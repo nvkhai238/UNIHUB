@@ -1,0 +1,108 @@
+version: "3.9"
+
+services:
+
+  # ─── Backend Spring Boot ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: unihub-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      # PostgreSQL — Supabase (kết nối từ ngoài, không chạy local)
+      SPRING_DATASOURCE_URL: ${SUPABASE_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${SUPABASE_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      # Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Supabase Storage
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Gemini AI
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # SMTP
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      # Mock Payment Gateway
+      MOCK_PAYMENT_URL: http://mock-payment:3001
+    depends_on:
+      redis:
+        condition: service_healthy
+      mock-payment:
+        condition: service_started
+    volumes:
+      - csv-data:/data   # Spring Batch đọc CSV từ đây
+    restart: on-failure
+    networks:
+      - unihub-net
+
+  # ─── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: unihub-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no  # In-memory only, no persistence needed
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - unihub-net
+
+  # ─── Mock Payment Gateway ────────────────────────────────────────────────────
+  # Server Node.js đơn giản giả lập success/fail/timeout ngẫu nhiên
+  # để test Circuit Breaker và Idempotency Key
+  mock-payment:
+    build:
+      context: ./mock-payment
+      dockerfile: Dockerfile
+    container_name: unihub-mock-payment
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      SUCCESS_RATE: 70    # 70% success
+      FAIL_RATE: 20       # 20% instant failure
+      TIMEOUT_RATE: 10    # 10% timeout (5000ms delay)
+      TIMEOUT_DELAY_MS: 5000
+    networks:
+      - unihub-net
+
+  # ─── Frontend React + Vite ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: unihub-frontend
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_URL: http://localhost:8080
+      VITE_SUPABASE_URL: ${SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on:
+      - backend
+    networks:
+      - unihub-net
+
+volumes:
+  csv-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data   # Thư mục ./data/ ở root project — đặt file CSV vào đây
+
+networks:
+  unihub-net:
+    driver: bridge
