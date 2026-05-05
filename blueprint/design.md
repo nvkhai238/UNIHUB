@@ -759,6 +759,98 @@ sequenceDiagram
   end
 ```
 
+## 6. Thiết kế kiểm soát truy cập (RBAC)
+
+### Mô hình phân quyền
+
+Sử dụng **Role-Based Access Control (RBAC)** thông qua Spring Security + JWT. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "nguyenvana@university.edu.vn",
+  "role": "STUDENT",
+  "iat": 1748908800,
+  "exp": 1748995200
+}
+```
+
+### Ba nhóm người dùng và quyền hạn
+
+| Tính năng / Endpoint      | STUDENT | ORGANIZER | CHECKIN_STAFF |
+| ------------------------- | ------- | --------- | ------------- |
+| Xem danh sách workshop    | ✅      | ✅        | ✅            |
+| Xem chi tiết workshop     | ✅      | ✅        | ✅            |
+| Đăng ký workshop          | ✅      | ❌        | ❌            |
+| Xem registration của mình | ✅      | ❌        | ❌            |
+| Tạo workshop mới          | ❌      | ✅        | ❌            |
+| Sửa / hủy workshop        | ❌      | ✅        | ❌            |
+| Upload PDF workshop       | ❌      | ✅        | ❌            |
+| Xem thống kê đăng ký      | ❌      | ✅        | ❌            |
+| Quét QR check-in          | ❌      | ❌        | ✅            |
+| Preload danh sách QR      | ❌      | ❌        | ✅            |
+| Sync check-in offline     | ❌      | ❌        | ✅            |
+
+### Triển khai trong Spring Security (Thành viên 2)
+
+**Tầng 1 — HTTP Security Config:**
+
+```java
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
+        .authorizeHttpRequests(auth -> auth
+            // Public endpoints
+            .requestMatchers(GET, "/api/workshops/**").permitAll()
+            .requestMatchers(POST, "/api/auth/**").permitAll()
+
+            // Student only
+            .requestMatchers(POST, "/api/registrations/**").hasRole("STUDENT")
+            .requestMatchers(GET, "/api/registrations/my/**").hasRole("STUDENT")
+
+            // Organizer only
+            .requestMatchers("/api/admin/**").hasRole("ORGANIZER")
+            .requestMatchers(POST, "/api/workshops/**").hasRole("ORGANIZER")
+            .requestMatchers(PUT, "/api/workshops/**").hasRole("ORGANIZER")
+            .requestMatchers(DELETE, "/api/workshops/**").hasRole("ORGANIZER")
+
+            // Check-in staff only
+            .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
+
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtAuthenticationFilter,
+                         UsernamePasswordAuthenticationFilter.class);
+    return http.build();
+}
+```
+
+**Tầng 2 — Method-level Security (defense in depth):**
+
+```java
+@Service
+@PreAuthorize("hasRole('ORGANIZER')")
+public class WorkshopAdminService {
+    public Workshop createWorkshop(CreateWorkshopRequest req) { ... }
+    public Workshop updateWorkshop(UUID id, UpdateWorkshopRequest req) { ... }
+}
+```
+
+**Tầng 3 — Data-level: SV chỉ xem được registration của chính mình:**
+
+```java
+@GetMapping("/registrations/my")
+public List<RegistrationDto> getMyRegistrations(
+        @AuthenticationPrincipal UserDetails user) {
+    // userDetails.getId() lấy từ JWT, không tin vào request param
+    return registrationService.findByUserId(user.getId());
+}
+```
+
+---
+
 ## 7. Thiết kế các cơ chế bảo vệ hệ thống
 
 ### 7.1 Kiểm soát tải đột biến — Rate Limiting (Thành viên 1)
