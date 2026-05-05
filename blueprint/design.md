@@ -147,88 +147,50 @@ Ngoài hệ thống:
 
 Sơ đồ này thể hiện luồng dữ liệu và điểm tích hợp quan trọng, đặc biệt ở các tình huống phức tạp.
 
-```
-                    ┌───────────────────────────────────────┐
-                    │           Người dùng                   │
-                    │  [Browser SV/Admin]  [Browser Check-in]│
-                    └──────────────┬────────────────────────┘
-                                   │ HTTPS
-                    ┌──────────────▼────────────────────────┐
-                    │         React + Vite (Frontend)        │
-                    │                                        │
-                    │  /                → Trang SV           │
-                    │  /admin           → Trang Admin        │
-                    │  /checkin         → PWA Check-in       │
-                    │                                        │
-                    │  Service Worker (PWA):                 │
-                    │  • Cache API responses                 │
-                    │  • IndexedDB: QR list offline          │
-                    │  • Background Sync: checkin queue      │
-                    └──────────────┬────────────────────────┘
-                                   │ REST/JSON
-                    ┌──────────────▼────────────────────────┐
-                    │       Spring Boot 3.x API :8080        │
-                    │                                        │
-                    │  ① JWT Filter (Spring Security)        │
-                    │     → Validate token                   │
-                    │     → Extract role (STUDENT /          │
-                    │       ORGANIZER / CHECKIN_STAFF)       │
-                    │     → Reject if unauthorized           │
-                    │                                        │
-                    │  ② Rate Limiter (Resilience4j+Redis)   │
-                    │     → 5 req/10s per user               │
-                    │     → 429 if exceeded                  │
-                    │                                        │
-                    │  ③ Business Logic Modules              │
-                    │     Auth → Workshop → Registration     │
-                    │     Payment → Checkin → Notification   │
-                    │     CsvImport → AiSummary              │
-                    └──┬────────┬────────────┬──────────────┘
-                       │        │            │
-            ┌──────────▼──┐ ┌───▼──────┐ ┌──▼──────────────────┐
-            │ Supabase    │ │  Redis   │ │  Tích hợp ngoài      │
-            │ PostgreSQL  │ │  :6379   │ │                       │
-            │             │ │          │ │  ┌─────────────────┐  │
-            │  ACID txn   │ │  Rate    │ │  │ Mock Payment GW │  │
-            │  Row-level  │ │  limit   │ │  │ Circuit Breaker │  │
-            │  locking    │ │  counters│ │  │ wraps HTTP call  │  │
-            │  Seat:      │ │          │ │  └─────────────────┘  │
-            │  SELECT FOR │ │  Idem.   │ │                       │
-            │  UPDATE     │ │  keys    │ │  ┌─────────────────┐  │
-            │             │ │  (24h    │ │  │  Gemini API     │  │
-            │  Real-time  │ │  TTL)    │ │  │  PDF → Summary  │  │
-            │  via        │ │          │ │  │  @Async task    │  │
-            │  Supabase   │ │  CB      │ │  └─────────────────┘  │
-            │  Realtime   │ │  state   │ │                       │
-            │  (WebSocket)│ │          │ │  ┌─────────────────┐  │
-            └─────────────┘ └──────────┘ │  │  SMTP Email     │  │
-                                         │  │  Thông báo      │  │
-                                         │  │  sau sự kiện    │  │
-                                         │  └─────────────────┘  │
-                                         │                       │
-                                         │  ┌─────────────────┐  │
-                                         │  │  CSV file       │  │
-                                         │  │  Spring Batch   │  │
-                                         │  │  Cron 2:00 AM   │  │
-                                         │  └─────────────────┘  │
-                                         └───────────────────────┘
-
-Luồng Check-in Offline (đặc biệt):
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Trước sự kiện (có mạng):                                     │
-  │  PWA App → GET /checkins/preload → Lưu vào IndexedDB         │
-  │                                                               │
-  │  Tại cửa phòng (mất mạng):                                   │
-  │  Quét QR → Lookup IndexedDB → Xác nhận local                 │
-  │          → Ghi pending queue vào IndexedDB                    │
-  │                                                               │
-  │  Khi có mạng trở lại:                                        │
-  │  Service Worker Background Sync → POST /checkins/sync         │
-  │  → API upsert PostgreSQL → Mark synced = true                 │
-  └──────────────────────────────────────────────────────────────┘
-```
-
+```mermaid
 ---
+config:
+  layout: elk
+---
+flowchart TB
+ subgraph subGraph0["Client Layer"]
+        Web_Student["Web App (PWA) - Sinh viên"]
+        Web_Admin["Web App - Ban tổ chức"]
+        Mobile_Staff["Mobile App (PWA) - Nhân sự Check-in"]
+  end
+ subgraph subGraph1["Core Backend Services (Spring Boot)"]
+        Auth_Service["Identity Service"]
+        Workshop_Service["Workshop & Catalog Service"]
+        Booking_Service["Booking & Payment Service\n(Circuit Breaker)"]
+        Notification_Service["Notification Service"]
+        Sync_Service["CSV Sync Worker\n(Spring Batch)"]
+  end
+ subgraph subGraph2["Data Storage"]
+        Redis[("Redis\nIdempotency Key / Rate Limit")]
+        DB[("Primary Database\nPostgreSQL\n(Pessimistic Lock)")]
+        LocalDB[("IndexedDB\n(PWA Offline Storage)")]
+  end
+ subgraph subGraph3["External Systems"]
+        Legacy_System["Hệ thống cũ\n(CSV Export)"]
+        Payment_Gateway["Cổng Thanh Toán Mock"]
+        AI_Model["AI Model\n(Gemini API)"]
+        Email_Provider["Email / App Push"]
+  end
+    Web_Student --> API_Gateway["API Gateway\nRate Limiting / Routing"]
+    Web_Admin --> API_Gateway
+    Mobile_Staff <--> LocalDB
+    Mobile_Staff -- Background Sync khi có mạng --> API_Gateway
+    API_Gateway --> Auth_Service & Workshop_Service & Booking_Service
+    Workshop_Service --> AI_Model & DB
+    Booking_Service <--> Redis
+    Booking_Service --> Payment_Gateway & DB
+    Booking_Service -- Publish Event --> MQ(("Message Queue<br>RabbitMQ"))
+    Sync_Service -- Lấy file lúc 2:00 AM --> Legacy_System
+    Sync_Service --> DB
+    MQ -- Xử lý lưu vé Async --> Booking_Service
+    MQ -- Kích hoạt gửi Mail --> Notification_Service
+    Notification_Service --> Email_Provider
+```
 
 ## 4. Thiết kế cơ sở dữ liệu
 
@@ -572,6 +534,61 @@ Client gửi lại request với cùng Idempotency-Key
 
 ### Luồng B — Check-in offline và đồng bộ (Thành viên 3)
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Staff as Nhân sự
+  participant PWA as UI (Trình duyệt PWA)
+  participant SW as Service Worker
+  participant IDB as IndexedDB (Local)
+  participant API as Spring Boot API
+  participant DB as PostgreSQL
+
+  Note over Staff, DB: GIAI ĐOẠN 1: CÓ MẠNG (Tải trước dữ liệu đầu ngày)
+  Staff->>PWA: Mở ứng dụng Check-in
+  PWA->>API: GET /api/checkins/preload?date=today
+  API->>DB: Query confirmed registrations (Hôm nay)
+  DB-->>API: Danh sách hợp lệ
+  API-->>PWA: [{qr, name, workshop_id}]
+  PWA->>IDB: Lưu vào store `qr_registry`
+  IDB-->>PWA: OK
+  PWA-->>Staff: Hiển thị: "Đã tải xong dữ liệu Offline"
+
+  Note over Staff, DB: GIAI ĐOẠN 2: MẤT MẠNG (Check-in tại cửa sự kiện)
+  Staff->>PWA: Quét mã QR của Sinh viên
+  PWA->>PWA: Kiểm tra navigator.onLine == false
+  PWA->>IDB: SELECT * FROM `qr_registry` WHERE qr = qr_code
+  
+  alt Không hợp lệ (Không tìm thấy)
+    IDB-->>PWA: null
+    PWA-->>Staff: Báo lỗi Đỏ & Gợi ý nhập tay/kiểm tra lại
+  else Hợp lệ (Tìm thấy)
+    IDB-->>PWA: {name, workshop_id}
+    PWA->>IDB: INSERT store `pending_sync` {qr_code, timestamp, synced: 0}
+    Note over PWA, IDB: UNIQUE constraint ngăn lưu trùng (SV quét 2 lần)
+    IDB-->>PWA: Insert Success
+    PWA-->>Staff: Báo Xanh "Check-in thành công: [Tên SV]"
+  end
+
+  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI (Đồng bộ nền)
+  Note right of SW: Sự kiện 'sync' được hệ điều hành kích hoạt ngầm
+  SW->>IDB: Lấy dữ liệu: SELECT * FROM `pending_sync` WHERE synced = 0
+  IDB-->>SW: [{qr_code, timestamp, device_id, ...}]
+  SW->>API: POST /api/checkins/sync (Gửi Array Batch)
+  API->>DB: UPSERT checkins 
+  Note right of API: ON CONFLICT (reg_id) DO NOTHING
+  
+  alt Kết nối chập chờn / Lỗi Server
+    DB-->>API: Error / Timeout
+    API-->>SW: 500 Internal Server Error
+    SW->>SW: Giữ nguyên `synced=0`, chờ lần trigger Background Sync tiếp theo
+  else Thành công
+    DB-->>API: Số dòng bị ảnh hưởng
+    API-->>SW: 200 OK {synced_ids: [...]}
+    SW->>IDB: UPDATE `pending_sync` SET synced = 1
+  end
+```
+
 ```
 Nhân sự (PWA)        Service Worker        Spring Boot API        IndexedDB    PostgreSQL
       │                    │                      │                    │             │
@@ -626,6 +643,46 @@ Nhân sự (PWA)        Service Worker        Spring Boot API        IndexedDB  
 | File preload quá lớn         | Phân trang theo `workshop_id`, chỉ load workshop của ngày hôm nay                                 |
 
 ---
+
+### Luồng C — Luồng nhập dữ liệu từ CSV đêm (Thành viên 3)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Cron as Scheduler (Cronjob)
+  participant Worker as Spring Batch Job
+  participant FTP as Legacy System (FTP)
+  participant DB as PostgreSQL
+  participant Log as Hệ thống Monitor / Log
+
+  Cron->>Worker: Kích hoạt lúc 02:00 AM
+  Worker->>FTP: Request tải file `students_export.csv`
+  
+  alt File không tồn tại / Lỗi kết nối FTP
+    FTP-->>Worker: Error (404 / Timeout)
+    Worker->>Log: Báo lỗi CRITICAL "Không lấy được file CSV"
+    Note over Worker: Đóng Job (Status = FAILED), kết thúc luồng.
+  else Lấy file thành công
+    FTP-->>Worker: Stream file CSV (UTF-8)
+    
+    loop Đọc từng Chunk (vd: 1000 dòng/lần)
+      Worker->>Worker: FlatFileItemReader (Bỏ qua dòng Header)
+      Worker->>Worker: ItemProcessor (Parse & Validate)
+      
+      alt Có dòng lỗi format (Thiếu cột, sai định dạng)
+        Worker->>Log: Ghi cảnh báo "Skip dòng X: Format không hợp lệ"
+        Note over Worker: SkipPolicy: Bỏ qua dòng lỗi, tiếp tục xử lý các dòng khác
+      end
+      
+      Worker->>DB: JdbcBatchItemWriter (Gửi mảng dữ liệu đã validate)
+      Note right of DB: UPSERT: ON CONFLICT (student_id) <br/> DO UPDATE SET email=EXCLUDED.email, <br/> full_name=EXCLUDED.full_name <br/> (TUYỆT ĐỐI KHÔNG ghi đè Role)
+      DB-->>Worker: Trả về số dòng bị ảnh hưởng
+    end
+    
+    Worker->>Log: Báo cáo Job hoàn tất (Thành công: X, Bỏ qua: Y)
+    Note over Worker: Job Status = COMPLETED
+  end
+```
 
 ## 7. Thiết kế các cơ chế bảo vệ hệ thống
 
