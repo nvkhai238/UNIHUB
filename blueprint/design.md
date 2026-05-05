@@ -49,96 +49,153 @@ com.unihub.workshop
 
 Sơ đồ này thể hiện UniHub Workshop trong bức tranh toàn cảnh: ai dùng hệ thống và hệ thống ngoài nào được tích hợp.
 
-```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                                                                          ║
-║    [Sinh viên]          [Ban tổ chức]        [Nhân sự check-in]         ║
-║    Xem workshop         Tạo/sửa/hủy          Quét QR tại cửa           ║
-║    Đăng ký, nhận QR     workshop             phòng (có/không có mạng)  ║
-║         │                    │                        │                  ║
-║         └────────────────────┼────────────────────────┘                  ║
-║                              ▼                                           ║
-║              ┌───────────────────────────────┐                          ║
-║              │      UniHub Workshop           │                          ║
-║              │  (React + Vite / Spring Boot)  │                          ║
-║              └───────┬────────────┬───────────┘                          ║
-║                      │            │                                      ║
-║          ┌───────────┘            └──────────────┐                      ║
-║          ▼                                       ▼                      ║
-║  [Mock Payment Gateway]              [Gemini API / Google AI]           ║
-║  Giả lập success/fail/               Tạo tóm tắt nội dung               ║
-║  timeout để test Circuit             từ PDF workshop                     ║
-║  Breaker & Idempotency               (do Thành viên 2 tích hợp)         ║
-║                                                                          ║
-║  [SMTP Email Server]                 [Legacy Student System]             ║
-║  Gửi email xác nhận                  Export CSV sinh viên lúc           ║
-║  đăng ký, thông báo                  2:00 AM — không có API,            ║
-║  workshop thay đổi                   chỉ đọc file một chiều              ║
-║                                                                          ║
-╚══════════════════════════════════════════════════════════════════════════╝
+```mermaid
+%%{init: {  "theme": "base",  "flowchart": {    "curve": "basis",    "nodeSpacing": 75,    "rankSpacing": 85  },  "themeVariables": {    "fontFamily": "Arial",    "primaryTextColor": "#222",    "lineColor": "#666"  }}}%%
+flowchart TB
+    %% ================= TITLE =================
+    title["Sơ đồ Context<br/>(Level 1) — Hệ thống UniHub<br/>Workshop"]
+
+    %% ================= USER AREA =================
+    subgraph USERS["[ Người dùng ]"]
+        direction LR
+        checkinStaff["&lt;&lt;person&gt;&gt;<br/>Nhân sự check-in<br/><span style='font-size:13px'>Quét QR tại cửa phòng</span>"]
+        organizer["&lt;&lt;person&gt;&gt;<br/>Ban tổ chức (BTC)<br/><span style='font-size:13px'>Quản lý, xem thống kê</span>"]
+        student["&lt;&lt;person&gt;&gt;<br/>Sinh viên<br/><span style='font-size:13px'>Xem lịch, đăng ký, nhận QR</span>"]
+    end
+
+    %% ================= MAIN SYSTEM =================
+    unihub["&lt;&lt;system&gt;&gt;<br/>UniHub Workshop System<br/><span style='font-size:13px'>Quản lý toàn bộ quy trình<br/>workshop</span>"]
+
+    %% ================= EXTERNAL SYSTEM AREA =================
+    subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
+        direction LR
+        legacy["&lt;&lt;external system&gt;&gt;<br/>Legacy Student System<br/><span style='font-size:13px'>Export CSV định kỳ</span>"]
+        email["&lt;&lt;external system&gt;&gt;<br/>Email / Notif. System<br/><span style='font-size:13px'>Gửi QR, thông báo SV</span>"]
+        ai["&lt;&lt;external system&gt;&gt;<br/>AI Service (Gemini)<br/><span style='font-size:13px'>Tóm tắt nội dung PDF</span>"]
+        payment["&lt;&lt;external system&gt;&gt;<br/>Payment Gateway<br/><span style='font-size:13px'>Workshop có phí</span>"]
+    end
+
+    %% ================= INVISIBLE LAYOUT LINKS =================
+    title ~~~ USERS
+    USERS ~~~ unihub
+    unihub ~~~ EXTERNALS
+
+    %% ================= REAL RELATIONSHIPS =================
+    checkinStaff -->|Check-in bằng QR<br/>HTTPS| unihub
+    organizer -->|Quản lý, xem báo cáo<br/>HTTPS| unihub
+    student -->|Đăng ký, xem lịch<br/>HTTPS| unihub
+    
+    %% ĐÃ SỬA: Thay đổi hướng mũi tên từ UniHub sang Legacy
+    unihub -->|Đồng bộ sinh viên<br/>CSV / Nightly Job| legacy
+    
+    unihub -->|Gửi thông báo<br/>SMTP / API| email
+    unihub -->|Tóm tắt PDF<br/>REST API / JSON| ai
+    unihub -->|Thanh toán<br/>REST API| payment
+
+    %% ================= STYLES =================
+    classDef titleStyle fill:transparent,stroke:transparent,color:#111,font-size:22px,font-weight:bold;
+    classDef person fill:#eeecff,stroke:#6c63d9,stroke-width:1.5px,color:#34308a;
+    classDef system fill:#dff3eb,stroke:#08785f,stroke-width:2px,color:#065f4b;
+    classDef externalSystem fill:#f3f1ec,stroke:#999,stroke-width:1.2px,color:#444;
+
+    class title titleStyle;
+    class checkinStaff,organizer,student person;
+    class unihub system;
+    class legacy,email,ai,payment externalSystem;
 ```
 
 ### Level 2 — Container Diagram
 
 Sơ đồ này phân rã UniHub Workshop thành các container, chỉ rõ công nghệ và cách giao tiếp.
 
-```
-╔════════════════════════════════════════════════════════════════════════════════╗
-║                              UniHub Workshop System                            ║
-║                                                                                ║
-║  ┌─────────────────────┐     ┌─────────────────────┐                         ║
-║  │   React Web App     │     │  React PWA           │                         ║
-║  │   (Vite + React)    │     │  Check-in App        │                         ║
-║  │                     │     │  (Vite + React)      │                         ║
-║  │  • Trang SV:        │     │  • Quét QR camera    │                         ║
-║  │    xem, đăng ký QR  │     │  • Offline-first     │                         ║
-║  │  • Trang Admin:     │     │  • Service Worker    │                         ║
-║  │    CRUD, thống kê   │     │  • IndexedDB cache   │                         ║
-║  └────────┬────────────┘     └──────────┬───────────┘                         ║
-║           │ HTTPS REST/JSON             │ HTTPS REST/JSON                     ║
-║           └──────────────┬──────────────┘                                     ║
-║                          ▼                                                     ║
-║           ┌──────────────────────────────────────────┐                        ║
-║           │    Spring Boot 3.x — Backend API          │                        ║
-║           │    Java 21 · Port 8080                    │                        ║
-║           │                                           │                        ║
-║           │  ┌─────────────────────────────────────┐ │                        ║
-║           │  │  Spring Security Filter Chain        │ │                        ║
-║           │  │  → JWT Validation → Role Check       │ │                        ║
-║           │  └─────────────────────────────────────┘ │                        ║
-║           │  ┌──────────────┐  ┌────────────────────┐│                        ║
-║           │  │ RateLimiter  │  │  Circuit Breaker   ││                        ║
-║           │  │ Resilience4j │  │  Resilience4j      ││                        ║
-║           │  │ + Redis      │  │  → Payment GW      ││                        ║
-║           │  └──────────────┘  └────────────────────┘│                        ║
-║           │                                           │                        ║
-║           │  Module: Auth    Module: Workshop         │                        ║
-║           │  Module: Reg.    Module: Payment          │                        ║
-║           │  Module: Checkin Module: Notification     │                        ║
-║           │  Module: CsvImport (Spring Batch)         │                        ║
-║           │  Module: AiSummary (Gemini API client)    │                        ║
-║           └───┬───────────┬──────────────┬────────────┘                        ║
-║               │           │              │                                     ║
-║               ▼           ▼              ▼                                     ║
-║  ┌────────────────┐ ┌──────────┐ ┌──────────────────────────────────┐        ║
-║  │  Supabase      │ │  Redis   │ │  Supabase Storage                │        ║
-║  │  PostgreSQL    │ │  :6379   │ │  (S3-compatible)                 │        ║
-║  │                │ │          │ │  • PDF file upload               │        ║
-║  │  Primary DB:   │ │  • Rate  │ │  • Sơ đồ phòng ảnh              │        ║
-║  │  users,        │ │    limit │ │                                  │        ║
-║  │  workshops,    │ │  • Idem. │ └──────────────────────────────────┘        ║
-║  │  registrations │ │    keys  │                                             ║
-║  │  payments,     │ │  • CB    │                                             ║
-║  │  checkins      │ │    state │                                             ║
-║  └────────────────┘ └──────────┘                                             ║
-║                                                                                ║
-╚════════════════════════════════════════════════════════════════════════════════╝
+```mermaid
+%%{init: {  "theme": "base",  "flowchart": {    "curve": "basis",    "nodeSpacing": 60,    "rankSpacing": 90  },  "themeVariables": {    "fontFamily": "Arial",    "primaryTextColor": "#222"  }}}%%
+flowchart TB
 
-Ngoài hệ thống:
-  [Mock Payment GW] ←──HTTP──→ PaymentService (Circuit Breaker wrap)
-  [Gemini API]      ←──HTTP──→ AiSummaryService (async, @Async)
-  [SMTP Server]     ←──SMTP──→ EmailNotificationService
-  [CSV file]        ←──read──  Spring Batch CsvImportJob (cron 2:00 AM)
+    title["<b>Sơ đồ Container (Level 2)</b><br/>Hệ thống UniHub Workshop"]
+    class title titleStyle
+
+    %% ================= USERS =================
+    subgraph USERS["[ Người dùng ]"]
+        direction LR
+        student["&lt;&lt;person&gt;&gt;<br/><b>Sinh viên</b><br/>Web / Mobile"]
+        btc["&lt;&lt;person&gt;&gt;<br/><b>Ban tổ chức</b><br/>Admin Web"]
+        staff["&lt;&lt;person&gt;&gt;<br/><b>Nhân sự</b><br/>Mobile check-in"]
+    end
+
+    %% ================= SYSTEM BOUNDARY =================
+    subgraph SYSTEM["UniHub Workshop System"]
+        direction TB
+
+        subgraph FRONTENDS["Tầng Giao diện"]
+            direction LR
+            webapp["&lt;&lt;container&gt;&gt;<br/><b>Web App</b><br/>(React)<br/><span style='font-size:12px'>Xem lịch, đăng ký, nhận QR</span>"]
+            adminweb["&lt;&lt;container&gt;&gt;<br/><b>Admin Web</b><br/>(React)<br/><span style='font-size:12px'>Quản lý workshop, thống kê</span>"]
+            mobileapp["&lt;&lt;container&gt;&gt;<br/><b>Mobile App</b><br/>(React Native)<br/><span style='font-size:12px'>Quét QR, check-in offline</span>"]
+        end
+
+        backend["&lt;&lt;container&gt;&gt;<br/><b>Backend API</b><br/>(Java Spring Boot)<br/><span style='font-size:12px'>Auth, RBAC, Workshop, Đăng ký</span>"]
+        
+        payment_svc["&lt;&lt;container&gt;&gt;<br/><b>Payment Service</b><br/>(Java)<br/><span style='font-size:12px'>Thanh toán, Webhook</span>"]
+        
+        worker["&lt;&lt;container&gt;&gt;<br/><b>Background Worker</b><br/>(Java)<br/><span style='font-size:12px'>Gửi mail, AI summary, Import CSV</span>"]
+
+        db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(PostgreSQL)<br/><span style='font-size:12px'>User, Workshop, Registration</span>")]
+        
+        storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>PDF, QR, CSV</span>"]
+    end
+
+    %% ================= EXTERNAL SYSTEMS =================
+    subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
+        direction LR
+        legacy["&lt;&lt;external system&gt;&gt;<br/><b>Legacy SIS</b><br/>(CSV Export)"]
+        vnpay["&lt;&lt;external system&gt;&gt;<br/><b>Payment Gateway</b><br/>(VNPay / Stripe)"]
+        ai["&lt;&lt;external system&gt;&gt;<br/><b>AI Model</b><br/>(OpenAI / Gemini)"]
+        email_svc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP / SendGrid)"]
+    end
+
+    %% ================= RELATIONSHIPS =================
+    %% Users to Frontends
+    student -->|HTTPS| webapp
+    btc -->|HTTPS| adminweb
+    staff -->|HTTPS| mobileapp
+
+    %% Frontends to Backend
+    webapp -->|REST / HTTPS| backend
+    adminweb -->|REST / HTTPS| backend
+    mobileapp -->|REST / HTTPS| backend
+
+    %% Backend to Services
+    backend -->|REST| payment_svc
+    backend -->|REST / Job| worker
+
+    %% Services to Storage/DB
+    backend & payment_svc & worker -->|SQL| db
+    backend & worker -->|Read/Write files| storage
+
+    %% Services to Externals
+    payment_svc -->|HTTPS / Webhook| vnpay
+    worker -->|REST / HTTPS| ai
+    worker -->|SMTP / HTTPS| email_svc
+    
+    %% Mũi tên từ UniHub sang Legacy theo yêu cầu trước đó của bạn
+    worker -->|Đồng bộ dữ liệu<br/>CSV Nightly| legacy
+
+    %% ================= STYLING =================
+    classDef titleStyle fill:transparent,stroke:transparent,font-size:20px;
+    classDef person fill:#eeecff,stroke:#6c63d9,color:#34308a;
+    classDef ui fill:#dff3eb,stroke:#08785f,color:#065f4b;
+    classDef logic fill:#dfefff,stroke:#2f75b5,color:#0d47a1;
+    classDef service fill:#fff1e8,stroke:#c26b4b,color:#7a2d14;
+    classDef database fill:#f3f1ec,stroke:#999,color:#444;
+    classDef external fill:#fdebf2,stroke:#cc6688,color:#8a3355;
+
+    class student,btc,staff person;
+    class webapp,adminweb,mobileapp ui;
+    class backend logic;
+    class payment_svc,worker service;
+    class db,storage database;
+    class legacy,vnpay,ai,email_svc external;
 ```
 
 ---
@@ -147,88 +204,50 @@ Ngoài hệ thống:
 
 Sơ đồ này thể hiện luồng dữ liệu và điểm tích hợp quan trọng, đặc biệt ở các tình huống phức tạp.
 
-```
-                    ┌───────────────────────────────────────┐
-                    │           Người dùng                   │
-                    │  [Browser SV/Admin]  [Browser Check-in]│
-                    └──────────────┬────────────────────────┘
-                                   │ HTTPS
-                    ┌──────────────▼────────────────────────┐
-                    │         React + Vite (Frontend)        │
-                    │                                        │
-                    │  /                → Trang SV           │
-                    │  /admin           → Trang Admin        │
-                    │  /checkin         → PWA Check-in       │
-                    │                                        │
-                    │  Service Worker (PWA):                 │
-                    │  • Cache API responses                 │
-                    │  • IndexedDB: QR list offline          │
-                    │  • Background Sync: checkin queue      │
-                    └──────────────┬────────────────────────┘
-                                   │ REST/JSON
-                    ┌──────────────▼────────────────────────┐
-                    │       Spring Boot 3.x API :8080        │
-                    │                                        │
-                    │  ① JWT Filter (Spring Security)        │
-                    │     → Validate token                   │
-                    │     → Extract role (STUDENT /          │
-                    │       ORGANIZER / CHECKIN_STAFF)       │
-                    │     → Reject if unauthorized           │
-                    │                                        │
-                    │  ② Rate Limiter (Resilience4j+Redis)   │
-                    │     → 5 req/10s per user               │
-                    │     → 429 if exceeded                  │
-                    │                                        │
-                    │  ③ Business Logic Modules              │
-                    │     Auth → Workshop → Registration     │
-                    │     Payment → Checkin → Notification   │
-                    │     CsvImport → AiSummary              │
-                    └──┬────────┬────────────┬──────────────┘
-                       │        │            │
-            ┌──────────▼──┐ ┌───▼──────┐ ┌──▼──────────────────┐
-            │ Supabase    │ │  Redis   │ │  Tích hợp ngoài      │
-            │ PostgreSQL  │ │  :6379   │ │                       │
-            │             │ │          │ │  ┌─────────────────┐  │
-            │  ACID txn   │ │  Rate    │ │  │ Mock Payment GW │  │
-            │  Row-level  │ │  limit   │ │  │ Circuit Breaker │  │
-            │  locking    │ │  counters│ │  │ wraps HTTP call  │  │
-            │  Seat:      │ │          │ │  └─────────────────┘  │
-            │  SELECT FOR │ │  Idem.   │ │                       │
-            │  UPDATE     │ │  keys    │ │  ┌─────────────────┐  │
-            │             │ │  (24h    │ │  │  Gemini API     │  │
-            │  Real-time  │ │  TTL)    │ │  │  PDF → Summary  │  │
-            │  via        │ │          │ │  │  @Async task    │  │
-            │  Supabase   │ │  CB      │ │  └─────────────────┘  │
-            │  Realtime   │ │  state   │ │                       │
-            │  (WebSocket)│ │          │ │  ┌─────────────────┐  │
-            └─────────────┘ └──────────┘ │  │  SMTP Email     │  │
-                                         │  │  Thông báo      │  │
-                                         │  │  sau sự kiện    │  │
-                                         │  └─────────────────┘  │
-                                         │                       │
-                                         │  ┌─────────────────┐  │
-                                         │  │  CSV file       │  │
-                                         │  │  Spring Batch   │  │
-                                         │  │  Cron 2:00 AM   │  │
-                                         │  └─────────────────┘  │
-                                         └───────────────────────┘
-
-Luồng Check-in Offline (đặc biệt):
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Trước sự kiện (có mạng):                                     │
-  │  PWA App → GET /checkins/preload → Lưu vào IndexedDB         │
-  │                                                               │
-  │  Tại cửa phòng (mất mạng):                                   │
-  │  Quét QR → Lookup IndexedDB → Xác nhận local                 │
-  │          → Ghi pending queue vào IndexedDB                    │
-  │                                                               │
-  │  Khi có mạng trở lại:                                        │
-  │  Service Worker Background Sync → POST /checkins/sync         │
-  │  → API upsert PostgreSQL → Mark synced = true                 │
-  └──────────────────────────────────────────────────────────────┘
-```
-
+```mermaid
 ---
+config:
+  layout: elk
+---
+flowchart TB
+ subgraph subGraph0["Client Layer"]
+        Web_Student["Web App (PWA) - Sinh viên"]
+        Web_Admin["Web App - Ban tổ chức"]
+        Mobile_Staff["Mobile App (PWA) - Nhân sự Check-in"]
+  end
+ subgraph subGraph1["Core Backend Services (Spring Boot)"]
+        Auth_Service["Identity Service"]
+        Workshop_Service["Workshop & Catalog Service"]
+        Booking_Service["Booking & Payment Service\n(Circuit Breaker)"]
+        Notification_Service["Notification Service"]
+        Sync_Service["CSV Sync Worker\n(Spring Batch)"]
+  end
+ subgraph subGraph2["Data Storage"]
+        Redis[("Redis\nIdempotency Key / Rate Limit")]
+        DB[("Primary Database\nPostgreSQL\n(Pessimistic Lock)")]
+        LocalDB[("IndexedDB\n(PWA Offline Storage)")]
+  end
+ subgraph subGraph3["External Systems"]
+        Legacy_System["Hệ thống cũ\n(CSV Export)"]
+        Payment_Gateway["Cổng Thanh Toán Mock"]
+        AI_Model["AI Model\n(Gemini API)"]
+        Email_Provider["Email / App Push"]
+  end
+    Web_Student --> API_Gateway["API Gateway\nRate Limiting / Routing"]
+    Web_Admin --> API_Gateway
+    Mobile_Staff <--> LocalDB
+    Mobile_Staff -- Background Sync khi có mạng --> API_Gateway
+    API_Gateway --> Auth_Service & Workshop_Service & Booking_Service
+    Workshop_Service --> AI_Model & DB
+    Booking_Service <--> Redis
+    Booking_Service --> Payment_Gateway & DB
+    Booking_Service -- Publish Event --> MQ(("Message Queue<br>RabbitMQ"))
+    Sync_Service -- Lấy file lúc 2:00 AM --> Legacy_System
+    Sync_Service --> DB
+    MQ -- Xử lý lưu vé Async --> Booking_Service
+    MQ -- Kích hoạt gửi Mail --> Notification_Service
+    Notification_Service --> Email_Provider
+```
 
 ## 4. Thiết kế cơ sở dữ liệu
 
@@ -388,9 +407,11 @@ CREATE INDEX idx_payments_idem          ON payments(idempotency_key);
 
 ## 5. Thiết kế kiểm soát truy cập (RBAC)
 
-### Mô hình phân quyền
+### 5.1. Mục tiêu
+Hệ thống UniHub Workshop có nhiều nhóm người dùng với quyền hạn khác nhau. Vì vậy, hệ thống cần có cơ chế kiểm soát truy cập để đảm bảo mỗi người dùng chỉ được thực hiện đúng các chức năng thuộc phạm vi của mình: Sinh viên chỉ được xem và đăng ký workshop; Ban tổ chức (BTC) được quản lý workshop; Nhân sự chỉ được thực hiện quét QR check-in.
 
-Sử dụng **Role-Based Access Control (RBAC)** thông qua Spring Security + JWT. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
+### 5.2. Mô hình kiểm soát truy cập
+Hệ thống áp dụng mô hình **RBAC (Role-Based Access Control)** thông qua Spring Security + JWT để quản lý quyền hạn của người dùng. Mỗi người dùng sẽ được gán cho một hoặc nhiều vai trò (Role), và mỗi vai trò sẽ có các quyền (Permission) tương ứng. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
 
 ```json
 {
@@ -402,23 +423,36 @@ Sử dụng **Role-Based Access Control (RBAC)** thông qua Spring Security + JW
 }
 ```
 
-### Ba nhóm người dùng và quyền hạn
+### 5.3. Các vai trò trong hệ thống
+* **Student (Sinh viên):** Xem lịch workshop, đăng ký workshop, nhận mã QR và xem trạng thái check-in của chính mình.
+* **Organizer (Ban tổ chức):** Tạo, sửa, hủy workshop, upload tài liệu PDF giới thiệu, xem danh sách sinh viên đăng ký và xem báo cáo thống kê.
+* **Staff (Nhân sự check-in):** Thực hiện quét mã QR của sinh viên tại cửa phòng workshop để ghi nhận sự hiện diện.
+* **Admin (Quản trị viên):** Quản lý người dùng, gán vai trò và cấu hình hệ thống.
 
-| Tính năng / Endpoint      | STUDENT | ORGANIZER | CHECKIN_STAFF |
-| ------------------------- | ------- | --------- | ------------- |
-| Xem danh sách workshop    | ✅      | ✅        | ✅            |
-| Xem chi tiết workshop     | ✅      | ✅        | ✅            |
-| Đăng ký workshop          | ✅      | ❌        | ❌            |
-| Xem registration của mình | ✅      | ❌        | ❌            |
-| Tạo workshop mới          | ❌      | ✅        | ❌            |
-| Sửa / hủy workshop        | ❌      | ✅        | ❌            |
-| Upload PDF workshop       | ❌      | ✅        | ❌            |
-| Xem thống kê đăng ký      | ❌      | ✅        | ❌            |
-| Quét QR check-in          | ❌      | ❌        | ✅            |
-| Preload danh sách QR      | ❌      | ❌        | ✅            |
-| Sync check-in offline     | ❌      | ❌        | ✅            |
+### 5.4. Phân quyền chức năng (Functional Permissions)
 
-### Triển khai trong Spring Security (Thành viên 2)
+| Chức năng | Sinh viên | Ban tổ chức | Nhân sự check-in | Quản trị viên |
+| :--- | :---: | :---: | :---: | :---: |
+| Xem danh sách / chi tiết workshop | ✅ | ✅ | ✅ | ✅ |
+| Đăng ký / Xem mã QR của chính mình | ✅ | ❌ | ❌ | ❌ |
+| Tạo / Cập nhật / Hủy workshop | ❌ | ✅ | ❌ | ✅ |
+| Upload PDF giới thiệu workshop | ❌ | ✅ | ❌ | ✅ |
+| Xem danh sách sinh viên / thống kê | ❌ | ✅ | ❌ | ✅ |
+| Quét QR / Đồng bộ check-in offline | ❌ | ❌ | ✅ | ❌ |
+| Quản lý tài khoản / Gán / thay đổi vai trò | ❌ | ❌ | ❌ | ✅ |
+
+### 5.5. Kiểm soát truy cập tại API Endpoint
+Tất cả request từ Web App, Admin Web và Mobile App đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend hiện các nút chức năng dựa trên role và nó là lớp hỗ trợ giao diện. Việc bảo mật thật sự phải được kiểm tra ở backend.
+
+**Quy trình kiểm tra quyền tại API:**
+1. Người dùng đăng nhập vào hệ thống.
+2. Backend xác thực tài khoản và trả về **JWT Access Token**.
+3. Client lưu token và gửi token trong mỗi request: `Authorization: Bearer <access_token>`.
+4. Backend API kiểm tra token xem nó có tồn tại, hợp lệ hay hết hạn hay không rồi cũng có thể check user có role nào.
+5. Backend kiểm tra role / permission của user với endpoint đang được gọi.
+6. Nếu không đăng nhập hoặc token sai, trả về `401 Unauthorized`.
+
+**Triển khai trong Spring Security (Thành viên 2):**
 
 **Tầng 1 — HTTP Security Config:**
 
@@ -445,6 +479,9 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
             // Check-in staff only
             .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
+
+            // Admin only
+            .requestMatchers("/api/sysadmin/**").hasRole("ADMIN")
 
             .anyRequest().authenticated()
         )
@@ -572,6 +609,61 @@ Client gửi lại request với cùng Idempotency-Key
 
 ### Luồng B — Check-in offline và đồng bộ (Thành viên 3)
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Staff as Nhân sự
+  participant PWA as UI (Trình duyệt PWA)
+  participant SW as Service Worker
+  participant IDB as IndexedDB (Local)
+  participant API as Spring Boot API
+  participant DB as PostgreSQL
+
+  Note over Staff, DB: GIAI ĐOẠN 1: CÓ MẠNG (Tải trước dữ liệu đầu ngày)
+  Staff->>PWA: Mở ứng dụng Check-in
+  PWA->>API: GET /api/checkins/preload?date=today
+  API->>DB: Query confirmed registrations (Hôm nay)
+  DB-->>API: Danh sách hợp lệ
+  API-->>PWA: [{qr, name, workshop_id}]
+  PWA->>IDB: Lưu vào store `qr_registry`
+  IDB-->>PWA: OK
+  PWA-->>Staff: Hiển thị: "Đã tải xong dữ liệu Offline"
+
+  Note over Staff, DB: GIAI ĐOẠN 2: MẤT MẠNG (Check-in tại cửa sự kiện)
+  Staff->>PWA: Quét mã QR của Sinh viên
+  PWA->>PWA: Kiểm tra navigator.onLine == false
+  PWA->>IDB: SELECT * FROM `qr_registry` WHERE qr = qr_code
+  
+  alt Không hợp lệ (Không tìm thấy)
+    IDB-->>PWA: null
+    PWA-->>Staff: Báo lỗi Đỏ & Gợi ý nhập tay/kiểm tra lại
+  else Hợp lệ (Tìm thấy)
+    IDB-->>PWA: {name, workshop_id}
+    PWA->>IDB: INSERT store `pending_sync` {qr_code, timestamp, synced: 0}
+    Note over PWA, IDB: UNIQUE constraint ngăn lưu trùng (SV quét 2 lần)
+    IDB-->>PWA: Insert Success
+    PWA-->>Staff: Báo Xanh "Check-in thành công: [Tên SV]"
+  end
+
+  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI (Đồng bộ nền)
+  Note right of SW: Sự kiện 'sync' được hệ điều hành kích hoạt ngầm
+  SW->>IDB: Lấy dữ liệu: SELECT * FROM `pending_sync` WHERE synced = 0
+  IDB-->>SW: [{qr_code, timestamp, device_id, ...}]
+  SW->>API: POST /api/checkins/sync (Gửi Array Batch)
+  API->>DB: UPSERT checkins 
+  Note right of API: ON CONFLICT (reg_id) DO NOTHING
+  
+  alt Kết nối chập chờn / Lỗi Server
+    DB-->>API: Error / Timeout
+    API-->>SW: 500 Internal Server Error
+    SW->>SW: Giữ nguyên `synced=0`, chờ lần trigger Background Sync tiếp theo
+  else Thành công
+    DB-->>API: Số dòng bị ảnh hưởng
+    API-->>SW: 200 OK {synced_ids: [...]}
+    SW->>IDB: UPDATE `pending_sync` SET synced = 1
+  end
+```
+
 ```
 Nhân sự (PWA)        Service Worker        Spring Boot API        IndexedDB    PostgreSQL
       │                    │                      │                    │             │
@@ -624,6 +716,138 @@ Nhân sự (PWA)        Service Worker        Spring Boot API        IndexedDB  
 | Sync thất bại (mạng đứt lại) | Giữ nguyên `synced=0`, Background Sync retry tự động                                              |
 | Check-in trùng (SV đã scan)  | IndexedDB UNIQUE constraint ngăn lưu trùng; PostgreSQL `ON CONFLICT DO NOTHING` ngăn trùng server |
 | File preload quá lớn         | Phân trang theo `workshop_id`, chỉ load workshop của ngày hôm nay                                 |
+
+---
+
+### Luồng C — Luồng nhập dữ liệu từ CSV đêm (Thành viên 3)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Cron as Scheduler (Cronjob)
+  participant Worker as Spring Batch Job
+  participant FTP as Legacy System (FTP)
+  participant DB as PostgreSQL
+  participant Log as Hệ thống Monitor / Log
+
+  Cron->>Worker: Kích hoạt lúc 02:00 AM
+  Worker->>FTP: Request tải file `students_export.csv`
+  
+  alt File không tồn tại / Lỗi kết nối FTP
+    FTP-->>Worker: Error (404 / Timeout)
+    Worker->>Log: Báo lỗi CRITICAL "Không lấy được file CSV"
+    Note over Worker: Đóng Job (Status = FAILED), kết thúc luồng.
+  else Lấy file thành công
+    FTP-->>Worker: Stream file CSV (UTF-8)
+    
+    loop Đọc từng Chunk (vd: 1000 dòng/lần)
+      Worker->>Worker: FlatFileItemReader (Bỏ qua dòng Header)
+      Worker->>Worker: ItemProcessor (Parse & Validate)
+      
+      alt Có dòng lỗi format (Thiếu cột, sai định dạng)
+        Worker->>Log: Ghi cảnh báo "Skip dòng X: Format không hợp lệ"
+        Note over Worker: SkipPolicy: Bỏ qua dòng lỗi, tiếp tục xử lý các dòng khác
+      end
+      
+      Worker->>DB: JdbcBatchItemWriter (Gửi mảng dữ liệu đã validate)
+      Note right of DB: UPSERT: ON CONFLICT (student_id) <br/> DO UPDATE SET email=EXCLUDED.email, <br/> full_name=EXCLUDED.full_name <br/> (TUYỆT ĐỐI KHÔNG ghi đè Role)
+      DB-->>Worker: Trả về số dòng bị ảnh hưởng
+    end
+    
+    Worker->>Log: Báo cáo Job hoàn tất (Thành công: X, Bỏ qua: Y)
+    Note over Worker: Job Status = COMPLETED
+  end
+```
+
+## 6. Thiết kế kiểm soát truy cập (RBAC)
+
+### Mô hình phân quyền
+
+Sử dụng **Role-Based Access Control (RBAC)** thông qua Spring Security + JWT. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "nguyenvana@university.edu.vn",
+  "role": "STUDENT",
+  "iat": 1748908800,
+  "exp": 1748995200
+}
+```
+
+### Ba nhóm người dùng và quyền hạn
+
+| Tính năng / Endpoint      | STUDENT | ORGANIZER | CHECKIN_STAFF |
+| ------------------------- | ------- | --------- | ------------- |
+| Xem danh sách workshop    | ✅      | ✅        | ✅            |
+| Xem chi tiết workshop     | ✅      | ✅        | ✅            |
+| Đăng ký workshop          | ✅      | ❌        | ❌            |
+| Xem registration của mình | ✅      | ❌        | ❌            |
+| Tạo workshop mới          | ❌      | ✅        | ❌            |
+| Sửa / hủy workshop        | ❌      | ✅        | ❌            |
+| Upload PDF workshop       | ❌      | ✅        | ❌            |
+| Xem thống kê đăng ký      | ❌      | ✅        | ❌            |
+| Quét QR check-in          | ❌      | ❌        | ✅            |
+| Preload danh sách QR      | ❌      | ❌        | ✅            |
+| Sync check-in offline     | ❌      | ❌        | ✅            |
+
+### Triển khai trong Spring Security (Thành viên 2)
+
+**Tầng 1 — HTTP Security Config:**
+
+```java
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
+        .authorizeHttpRequests(auth -> auth
+            // Public endpoints
+            .requestMatchers(GET, "/api/workshops/**").permitAll()
+            .requestMatchers(POST, "/api/auth/**").permitAll()
+
+            // Student only
+            .requestMatchers(POST, "/api/registrations/**").hasRole("STUDENT")
+            .requestMatchers(GET, "/api/registrations/my/**").hasRole("STUDENT")
+
+            // Organizer only
+            .requestMatchers("/api/admin/**").hasRole("ORGANIZER")
+            .requestMatchers(POST, "/api/workshops/**").hasRole("ORGANIZER")
+            .requestMatchers(PUT, "/api/workshops/**").hasRole("ORGANIZER")
+            .requestMatchers(DELETE, "/api/workshops/**").hasRole("ORGANIZER")
+
+            // Check-in staff only
+            .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
+
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtAuthenticationFilter,
+                         UsernamePasswordAuthenticationFilter.class);
+    return http.build();
+}
+```
+
+**Tầng 2 — Method-level Security (defense in depth):**
+
+```java
+@Service
+@PreAuthorize("hasRole('ORGANIZER')")
+public class WorkshopAdminService {
+    public Workshop createWorkshop(CreateWorkshopRequest req) { ... }
+    public Workshop updateWorkshop(UUID id, UpdateWorkshopRequest req) { ... }
+}
+```
+
+**Tầng 3 — Data-level: SV chỉ xem được registration của chính mình:**
+
+```java
+@GetMapping("/registrations/my")
+public List<RegistrationDto> getMyRegistrations(
+        @AuthenticationPrincipal UserDetails user) {
+    // userDetails.getId() lấy từ JWT, không tin vào request param
+    return registrationService.findByUserId(user.getId());
+}
+```
 
 ---
 
