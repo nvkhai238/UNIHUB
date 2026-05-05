@@ -13,6 +13,141 @@ Hệ thống thông báo đa kênh:
 
 ---
 
+## API Endpoints
+
+### Base path: `/api/notifications`
+
+#### `GET /api/notifications` — Danh sách notifications (STUDENT)
+
+Lấy notifications của user đang đăng nhập.
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Query Params:**
+- `?is_read=false` — chỉ unread (tùy chọn)
+- `?page=0&size=20` — phân trang
+- `?sort=createdAt,desc` — sắp xếp
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "content": [
+      {
+        "id": "n1n2n3n4-...",
+        "type": "REGISTRATION_CONFIRMED",
+        "title": "Đăng ký thành công",
+        "body": "Bạn đã đăng ký thành công workshop 'AI trong giáo dục'",
+        "is_read": false,
+        "created_at": "2026-05-03T10:15:00Z",
+        "data": {
+          "workshopId": "a1b2c3d4-...",
+          "registrationId": "r1r2r3r4-..."
+        }
+      }
+    ],
+    "totalElements": 15,
+    "totalPages": 1,
+    "page": 0,
+    "size": 20,
+    "unreadCount": 3
+  }
+}
+```
+
+---
+
+#### `PATCH /api/notifications/{notificationId}` — Mark as read (STUDENT)
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Request Body:**
+```json
+{
+  "is_read": true
+}
+```
+
+**Validation:**
+- Notification thuộc về user đang đăng nhập
+- Chỉ có thể set `is_read` (không thể modify `type`, `title`, `body`)
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "id": "n1n2n3n4-...",
+    "is_read": true,
+    "updatedAt": "2026-05-03T10:20:00Z"
+  }
+}
+```
+
+---
+
+#### `PATCH /api/notifications` — Bulk mark as read (STUDENT)
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Request Body:**
+```json
+{
+  "action": "mark_all_read",
+  "filter": {
+    "type": "WORKSHOP_CANCELLED"
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "updatedCount": 5
+  }
+}
+```
+
+---
+
+#### `DELETE /api/notifications/{notificationId}` — Xóa notification (STUDENT)
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Response 204 — No Content**
+
+---
+
+#### `DELETE /api/notifications` — Bulk delete (STUDENT)
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Request Body:**
+```json
+{
+  "action": "delete_all",
+  "filter": {
+    "type": "WORKSHOP_CANCELLED",
+    "olderThan": "2026-04-01"
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "deletedCount": 3
+  }
+}
+```
+
+---
+
 ## Luồng chính
 
 ### Luồng A: Email Registration Confirmation
