@@ -1,4 +1,4 @@
-# Đặc tả: CSV Import (Thành viên 3)
+﻿# Đặc tả: Nhập CSV (Thành viên 3)
 
 > **Phạm vi:** Spring Batch job đọc file CSV sinh viên từ hệ thống cũ, upsert vào database lúc 2 AM.
 
@@ -131,11 +131,11 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
 - ✅ 2 lần chạy job → không có duplicate hoặc data corruption
 - ✅ Log file ghi chi tiết từng dòng lỗi (line number, error reason)
 
-### Additional API Endpoints
+## API Endpoints
 
 #### `GET /api/csv/status` — Check Import Job Status
 
-Allows ADMIN to check the status of the latest CSV import job.
+Cho phép ADMIN xem trạng thái của lần chạy CSV import gần nhất.
 
 **Response 200:**
 ```json
@@ -149,3 +149,7 @@ Allows ADMIN to check the status of the latest CSV import job.
   }
 }
 ```
+
+
+
+

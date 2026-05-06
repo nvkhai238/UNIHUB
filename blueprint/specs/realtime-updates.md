@@ -1,4 +1,4 @@
-# Đặc tả: Real-time Updates (Xuyên suốt - TV1, TV2, TV3)
+﻿# Đặc tả: Cập nhật thời gian thực (Xuyên suốt - TV1, TV2, TV3)
 
 > **Phạm vi:** Supabase Realtime WebSocket để cập nhật số ghế còn lại, trạng thái workshop tự động không cần polling.
 
@@ -85,22 +85,6 @@ const channel = supabase
   .subscribe();
 ```
 
-### Additional API Endpoints
-
-#### `GET /api/realtime/workshops/{id}` — Subscribe to Workshop Updates
-
-Allows clients to subscribe to real-time updates for a specific workshop.
-
-**Response 200:**
-```json
-{
-  "status": 200,
-  "message": "Subscribed to workshop updates."
-}
-```
-
----
-
 ## Kịch bản lỗi
 
 | Tình huống | Hành vi |
@@ -141,3 +125,25 @@ Allows clients to subscribe to real-time updates for a specific workshop.
 - ✅ Supabase Realtime down → Fallback to polling hoặc hiển thị thông báo
 - ✅ Data consistency: UI thấy realtime + REST API response luôn match
 - ✅ Không có memory leak từ multiple subscriptions (Unsubscribe cleanup)
+
+---
+
+## API Endpoints
+
+#### `GET /api/realtime/workshops/{id}` — Subscribe to Workshop Updates
+
+Cho phép client đăng ký theo dõi cập nhật thời gian thực cho một workshop cụ thể.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "message": "Subscribed to workshop updates."
+}
+```
+
+---
+
+
+
+

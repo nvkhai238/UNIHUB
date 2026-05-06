@@ -1,4 +1,4 @@
-# Đặc tả: Circuit Breaker (Thành viên 1)
+﻿# Đặc tả: Ngắt mạch (Thành viên 1)
 
 > **Phạm vi:** Bảo vệ backend khỏi lỗi từ Mock Payment Gateway, graceful degradation.
 
@@ -54,7 +54,7 @@ Trạng thái HALF-OPEN (đang thử phục hồi)
           └── Chuyển OPEN (lại ngắt mạch) → chờ thêm 30s
 ```
 
-### Configuration (application.yml)
+### Cấu hình (application.yml)
 
 ```yaml
 resilience4j:
@@ -98,7 +98,7 @@ management:
         include: health,circuitbreakers # Expose CB metrics
 ```
 
-### Service Implementation
+### Cài đặt service
 
 ```java
 @Service
@@ -166,7 +166,7 @@ public class PaymentService {
 }
 ```
 
-### Exception Handling
+### Xử lý exception
 
 ```java
 @RestControllerAdvice
@@ -187,7 +187,7 @@ public class GlobalExceptionHandler {
 }
 ```
 
-### Frontend Handling
+### Xử lý phía frontend
 
 ```javascript
 // React component
@@ -261,11 +261,13 @@ const handleRegister = async () => {
 
 ---
 
-### Additional API Endpoints
+---
+
+## API Endpoints
 
 #### `GET /api/circuit-breaker/status` — Check Circuit Breaker State
 
-Allows ADMIN to check the current state of the circuit breaker for the payment gateway.
+Cho phép ADMIN xem trạng thái hiện tại của circuit breaker cho cổng thanh toán.
 
 **Response 200:**
 ```json
@@ -278,3 +280,6 @@ Allows ADMIN to check the current state of the circuit breaker for the payment g
   }
 }
 ```
+
+
+

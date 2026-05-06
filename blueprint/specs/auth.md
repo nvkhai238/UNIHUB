@@ -1,10 +1,10 @@
-# Module Spec: Auth (Thành viên 2)
+﻿# Đặc tả: Xác thực (Thành viên 2)
 
 > **Phạm vi:** Đăng nhập, đăng ký, làm mới token JWT, đăng xuất, bảo vệ endpoint theo role.
 
 ---
 
-## 1. Trách nhiệm module
+## Mô tả
 
 | Trách nhiệm                  | Mô tả                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------- |
@@ -17,7 +17,148 @@
 
 ---
 
-## 2. API Endpoints
+## Luồng chính
+
+### Cấu trúc Access Token
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "nguyenvana@university.edu.vn",
+  "role": "STUDENT",
+  "iat": 1748908800,
+  "exp": 1748995200
+}
+```
+
+| Field   | Mô tả                              |
+| ------- | ---------------------------------- |
+| `sub`   | UUID của user trong bảng `users`   |
+| `email` | Email người dùng (read-only)       |
+| `role`  | `STUDENT` / `ORGANIZER` / `CHECKIN_STAFF` |
+| `iat`   | Thời điểm phát hành (Unix epoch)   |
+| `exp`   | Thời điểm hết hạn = `iat + 86400` (24h) |
+
+### Token TTL
+
+| Token Type    | TTL     | Lưu trữ phía client              |
+| ------------- | ------- | -------------------------------- |
+| Access Token  | 24 giờ  | `localStorage` (hoặc memory)     |
+| Refresh Token | 7 ngày  | `localStorage` (httpOnly cookie nếu có thể) |
+
+### Đăng xuất — Blacklist trong Redis
+
+```
+Key:   refresh:{refreshToken}
+Value: "revoked"
+TTL:   Thời gian còn lại của token (seconds)
+```
+
+Khi `/api/auth/refresh` được gọi:
+1. Kiểm tra token có trong Redis blacklist không → nếu có → 401
+2. Verify signature + expiry
+3. Cấp access token mới
+
+---
+
+### Khởi tạo mật khẩu mặc định
+
+Tài khoản sinh viên được tạo bởi CSV Import Job. Mật khẩu ban đầu = `student_id + "@UniHub"` (ví dụ: mã SV `21521234` → mật khẩu mặc định `21521234@UniHub`).
+
+Tài khoản ORGANIZER và CHECKIN_STAFF được tạo thủ công bởi DBA/Admin hệ thống — không qua API đăng ký public.
+
+**Không có tính năng "Quên mật khẩu" trong phạm vi đồ án.** Sinh viên quên mật khẩu liên hệ ban tổ chức để reset về mặc định.
+
+---
+
+### Spring Security Filter Chain
+
+```
+Request đến
+    │
+    ▼
+JwtAuthenticationFilter (OncePerRequestFilter)
+    ├── Extract Bearer token từ header Authorization
+    ├── Nếu không có token → SecurityContext rỗng → tiếp tục (public endpoint tự xử lý)
+    ├── Verify signature (HMAC-SHA256, secret từ application.yml)
+    ├── Kiểm tra exp → 401 nếu hết hạn
+    ├── Parse claims: sub, email, role
+    └── Set SecurityContextHolder với UsernamePasswordAuthenticationToken
+    │
+    ▼
+Authorization Check (Spring Security)
+    ├── /api/auth/**         → permitAll (public)
+    ├── GET /api/workshops/** → permitAll (public)
+    ├── POST /api/registrations/** → hasRole("STUDENT")
+    ├── GET /api/registrations/my/** → hasRole("STUDENT")
+    ├── /api/admin/**        → hasRole("ORGANIZER")
+    ├── POST/PUT/DELETE /api/workshops/** → hasRole("ORGANIZER")
+    ├── /api/checkins/**     → hasRole("CHECKIN_STAFF")
+    └── anyRequest()        → authenticated()
+```
+
+---
+
+## Ràng buộc
+
+```yaml
+app:
+  jwt:
+    secret: "${JWT_SECRET}"        # 256-bit base64 encoded, set qua env var
+    access-token-ttl: 86400        # 24 giờ (seconds)
+    refresh-token-ttl: 604800      # 7 ngày (seconds)
+
+spring:
+  security:
+    filter-order: 10
+```
+
+**Lưu ý bảo mật:**
+- `JWT_SECRET` không được commit vào source code — set qua biến môi trường hoặc `.env` file (không commit `.env`).
+- Secret phải dài ít nhất 32 ký tự (256 bit) để đảm bảo an toàn cho HMAC-SHA256.
+
+---
+
+## Kịch bản lỗi
+
+Mọi response lỗi từ module Auth đều theo format chung:
+
+```json
+{
+  "status": <HTTP status code>,
+  "code": "<ERROR_CODE>",
+  "message": "<Thông báo tiếng Việt cho người dùng>"
+}
+```
+
+| Tình huống                     | HTTP | Code                    |
+| ------------------------------ | ---- | ----------------------- |
+| Sai email hoặc password        | 401  | `INVALID_CREDENTIALS`   |
+| Tài khoản bị vô hiệu hóa      | 403  | `ACCOUNT_DISABLED`      |
+| Access token hết hạn           | 401  | `TOKEN_EXPIRED`         |
+| Access token không hợp lệ     | 401  | `TOKEN_INVALID`         |
+| Refresh token bị blacklist     | 401  | `REFRESH_TOKEN_INVALID` |
+| Thiếu header Authorization    | 401  | `UNAUTHORIZED`          |
+| Role không đủ quyền           | 403  | `FORBIDDEN`             |
+| Mật khẩu hiện tại sai         | 400  | `WRONG_CURRENT_PASSWORD`|
+
+---
+
+## Tiêu chí chấp nhận
+
+- [ ] Tạo `JwtAuthenticationFilter` extends `OncePerRequestFilter`
+- [ ] Tạo `JwtService` — `generateAccessToken()`, `validateToken()`, `extractClaims()`
+- [ ] Tạo `RefreshTokenService` — lưu/xóa/blacklist trong Redis
+- [ ] Cấu hình `SecurityFilterChain` bean trong `SecurityConfig`
+- [ ] Tạo `AuthController` với 4 endpoints: login, refresh, logout, change-password
+- [ ] Tạo `UserDetailsServiceImpl` — load user từ PostgreSQL theo email
+- [ ] Viết `PasswordEncoder` bean (BCrypt, strength 12)
+- [ ] Test: login thành công, sai password, token hết hạn, blacklist refresh token
+- [ ] Test: endpoint STUDENT không cho ORGANIZER truy cập và ngược lại
+
+---
+
+## API Endpoints
 
 ### Base path: `/api/auth`
 
@@ -146,141 +287,6 @@ Làm mới access token mà không cần đăng nhập lại.
 
 ---
 
-## 3. Thiết kế JWT
 
-### Cấu trúc Access Token
 
-```json
-{
-  "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "email": "nguyenvana@university.edu.vn",
-  "role": "STUDENT",
-  "iat": 1748908800,
-  "exp": 1748995200
-}
-```
 
-| Field   | Mô tả                              |
-| ------- | ---------------------------------- |
-| `sub`   | UUID của user trong bảng `users`   |
-| `email` | Email người dùng (read-only)       |
-| `role`  | `STUDENT` / `ORGANIZER` / `CHECKIN_STAFF` |
-| `iat`   | Thời điểm phát hành (Unix epoch)   |
-| `exp`   | Thời điểm hết hạn = `iat + 86400` (24h) |
-
-### Token TTL
-
-| Token Type    | TTL     | Lưu trữ phía client              |
-| ------------- | ------- | -------------------------------- |
-| Access Token  | 24 giờ  | `localStorage` (hoặc memory)     |
-| Refresh Token | 7 ngày  | `localStorage` (httpOnly cookie nếu có thể) |
-
-### Đăng xuất — Blacklist trong Redis
-
-```
-Key:   refresh:{refreshToken}
-Value: "revoked"
-TTL:   Thời gian còn lại của token (seconds)
-```
-
-Khi `/api/auth/refresh` được gọi:
-1. Kiểm tra token có trong Redis blacklist không → nếu có → 401
-2. Verify signature + expiry
-3. Cấp access token mới
-
----
-
-## 4. Khởi tạo mật khẩu mặc định
-
-Tài khoản sinh viên được tạo bởi CSV Import Job. Mật khẩu ban đầu = `student_id + "@UniHub"` (ví dụ: mã SV `21521234` → mật khẩu mặc định `21521234@UniHub`).
-
-Tài khoản ORGANIZER và CHECKIN_STAFF được tạo thủ công bởi DBA/Admin hệ thống — không qua API đăng ký public.
-
-**Không có tính năng "Quên mật khẩu" trong phạm vi đồ án.** Sinh viên quên mật khẩu liên hệ ban tổ chức để reset về mặc định.
-
----
-
-## 5. Spring Security Filter Chain
-
-```
-Request đến
-    │
-    ▼
-JwtAuthenticationFilter (OncePerRequestFilter)
-    ├── Extract Bearer token từ header Authorization
-    ├── Nếu không có token → SecurityContext rỗng → tiếp tục (public endpoint tự xử lý)
-    ├── Verify signature (HMAC-SHA256, secret từ application.yml)
-    ├── Kiểm tra exp → 401 nếu hết hạn
-    ├── Parse claims: sub, email, role
-    └── Set SecurityContextHolder với UsernamePasswordAuthenticationToken
-    │
-    ▼
-Authorization Check (Spring Security)
-    ├── /api/auth/**         → permitAll (public)
-    ├── GET /api/workshops/** → permitAll (public)
-    ├── POST /api/registrations/** → hasRole("STUDENT")
-    ├── GET /api/registrations/my/** → hasRole("STUDENT")
-    ├── /api/admin/**        → hasRole("ORGANIZER")
-    ├── POST/PUT/DELETE /api/workshops/** → hasRole("ORGANIZER")
-    ├── /api/checkins/**     → hasRole("CHECKIN_STAFF")
-    └── anyRequest()        → authenticated()
-```
-
----
-
-## 6. Cấu hình `application.yml`
-
-```yaml
-app:
-  jwt:
-    secret: "${JWT_SECRET}"        # 256-bit base64 encoded, set qua env var
-    access-token-ttl: 86400        # 24 giờ (seconds)
-    refresh-token-ttl: 604800      # 7 ngày (seconds)
-
-spring:
-  security:
-    filter-order: 10
-```
-
-**Lưu ý bảo mật:**
-- `JWT_SECRET` không được commit vào source code — set qua biến môi trường hoặc `.env` file (không commit `.env`).
-- Secret phải dài ít nhất 32 ký tự (256 bit) để đảm bảo an toàn cho HMAC-SHA256.
-
----
-
-## 7. Xử lý lỗi chuẩn
-
-Mọi response lỗi từ module Auth đều theo format chung:
-
-```json
-{
-  "status": <HTTP status code>,
-  "code": "<ERROR_CODE>",
-  "message": "<Thông báo tiếng Việt cho người dùng>"
-}
-```
-
-| Tình huống                     | HTTP | Code                    |
-| ------------------------------ | ---- | ----------------------- |
-| Sai email hoặc password        | 401  | `INVALID_CREDENTIALS`   |
-| Tài khoản bị vô hiệu hóa      | 403  | `ACCOUNT_DISABLED`      |
-| Access token hết hạn           | 401  | `TOKEN_EXPIRED`         |
-| Access token không hợp lệ     | 401  | `TOKEN_INVALID`         |
-| Refresh token bị blacklist     | 401  | `REFRESH_TOKEN_INVALID` |
-| Thiếu header Authorization    | 401  | `UNAUTHORIZED`          |
-| Role không đủ quyền           | 403  | `FORBIDDEN`             |
-| Mật khẩu hiện tại sai         | 400  | `WRONG_CURRENT_PASSWORD`|
-
----
-
-## 8. Checklist triển khai (Thành viên 2)
-
-- [ ] Tạo `JwtAuthenticationFilter` extends `OncePerRequestFilter`
-- [ ] Tạo `JwtService` — `generateAccessToken()`, `validateToken()`, `extractClaims()`
-- [ ] Tạo `RefreshTokenService` — lưu/xóa/blacklist trong Redis
-- [ ] Cấu hình `SecurityFilterChain` bean trong `SecurityConfig`
-- [ ] Tạo `AuthController` với 4 endpoints: login, refresh, logout, change-password
-- [ ] Tạo `UserDetailsServiceImpl` — load user từ PostgreSQL theo email
-- [ ] Viết `PasswordEncoder` bean (BCrypt, strength 12)
-- [ ] Test: login thành công, sai password, token hết hạn, blacklist refresh token
-- [ ] Test: endpoint STUDENT không cho ORGANIZER truy cập và ngược lại

@@ -1,4 +1,4 @@
-# Đặc tả: AI Summary (Thành viên 2)
+﻿# Đặc tả: Tóm tắt AI (Thành viên 2)
 
 > **Phạm vi:** Upload PDF workshop, tự động trích xuất & tóm tắt bằng Gemini API.
 
@@ -153,11 +153,23 @@ POST /api/workshops/{workshopId}/ai-summary/retry
 - ✅ Tóm tắt tiếng Việt 3-5 câu, chứa kiến thức chính của workshop
 - ✅ Xem workshop vẫn hoạt động bình thường dù Gemini API down (graceful degradation)
 
-### Additional API Endpoints
+## API Endpoints
 
-#### `GET /api/ai-summary/{workshopId}` — Get AI Summary
+#### `POST /api/workshops/{workshopId}/pdf`
 
-Allows ORGANIZER to retrieve the AI-generated summary for a specific workshop.
+Upload file PDF và kích hoạt tiến trình tạo tóm tắt AI bất đồng bộ.
+
+#### `POST /api/workshops/{workshopId}/ai-summary/retry`
+
+Thử lại tiến trình tạo tóm tắt AI khi trạng thái trước đó là `FAILED`.
+
+#### `GET /api/workshops/{workshopId}/ai-summary`
+
+Lấy trạng thái xử lý và nội dung tóm tắt AI theo namespace workshop.
+
+#### `GET /api/ai-summary/{workshopId}` — Lấy tóm tắt AI
+
+Cho phép ORGANIZER lấy bản tóm tắt AI của một workshop cụ thể.
 
 **Response 200:**
 ```json
@@ -168,3 +180,7 @@ Allows ORGANIZER to retrieve the AI-generated summary for a specific workshop.
   }
 }
 ```
+
+
+
+

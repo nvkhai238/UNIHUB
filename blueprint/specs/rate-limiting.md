@@ -1,4 +1,4 @@
-# Đặc tả: Rate Limiting (Thành viên 1)
+﻿# Đặc tả: Giới hạn tần suất (Thành viên 1)
 
 > **Phạm vi:** Kiểm soát tải đột biến, chống brute-force, đảm bảo công bằng giữa sinh viên.
 
@@ -43,7 +43,7 @@ POST /api/registrations (hoặc bất kỳ endpoint có @RateLimiter)
   └── Response → Client
 ```
 
-### Configuration (application.yml)
+### Cấu hình (application.yml)
 
 ```yaml
 resilience4j:
@@ -67,7 +67,7 @@ management:
         include: health,metrics         # Expose rate limiter metrics
 ```
 
-### Controller Implementation
+### Cài đặt controller
 
 ```java
 @RestController
@@ -121,7 +121,7 @@ public class RegistrationController {
 }
 ```
 
-### Frontend Handling
+### Xử lý phía frontend
 
 ```javascript
 // React component
@@ -221,3 +221,12 @@ return (
 - ✅ Nếu Resilience4j config fail → System startup warning nhưng không crash
 - ✅ Rate limit không block non-API requests (static files, health check)
 - ✅ Load test: 1000 users trong 10 phút → backend không sập, rate limit hoạt động
+
+---
+
+## API Endpoints
+
+#### `POST /api/registrations` — Endpoint áp dụng rate limit
+
+
+
