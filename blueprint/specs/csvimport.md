@@ -130,3 +130,22 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
 - ✅ Nếu FTP fail → SKIPPED, không insert partial data
 - ✅ 2 lần chạy job → không có duplicate hoặc data corruption
 - ✅ Log file ghi chi tiết từng dòng lỗi (line number, error reason)
+
+### Additional API Endpoints
+
+#### `GET /api/csv/status` — Check Import Job Status
+
+Allows ADMIN to check the status of the latest CSV import job.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "jobId": "job123",
+    "status": "COMPLETED",
+    "processedRecords": 1000,
+    "failedRecords": 10
+  }
+}
+```

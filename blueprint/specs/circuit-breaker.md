@@ -258,3 +258,23 @@ const handleRegister = async () => {
 - ✅ Metrics available: `/actuator/metrics/resilience4j.circuitbreaker.state`
 - ✅ Health check: `/actuator/health/circuitbreakers` show status OPEN/CLOSED/HALF_OPEN
 - ✅ Load test: 10 calls, 5 fail → CB OPEN, các call tiếp theo 503 (không slow)
+
+---
+
+### Additional API Endpoints
+
+#### `GET /api/circuit-breaker/status` — Check Circuit Breaker State
+
+Allows ADMIN to check the current state of the circuit breaker for the payment gateway.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "state": "CLOSED",
+    "failureRate": 10,
+    "slowCallRate": 5
+  }
+}
+```

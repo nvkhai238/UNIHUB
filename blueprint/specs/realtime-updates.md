@@ -85,6 +85,20 @@ const channel = supabase
   .subscribe();
 ```
 
+### Additional API Endpoints
+
+#### `GET /api/realtime/workshops/{id}` — Subscribe to Workshop Updates
+
+Allows clients to subscribe to real-time updates for a specific workshop.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "message": "Subscribed to workshop updates."
+}
+```
+
 ---
 
 ## Kịch bản lỗi

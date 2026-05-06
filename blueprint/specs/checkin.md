@@ -61,3 +61,24 @@ Hệ thống cho phép nhân sự (CHECKIN_STAFF) quét mã QR để ghi nhận 
 - ✅ Tắt Wifi, quét QR hợp lệ → Báo thành công, lưu local.
 - ✅ Quét lại mã QR đó khi tắt Wifi → Báo đã check-in.
 - ✅ Bật Wifi lại → Payload tự động gửi lên server qua `POST /api/checkins/sync` mà không cần staff bấm nút.
+
+### Additional API Endpoints
+
+#### `GET /api/checkins/{workshopId}` — List Check-ins
+
+Allows CHECKIN_STAFF to view all check-ins for a specific workshop.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "id": "checkin123",
+      "userId": "user456",
+      "workshopId": "workshop789",
+      "checkinTime": "2026-05-10T08:00:00Z"
+    }
+  ]
+}
+```

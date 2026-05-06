@@ -146,3 +146,30 @@ DELETE /api/registrations/{registrationId}
 - ✅ Circuit Breaker OPEN khi payment GW fail → hệ thống xem workshop vẫn hoạt động 100%
 - ✅ Email xác nhận gửi async, không block response
 - ✅ Pagination: danh sách registration hỗ trợ page & size
+
+### Additional API Endpoints
+
+#### `GET /api/registrations` — List Registrations
+
+Allows STUDENT to view their registrations and ORGANIZER to view all registrations for a specific workshop.
+
+**Query Params:**
+- `?workshopId=abc123` — Filter by workshop ID (ORGANIZER only).
+- `?status=CONFIRMED` — Filter by registration status.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "id": "reg123",
+      "workshopId": "abc123",
+      "userId": "user456",
+      "status": "CONFIRMED",
+      "qrCode": "qr123",
+      "createdAt": "2026-05-01T10:00:00Z"
+    }
+  ]
+}
+```

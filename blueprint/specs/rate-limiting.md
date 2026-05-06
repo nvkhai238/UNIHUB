@@ -112,6 +112,12 @@ public class RegistrationController {
         // ...
         return ResponseEntity.ok(...);
     }
+
+    @GetMapping("/rate-limits")
+    public ResponseEntity<?> getRateLimits() {
+        // Return current rate limit status for users
+        return ResponseEntity.ok(...);
+    }
 }
 ```
 

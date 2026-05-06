@@ -152,3 +152,19 @@ POST /api/workshops/{workshopId}/ai-summary/retry
 - ✅ Gemini timeout → retry 2 lần, nếu vẫn timeout → FAILED
 - ✅ Tóm tắt tiếng Việt 3-5 câu, chứa kiến thức chính của workshop
 - ✅ Xem workshop vẫn hoạt động bình thường dù Gemini API down (graceful degradation)
+
+### Additional API Endpoints
+
+#### `GET /api/ai-summary/{workshopId}` — Get AI Summary
+
+Allows ORGANIZER to retrieve the AI-generated summary for a specific workshop.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "summary": "This workshop covers the basics of AI in education..."
+  }
+}
+```

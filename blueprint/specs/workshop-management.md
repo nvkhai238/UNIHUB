@@ -233,6 +233,45 @@ Xem tất cả workshop (DRAFT, PUBLISHED, CANCELLED).
 
 ---
 
+### Additional API Endpoints
+
+#### `PATCH /api/workshops/{id}` — Update Workshop Details
+
+Allows ORGANIZER to update workshop details such as title, speaker, room, and schedule.
+
+**Request Body:**
+```json
+{
+  "title": "Updated Workshop Title",
+  "speakerName": "Updated Speaker",
+  "room": "Updated Room",
+  "startTime": "2026-05-10T10:00:00Z",
+  "endTime": "2026-05-10T12:00:00Z"
+}
+```
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "message": "Workshop updated successfully."
+}
+```
+
+#### `DELETE /api/workshops/{id}` — Cancel Workshop
+
+Allows ORGANIZER to cancel a workshop. Updates the status to `CANCELLED`.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "message": "Workshop cancelled successfully."
+}
+```
+
+---
+
 ## Luồng chính
 
 ### Luồng: CRUD & Status Management

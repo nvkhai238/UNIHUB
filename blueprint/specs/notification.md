@@ -148,6 +148,32 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
+### Additional API Endpoints
+
+#### `POST /api/notifications` — Create Notification
+
+Allows ORGANIZER to create a new notification for a specific workshop.
+
+**Request Body:**
+```json
+{
+  "workshopId": "abc123",
+  "type": "WORKSHOP_UPDATED",
+  "title": "Workshop Updated",
+  "body": "The workshop schedule has been updated."
+}
+```
+
+**Response 201:**
+```json
+{
+  "status": 201,
+  "message": "Notification created successfully."
+}
+```
+
+---
+
 ## Luồng chính
 
 ### Luồng A: Email Registration Confirmation
