@@ -1,4 +1,4 @@
-# Đặc tả: Check-in & Offline Sync (Thành viên 3)
+﻿# Đặc tả: Check-in và đồng bộ offline (Thành viên 3)
 
 > **Phạm vi:** Quét QR tại cửa phòng (online và offline), đồng bộ nền khi mạng trở lại qua PWA. (Phần CSV và Notification đã được tách riêng).
 
@@ -61,3 +61,36 @@ Hệ thống cho phép nhân sự (CHECKIN_STAFF) quét mã QR để ghi nhận 
 - ✅ Tắt Wifi, quét QR hợp lệ → Báo thành công, lưu local.
 - ✅ Quét lại mã QR đó khi tắt Wifi → Báo đã check-in.
 - ✅ Bật Wifi lại → Payload tự động gửi lên server qua `POST /api/checkins/sync` mà không cần staff bấm nút.
+
+## API Endpoints
+
+#### `GET /api/checkins/preload?date={today}`
+
+Tải trước danh sách QR hợp lệ cho các workshop trong ngày để phục vụ check-in offline.
+
+#### `POST /api/checkins/sync`
+
+Đồng bộ batch check-in từ thiết bị offline lên server khi có mạng trở lại.
+
+#### `GET /api/checkins/{workshopId}` — Danh sách check-in
+
+Cho phép CHECKIN_STAFF xem toàn bộ lượt check-in của một workshop cụ thể.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "id": "checkin123",
+      "userId": "user456",
+      "workshopId": "workshop789",
+      "checkinTime": "2026-05-10T08:00:00Z"
+    }
+  ]
+}
+```
+
+
+
+

@@ -1,4 +1,4 @@
-# Đặc tả: Registration (Thành viên 1)
+﻿# Đặc tả: Đăng ký workshop (Thành viên 1)
 
 > **Phạm vi:** Đăng ký workshop (miễn phí và có phí), quản lý chỗ ngồi, danh sách chờ, QR code.
 
@@ -146,3 +146,50 @@ DELETE /api/registrations/{registrationId}
 - ✅ Circuit Breaker OPEN khi payment GW fail → hệ thống xem workshop vẫn hoạt động 100%
 - ✅ Email xác nhận gửi async, không block response
 - ✅ Pagination: danh sách registration hỗ trợ page & size
+
+## API Endpoints
+
+#### `POST /api/registrations`
+
+Sinh viên đăng ký workshop. Áp dụng cho cả workshop miễn phí và workshop có phí.
+
+#### `GET /api/registrations/my`
+
+Sinh viên xem danh sách đăng ký của chính mình.
+
+#### `DELETE /api/registrations/{registrationId}`
+
+Sinh viên hủy đăng ký trước khi workshop bắt đầu.
+
+#### `GET /api/admin/registrations`
+
+Ban tổ chức xem danh sách đăng ký theo workshop, trạng thái và phân trang.
+
+#### `GET /api/registrations` — Danh sách đăng ký
+
+Cho phép STUDENT xem đăng ký của mình và ORGANIZER xem danh sách đăng ký theo workshop.
+
+**Query Params:**
+- `?workshopId=abc123` — Lọc theo workshop ID (chỉ ORGANIZER).
+- `?status=CONFIRMED` — Lọc theo trạng thái đăng ký.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "id": "reg123",
+      "workshopId": "abc123",
+      "userId": "user456",
+      "status": "CONFIRMED",
+      "qrCode": "qr123",
+      "createdAt": "2026-05-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+
+
+

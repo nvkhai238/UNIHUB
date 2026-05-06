@@ -1,4 +1,4 @@
-# Đặc tả: CSV Import (Thành viên 3)
+﻿# Đặc tả: Nhập CSV (Thành viên 3)
 
 > **Phạm vi:** Spring Batch job đọc file CSV sinh viên từ hệ thống cũ, upsert vào database lúc 2 AM.
 
@@ -130,3 +130,26 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
 - ✅ Nếu FTP fail → SKIPPED, không insert partial data
 - ✅ 2 lần chạy job → không có duplicate hoặc data corruption
 - ✅ Log file ghi chi tiết từng dòng lỗi (line number, error reason)
+
+## API Endpoints
+
+#### `GET /api/csv/status` — Check Import Job Status
+
+Cho phép ADMIN xem trạng thái của lần chạy CSV import gần nhất.
+
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": {
+    "jobId": "job123",
+    "status": "COMPLETED",
+    "processedRecords": 1000,
+    "failedRecords": 10
+  }
+}
+```
+
+
+
+
