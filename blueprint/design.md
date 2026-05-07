@@ -1,6 +1,6 @@
 # UniHub Workshop — Technical Design
 
-> **Stack đã chốt:** Java 21 + Spring Boot 3.x · React + Vite (PWA) · Supabase (PostgreSQL) · Redis · Gemini API · SMTP
+> **Stack đã chốt:** Java 21 + Spring Boot 3.x · React + Vite PWA · Service Worker + IndexedDB · Supabase (PostgreSQL + Storage) · Redis · Gemini API · SMTP
 >
 > **Phân công:** Thành viên 1 — Đăng ký & Giao dịch | Thành viên 2 — Quản trị & AI | Thành viên 3 — Vận hành & Đồng bộ
 
@@ -50,7 +50,7 @@ com.unihub.workshop
 Sơ đồ này thể hiện UniHub Workshop trong bức tranh toàn cảnh: ai dùng hệ thống và hệ thống ngoài nào được tích hợp.
 
 ```mermaid
-%%{init: {  "theme": "base",  "flowchart": {    "curve": "basis",    "nodeSpacing": 75,    "rankSpacing": 85  },  "themeVariables": {    "fontFamily": "Arial",    "primaryTextColor": "#222",    "lineColor": "#666"  }}}%%
+%%{init: { "theme": "base", "flowchart": { "curve": "basis", "htmlLabels": true, "nodeSpacing": 70, "rankSpacing": 80 }, "themeVariables": { "fontFamily": "Arial", "primaryTextColor": "#222", "lineColor": "#666" } }}%%
 flowchart TB
     %% ================= TITLE =================
     title["Sơ đồ Context<br/>(Level 1) — Hệ thống UniHub<br/>Workshop"]
@@ -85,8 +85,7 @@ flowchart TB
     organizer -->|Quản lý, xem báo cáo<br/>HTTPS| unihub
     student -->|Đăng ký, xem lịch<br/>HTTPS| unihub
     
-    %% ĐÃ SỬA: Thay đổi hướng mũi tên từ UniHub sang Legacy
-    unihub -->|Đồng bộ sinh viên<br/>CSV / Nightly Job| legacy
+    legacy -->|Export CSV hằng đêm<br/>UniHub chỉ đọc file| unihub
     
     unihub -->|Gửi thông báo<br/>SMTP| email
     unihub -->|Tóm tắt PDF<br/>Gemini API| ai
@@ -109,87 +108,92 @@ flowchart TB
 Sơ đồ này phân rã UniHub Workshop thành các container, chỉ rõ công nghệ và cách giao tiếp.
 
 ```mermaid
-%%{init: {  "theme": "base",  "flowchart": {    "curve": "basis",    "nodeSpacing": 60,    "rankSpacing": 90  },  "themeVariables": {    "fontFamily": "Arial",    "primaryTextColor": "#222"  }}}%%
+%%{init: { "theme": "base", "flowchart": { "curve": "basis", "htmlLabels": true, "nodeSpacing": 55, "rankSpacing": 70 }, "themeVariables": { "fontFamily": "Arial", "primaryTextColor": "#222", "lineColor": "#5c6773" } }}%%
 flowchart TB
 
-    title["<b>Sơ đồ Container (Level 2)</b><br/>Hệ thống UniHub Workshop"]
+    title["<b>Sơ đồ Container (Level 2)</b><br/>UniHub Workshop"]
     class title titleStyle
 
     %% ================= USERS =================
     subgraph USERS["[ Người dùng ]"]
         direction LR
-        student["&lt;&lt;person&gt;&gt;<br/><b>Sinh viên</b><br/>Web / Mobile"]
-        btc["&lt;&lt;person&gt;&gt;<br/><b>Ban tổ chức</b><br/>Admin Web"]
-        staff["&lt;&lt;person&gt;&gt;<br/><b>Nhân sự</b><br/>Mobile check-in"]
+        student["&lt;&lt;person&gt;&gt;<br/><b>Sinh viên</b><br/>Xem lịch, đăng ký, nhận QR"]
+        organizer["&lt;&lt;person&gt;&gt;<br/><b>Ban tổ chức</b><br/>Quản lý workshop, thống kê"]
+        staff["&lt;&lt;person&gt;&gt;<br/><b>Nhân sự check-in</b><br/>Quét QR tại phòng"]
     end
 
     %% ================= SYSTEM BOUNDARY =================
     subgraph SYSTEM["UniHub Workshop System"]
         direction TB
 
-        subgraph FRONTENDS["Tầng Giao diện"]
+        subgraph FRONTENDS["Tầng Client"]
             direction LR
-            webapp["&lt;&lt;container&gt;&gt;<br/><b>Web App</b><br/>(React + Vite PWA)<br/><span style='font-size:12px'>Xem lịch, đăng ký, nhận QR</span>"]
-            adminweb["&lt;&lt;container&gt;&gt;<br/><b>Admin Web</b><br/>(React + Vite)<br/><span style='font-size:12px'>Quản lý workshop, thống kê</span>"]
-            mobileapp["&lt;&lt;container&gt;&gt;<br/><b>Check-in App</b><br/>(React + Vite PWA)<br/><span style='font-size:12px'>Quét QR, check-in offline</span>"]
+            studentWeb["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Student Web PWA</b><br/>(React + Vite)<br/><span style='font-size:12px'>Lịch workshop, đăng ký, mã QR</span></div>"]
+            adminWeb["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Organizer Admin Web</b><br/>(React + Vite)<br/><span style='font-size:12px'>CRUD workshop, PDF, thống kê</span></div>"]
+            checkinPwa["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Check-in PWA</b><br/>(React + Vite)<br/><span style='font-size:12px'>Quét QR, offline sync</span></div>"]
         end
 
-        backend["&lt;&lt;container&gt;&gt;<br/><b>Modular Monolith API</b><br/>(Java 21 + Spring Boot 3.x)<br/><span style='font-size:12px'>Auth, Workshop, Booking, Payment, Batch, Mail</span>"]
-        
-        redis[("&lt;&lt;database&gt;&gt;<br/><b>Cache & Lock</b><br/>(Redis)<br/><span style='font-size:12px'>Rate limit, Idempotency, Seats</span>")]
+        offlineDb[("&lt;&lt;browser storage&gt;&gt;<br/><b>Offline Check-in Store</b><br/>(IndexedDB)<br/><span style='font-size:12px'>QR preload, pending scans</span>")]
 
-        db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(Supabase PostgreSQL)<br/><span style='font-size:12px'>User, Workshop, Registration</span>")]
-        
-        storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>PDF, QR, CSV</span>"]
+        backend["<div style='width:260px'>&lt;&lt;container&gt;&gt;<br/><b>Modular Monolith API</b><br/>(Java 21 + Spring Boot 3.x)<br/><span style='font-size:12px'>Auth/RBAC, Workshop, Registration, Payment, Check-in, Notification, CSV Batch</span></div>"]
+
+        subgraph DATA["Tầng Dữ liệu"]
+            direction LR
+            db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(Supabase PostgreSQL)<br/><span style='font-size:12px'>Users, workshops, registrations, payments, check-ins</span>")]
+            redis[("&lt;&lt;database&gt;&gt;<br/><b>Cache & Lock</b><br/>(Redis)<br/><span style='font-size:12px'>Rate limit, idempotency, circuit state</span>")]
+            storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>PDF, room maps, QR, CSV import files</span>"]
+        end
     end
 
     %% ================= EXTERNAL SYSTEMS =================
     subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
         direction LR
-        legacy["&lt;&lt;external system&gt;&gt;<br/><b>Legacy SIS</b><br/>(CSV Export)"]
-        vnpay["&lt;&lt;external system&gt;&gt;<br/><b>Mock Payment Gateway</b><br/>(REST API)"]
+        legacy["&lt;&lt;external system&gt;&gt;<br/><b>Legacy Student System</b><br/>(CSV export nightly)"]
+        payment["&lt;&lt;external system&gt;&gt;<br/><b>Mock Payment Gateway</b><br/>(REST API)"]
         ai["&lt;&lt;external system&gt;&gt;<br/><b>AI Service</b><br/>(Gemini API)"]
-        email_svc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP)"]
+        emailSvc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP)"]
     end
+
+    %% ================= LAYOUT =================
+    title ~~~ USERS
 
     %% ================= RELATIONSHIPS =================
     %% Users to Frontends
-    student -->|HTTPS| webapp
-    btc -->|HTTPS| adminweb
-    staff -->|HTTPS| mobileapp
+    student -->|HTTPS| studentWeb
+    organizer -->|HTTPS| adminWeb
+    staff -->|HTTPS| checkinPwa
 
     %% Frontends to Backend
-    webapp -->|REST / HTTPS| backend
-    adminweb -->|REST / HTTPS| backend
-    mobileapp -->|REST / HTTPS| backend
+    studentWeb & adminWeb & checkinPwa -->|REST / HTTPS| backend
+    checkinPwa <-->|Preload QR + pending scans| offlineDb
+    offlineDb -->|Background sync| backend
 
     %% Backend to Storage/DB/Cache
-    backend -->|SQL<br/>Pessimistic Lock| db
-    backend -->|Read/Write files| storage
-    backend -->|Atomic Ops| redis
+    backend -->|SQL + transaction lock| db
+    backend -->|Atomic ops + TTL| redis
+    backend -->|Read/write files| storage
 
     %% Backend to Externals
-    backend -->|HTTPS| vnpay
+    backend -->|REST / HTTPS + circuit breaker| payment
     backend -->|Gemini API| ai
-    backend -->|SMTP| email_svc
-    
-    %% Mũi tên từ UniHub sang Legacy theo yêu cầu trước đó của bạn
-    backend -->|Đồng bộ dữ liệu<br/>CSV Nightly| legacy
+    backend -->|SMTP| emailSvc
+    legacy -->|CSV nightly export| storage
 
     %% ================= STYLING =================
-    classDef titleStyle fill:transparent,stroke:transparent,font-size:20px;
-    classDef person fill:#eeecff,stroke:#6c63d9,color:#34308a;
-    classDef ui fill:#dff3eb,stroke:#08785f,color:#065f4b;
-    classDef logic fill:#dfefff,stroke:#2f75b5,color:#0d47a1;
-    classDef service fill:#fff1e8,stroke:#c26b4b,color:#7a2d14;
-    classDef database fill:#f3f1ec,stroke:#999,color:#444;
-    classDef external fill:#fdebf2,stroke:#cc6688,color:#8a3355;
+    classDef titleStyle fill:transparent,stroke:transparent,font-size:20px,font-weight:bold;
+    classDef person fill:#eeecff,stroke:#6c63d9,stroke-width:1.4px,color:#34308a;
+    classDef ui fill:#dff3eb,stroke:#08785f,stroke-width:1.6px,color:#065f4b;
+    classDef logic fill:#dfefff,stroke:#2f75b5,stroke-width:1.8px,color:#0d47a1;
+    classDef database fill:#f3f1ec,stroke:#8d8d8d,stroke-width:1.2px,color:#444;
+    classDef external fill:#fdebf2,stroke:#cc6688,stroke-width:1.2px,color:#8a3355;
+    classDef local fill:#fff7db,stroke:#b7791f,stroke-width:1.2px,color:#6b4e16;
 
-    class student,btc,staff person;
-    class webapp,adminweb,mobileapp ui;
+    class student,organizer,staff person;
+    class studentWeb,adminWeb,checkinPwa ui;
     class backend logic;
     class db,redis,storage database;
-    class legacy,vnpay,ai,email_svc external;
+    class offlineDb local;
+    class legacy,payment,ai,emailSvc external;
 ```
 
 ---
@@ -199,48 +203,71 @@ flowchart TB
 Sơ đồ này thể hiện luồng dữ liệu và điểm tích hợp quan trọng, đặc biệt ở các tình huống phức tạp.
 
 ```mermaid
----
-config:
-  layout: elk
----
-flowchart TB
- subgraph subGraph0["Client Layer"]
-        Web_Student["Web App (PWA) - Sinh viên"]
-        Web_Admin["Web App - Ban tổ chức"]
-        Mobile_Staff["Mobile App (PWA) - Nhân sự Check-in"]
-  end
- subgraph subGraph1["Core Backend Services (Spring Boot)"]
-        Auth_Service["Identity Service"]
-        Workshop_Service["Workshop & Catalog Service"]
-        Booking_Service["Booking & Payment Service\n(Circuit Breaker)"]
-        Notification_Service["Notification Service"]
-        Sync_Service["CSV Sync Worker\n(Spring Batch)"]
-  end
- subgraph subGraph2["Data Storage"]
-        Redis[("Redis\nIdempotency Key / Rate Limit")]
-        DB[("Primary Database\nPostgreSQL\n(Pessimistic Lock)")]
-        LocalDB[("IndexedDB\n(PWA Offline Storage)")]
-  end
- subgraph subGraph3["External Systems"]
-        Legacy_System["Hệ thống cũ\n(CSV Export)"]
-        Payment_Gateway["Cổng Thanh Toán Mock"]
-        AI_Model["AI Model\n(Gemini API)"]
-        Email_Provider["Email / App Push"]
-  end
-    Web_Student --> API_Gateway["API Gateway\nRate Limiting / Routing"]
-    Web_Admin --> API_Gateway
-    Mobile_Staff <--> LocalDB
-    Mobile_Staff -- Background Sync khi có mạng --> API_Gateway
-    API_Gateway --> Auth_Service & Workshop_Service & Booking_Service
-    Workshop_Service --> AI_Model & DB
-    Booking_Service <--> Redis
-    Booking_Service --> Payment_Gateway & DB
-    Booking_Service -- Publish Event --> MQ(("Message Queue<br>RabbitMQ"))
-    Sync_Service -- Lấy file lúc 2:00 AM --> Legacy_System
-    Sync_Service --> DB
-    MQ -- Xử lý lưu vé Async --> Booking_Service
-    MQ -- Kích hoạt gửi Mail --> Notification_Service
-    Notification_Service --> Email_Provider
+%%{init: { "theme": "base", "flowchart": { "curve": "basis", "htmlLabels": true, "nodeSpacing": 55, "rankSpacing": 70 }, "themeVariables": { "fontFamily": "Arial", "primaryTextColor": "#222", "lineColor": "#5c6773" } }}%%
+flowchart LR
+    subgraph CLIENTS["Client Layer"]
+        direction TB
+        Web_Student["Student Web PWA<br/>(React + Vite)"]
+        Web_Admin["Organizer Admin Web<br/>(React + Vite)"]
+        Checkin_PWA["Check-in PWA<br/>(Service Worker)"]
+        LocalDB[("IndexedDB<br/>Offline QR + pending scans")]
+    end
+
+    subgraph BACKEND["Spring Boot Modular Monolith"]
+        direction TB
+        Edge["Security + Rate Limit Filter<br/>(JWT, RBAC, Redis counters)"]
+        Auth_Service["Auth Module"]
+        Workshop_Service["Workshop + AI Summary Module"]
+        Registration_Service["Registration Module<br/>(Seat locking)"]
+        Payment_Service["Payment Module<br/>(Circuit Breaker + Idempotency)"]
+        Checkin_Service["Check-in Sync Module"]
+        Notification_Service["Notification Module<br/>(Email + In-app adapter)"]
+        Csv_Service["CSV Import Module<br/>(Spring Batch nightly job)"]
+    end
+
+    subgraph DATA["Data Layer"]
+        DB[("Supabase PostgreSQL<br/>Users, workshops, registrations, payments, check-ins")]
+        Redis[("Redis<br/>Rate limit, idempotency, circuit state")]
+        Storage["Supabase Storage<br/>PDF, room maps, QR, CSV files"]
+    end
+
+    subgraph EXTERNALS["External Systems"]
+        Legacy_System["Legacy Student System<br/>CSV export only"]
+        Payment_Gateway["Mock Payment Gateway<br/>REST API"]
+        AI_Model["Gemini API<br/>PDF summary"]
+        Email_Provider["SMTP Provider<br/>Email delivery"]
+    end
+
+    Web_Student -->|REST / HTTPS| Edge
+    Web_Admin -->|REST / HTTPS| Edge
+    Checkin_PWA <-->|Preload + save scans| LocalDB
+    Checkin_PWA -->|REST / HTTPS sync| Edge
+
+    Edge --> Auth_Service
+    Edge --> Workshop_Service
+    Edge --> Registration_Service
+    Edge --> Payment_Service
+    Edge --> Checkin_Service
+
+    Workshop_Service -->|Read/write workshop data| DB
+    Workshop_Service -->|PDF text to summarize| AI_Model
+    Workshop_Service -->|PDF + room maps| Storage
+
+    Registration_Service -->|SQL transaction + lock| DB
+    Registration_Service -->|Rate/idempotency lookup| Redis
+    Registration_Service -->|Emit confirmation event| Notification_Service
+
+    Payment_Service -->|REST call with idempotency key| Payment_Gateway
+    Payment_Service -->|Cache response + circuit state| Redis
+    Payment_Service -->|Payment status| DB
+
+    Checkin_Service -->|Persist synced scans| DB
+    Notification_Service -->|SMTP| Email_Provider
+    Notification_Service -->|In-app notifications| DB
+
+    Legacy_System -->|Nightly CSV export| Storage
+    Csv_Service -->|Read, validate, upsert| Storage
+    Csv_Service -->|Upsert students + batch log| DB
 ```
 
 ## 4. Thiết kế cơ sở dữ liệu
