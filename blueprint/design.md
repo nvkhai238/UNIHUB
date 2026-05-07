@@ -69,10 +69,10 @@ flowchart TB
     %% ================= EXTERNAL SYSTEM AREA =================
     subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
         direction LR
-        legacy["&lt;&lt;external system&gt;&gt;<br/>Legacy Student System<br/><span style='font-size:13px'>Export CSV định kỳ</span>"]
-        email["&lt;&lt;external system&gt;&gt;<br/>Email / Notif. System<br/><span style='font-size:13px'>Gửi QR, thông báo SV</span>"]
-        ai["&lt;&lt;external system&gt;&gt;<br/>AI Service (Gemini)<br/><span style='font-size:13px'>Tóm tắt nội dung PDF</span>"]
-        payment["&lt;&lt;external system&gt;&gt;<br/>Payment Gateway<br/><span style='font-size:13px'>Workshop có phí</span>"]
+        legacy["&lt;&lt;external system&gt;&gt;<br/>Legacy Student System<br/><span style='font-size:13px'>Chỉ export CSV hằng đêm</span>"]
+        email["&lt;&lt;external system&gt;&gt;<br/>Email Service<br/><span style='font-size:13px'>SMTP gửi QR, thông báo</span>"]
+        ai["&lt;&lt;external system&gt;&gt;<br/>AI Service (Gemini)<br/><span style='font-size:13px'>Tóm tắt PDF workshop</span>"]
+        payment["&lt;&lt;external system&gt;&gt;<br/>Mock Payment Gateway<br/><span style='font-size:13px'>Thanh toán workshop có phí</span>"]
     end
 
     %% ================= INVISIBLE LAYOUT LINKS =================
@@ -85,11 +85,11 @@ flowchart TB
     organizer -->|Quản lý, xem báo cáo<br/>HTTPS| unihub
     student -->|Đăng ký, xem lịch<br/>HTTPS| unihub
     
-    legacy -->|Export CSV hằng đêm<br/>UniHub chỉ đọc file| unihub
+    legacy -->|Export CSV hằng đêm<br/>UniHub đọc file, không gọi API| unihub
     
     unihub -->|Gửi thông báo<br/>SMTP| email
     unihub -->|Tóm tắt PDF<br/>Gemini API| ai
-    unihub -->|Thanh toán<br/>REST API| payment
+    unihub -->|Thanh toán có phí<br/>REST / HTTPS| payment
 
     %% ================= STYLES =================
     classDef titleStyle fill:transparent,stroke:transparent,color:#111,font-size:22px,font-weight:bold;
@@ -303,7 +303,7 @@ CREATE TYPE payment_status AS ENUM ('PENDING', 'SUCCESS', 'FAILED', 'REFUNDED');
 -- =============================================
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id  VARCHAR(20) UNIQUE,          -- Mã SV, null nếu là Admin/Staff
+    student_id  VARCHAR(20) UNIQUE,          -- Mã SV, null nếu là Organizer/Staff
     email       VARCHAR(255) UNIQUE NOT NULL,
     full_name   VARCHAR(255) NOT NULL,
     role        user_role NOT NULL DEFAULT 'STUDENT',
@@ -432,7 +432,7 @@ CREATE INDEX idx_payments_idem          ON payments(idempotency_key);
 Hệ thống UniHub Workshop có nhiều nhóm người dùng với quyền hạn khác nhau. Vì vậy, hệ thống cần có cơ chế kiểm soát truy cập để đảm bảo mỗi người dùng chỉ được thực hiện đúng các chức năng thuộc phạm vi của mình: Sinh viên chỉ được xem và đăng ký workshop; Ban tổ chức (BTC) được quản lý workshop; Nhân sự chỉ được thực hiện quét QR check-in.
 
 ### 5.2. Mô hình kiểm soát truy cập
-Hệ thống áp dụng mô hình **RBAC (Role-Based Access Control)** thông qua Spring Security + JWT để quản lý quyền hạn của người dùng. Mỗi người dùng sẽ được gán cho một hoặc nhiều vai trò (Role), và mỗi vai trò sẽ có các quyền (Permission) tương ứng. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
+Hệ thống áp dụng mô hình **RBAC (Role-Based Access Control)** thông qua Spring Security + JWT. Trong phạm vi đồ án chỉ có 3 role đúng với đề bài và schema PostgreSQL: `STUDENT`, `ORGANIZER`, `CHECKIN_STAFF`. Mỗi JWT access token chứa claim `role`; backend dùng claim này để kiểm tra quyền ở tầng route và method.
 
 ```json
 {
@@ -445,33 +445,36 @@ Hệ thống áp dụng mô hình **RBAC (Role-Based Access Control)** thông qu
 ```
 
 ### 5.3. Các vai trò trong hệ thống
-* **Student (Sinh viên):** Xem lịch workshop, đăng ký workshop, nhận mã QR và xem trạng thái check-in của chính mình.
-* **Organizer (Ban tổ chức):** Tạo, sửa, hủy workshop, upload tài liệu PDF giới thiệu, xem danh sách sinh viên đăng ký và xem báo cáo thống kê.
-* **Staff (Nhân sự check-in):** Thực hiện quét mã QR của sinh viên tại cửa phòng workshop để ghi nhận sự hiện diện.
-* **Admin (Quản trị viên):** Quản lý người dùng, gán vai trò và cấu hình hệ thống.
+* **STUDENT (Sinh viên):** Xem lịch workshop, đăng ký workshop, nhận mã QR và xem trạng thái check-in của chính mình.
+* **ORGANIZER (Ban tổ chức):** Tạo, sửa, hủy workshop, upload tài liệu PDF giới thiệu, xem danh sách sinh viên đăng ký và xem báo cáo thống kê.
+* **CHECKIN_STAFF (Nhân sự check-in):** Preload danh sách QR hợp lệ, quét QR tại cửa phòng và đồng bộ các lượt check-in offline.
+
+Tài khoản `ORGANIZER` và `CHECKIN_STAFF` được tạo thủ công qua seed data/DBA cho phạm vi đồ án, không mở API public để tự gán role. Vì vậy hệ thống không định nghĩa role `ADMIN` riêng trong runtime; các đường dẫn quản trị nghiệp vụ thuộc role `ORGANIZER`.
 
 ### 5.4. Phân quyền chức năng (Functional Permissions)
 
-| Chức năng | Sinh viên | Ban tổ chức | Nhân sự check-in | Quản trị viên |
-| :--- | :---: | :---: | :---: | :---: |
-| Xem danh sách / chi tiết workshop | ✅ | ✅ | ✅ | ✅ |
-| Đăng ký / Xem mã QR của chính mình | ✅ | ❌ | ❌ | ❌ |
-| Tạo / Cập nhật / Hủy workshop | ❌ | ✅ | ❌ | ✅ |
-| Upload PDF giới thiệu workshop | ❌ | ✅ | ❌ | ✅ |
-| Xem danh sách sinh viên / thống kê | ❌ | ✅ | ❌ | ✅ |
-| Quét QR / Đồng bộ check-in offline | ❌ | ❌ | ✅ | ❌ |
-| Quản lý tài khoản / Gán / thay đổi vai trò | ❌ | ❌ | ❌ | ✅ |
+| Chức năng / Endpoint | STUDENT | ORGANIZER | CHECKIN_STAFF |
+| :--- | :---: | :---: | :---: |
+| Xem danh sách / chi tiết workshop (`GET /api/workshops/**`) | ✅ | ✅ | ✅ |
+| Đăng ký workshop (`POST /api/registrations/**`) | ✅ | ❌ | ❌ |
+| Xem registration / mã QR của chính mình (`GET /api/registrations/my/**`) | ✅ | ❌ | ❌ |
+| Tạo / cập nhật / hủy workshop (`POST/PUT/DELETE /api/workshops/**`) | ❌ | ✅ | ❌ |
+| Upload PDF giới thiệu workshop (`POST /api/admin/workshops/{id}/pdf`) | ❌ | ✅ | ❌ |
+| Xem danh sách sinh viên đăng ký / thống kê (`GET /api/admin/**`) | ❌ | ✅ | ❌ |
+| Preload danh sách QR hợp lệ (`GET /api/checkins/preload`) | ❌ | ❌ | ✅ |
+| Quét QR / đồng bộ check-in offline (`POST /api/checkins/**`) | ❌ | ❌ | ✅ |
 
 ### 5.5. Kiểm soát truy cập tại API Endpoint
-Tất cả request từ Web App, Admin Web và Mobile App đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend hiện các nút chức năng dựa trên role và nó là lớp hỗ trợ giao diện. Việc bảo mật thật sự phải được kiểm tra ở backend.
+Tất cả request từ Student Web, Organizer Admin Web và Check-in PWA đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend chỉ ẩn/hiện route và nút chức năng theo role để cải thiện UX; bảo mật thật sự phải được kiểm tra ở backend.
 
 **Quy trình kiểm tra quyền tại API:**
 1. Người dùng đăng nhập vào hệ thống.
 2. Backend xác thực tài khoản và trả về **JWT Access Token**.
 3. Client lưu token và gửi token trong mỗi request: `Authorization: Bearer <access_token>`.
-4. Backend API kiểm tra token xem nó có tồn tại, hợp lệ hay hết hạn hay không rồi cũng có thể check user có role nào.
-5. Backend kiểm tra role / permission của user với endpoint đang được gọi.
+4. `JwtAuthenticationFilter` kiểm tra token có tồn tại, hợp lệ và chưa hết hạn.
+5. Backend kiểm tra role của user với endpoint đang được gọi.
 6. Nếu không đăng nhập hoặc token sai, trả về `401 Unauthorized`.
+7. Nếu token đúng nhưng role không đủ quyền, trả về `403 Forbidden`.
 
 **Triển khai trong Spring Security (Thành viên 2):**
 
@@ -500,9 +503,6 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
             // Check-in staff only
             .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
-
-            // Admin only
-            .requestMatchers("/api/sysadmin/**").hasRole("ADMIN")
 
             .anyRequest().authenticated()
         )
@@ -533,6 +533,24 @@ public List<RegistrationDto> getMyRegistrations(
     return registrationService.findByUserId(user.getId());
 }
 ```
+
+**Tầng 4 — Frontend route guard theo role:**
+
+```jsx
+<RoleGuard allowedRoles={['STUDENT']}>
+  <StudentLayout />
+</RoleGuard>
+
+<RoleGuard allowedRoles={['ORGANIZER']}>
+  <OrganizerLayout />
+</RoleGuard>
+
+<RoleGuard allowedRoles={['CHECKIN_STAFF']}>
+  <CheckinLayout />
+</RoleGuard>
+```
+
+Route guard chỉ là lớp hỗ trợ giao diện. Người dùng tự sửa URL hoặc token không hợp lệ vẫn bị backend chặn ở tầng Spring Security.
 
 ---
 
@@ -780,98 +798,6 @@ sequenceDiagram
   end
 ```
 
-## 6. Thiết kế kiểm soát truy cập (RBAC)
-
-### Mô hình phân quyền
-
-Sử dụng **Role-Based Access Control (RBAC)** thông qua Spring Security + JWT. Mỗi JWT access token chứa claim `role` để backend xác định quyền mà không cần query database mỗi request.
-
-```json
-{
-  "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "email": "nguyenvana@university.edu.vn",
-  "role": "STUDENT",
-  "iat": 1748908800,
-  "exp": 1748995200
-}
-```
-
-### Ba nhóm người dùng và quyền hạn
-
-| Tính năng / Endpoint      | STUDENT | ORGANIZER | CHECKIN_STAFF |
-| ------------------------- | ------- | --------- | ------------- |
-| Xem danh sách workshop    | ✅      | ✅        | ✅            |
-| Xem chi tiết workshop     | ✅      | ✅        | ✅            |
-| Đăng ký workshop          | ✅      | ❌        | ❌            |
-| Xem registration của mình | ✅      | ❌        | ❌            |
-| Tạo workshop mới          | ❌      | ✅        | ❌            |
-| Sửa / hủy workshop        | ❌      | ✅        | ❌            |
-| Upload PDF workshop       | ❌      | ✅        | ❌            |
-| Xem thống kê đăng ký      | ❌      | ✅        | ❌            |
-| Quét QR check-in          | ❌      | ❌        | ✅            |
-| Preload danh sách QR      | ❌      | ❌        | ✅            |
-| Sync check-in offline     | ❌      | ❌        | ✅            |
-
-### Triển khai trong Spring Security (Thành viên 2)
-
-**Tầng 1 — HTTP Security Config:**
-
-```java
-@Bean
-public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http
-        .csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
-        .authorizeHttpRequests(auth -> auth
-            // Public endpoints
-            .requestMatchers(GET, "/api/workshops/**").permitAll()
-            .requestMatchers(POST, "/api/auth/**").permitAll()
-
-            // Student only
-            .requestMatchers(POST, "/api/registrations/**").hasRole("STUDENT")
-            .requestMatchers(GET, "/api/registrations/my/**").hasRole("STUDENT")
-
-            // Organizer only
-            .requestMatchers("/api/admin/**").hasRole("ORGANIZER")
-            .requestMatchers(POST, "/api/workshops/**").hasRole("ORGANIZER")
-            .requestMatchers(PUT, "/api/workshops/**").hasRole("ORGANIZER")
-            .requestMatchers(DELETE, "/api/workshops/**").hasRole("ORGANIZER")
-
-            // Check-in staff only
-            .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
-
-            .anyRequest().authenticated()
-        )
-        .addFilterBefore(jwtAuthenticationFilter,
-                         UsernamePasswordAuthenticationFilter.class);
-    return http.build();
-}
-```
-
-**Tầng 2 — Method-level Security (defense in depth):**
-
-```java
-@Service
-@PreAuthorize("hasRole('ORGANIZER')")
-public class WorkshopAdminService {
-    public Workshop createWorkshop(CreateWorkshopRequest req) { ... }
-    public Workshop updateWorkshop(UUID id, UpdateWorkshopRequest req) { ... }
-}
-```
-
-**Tầng 3 — Data-level: SV chỉ xem được registration của chính mình:**
-
-```java
-@GetMapping("/registrations/my")
-public List<RegistrationDto> getMyRegistrations(
-        @AuthenticationPrincipal UserDetails user) {
-    // userDetails.getId() lấy từ JWT, không tin vào request param
-    return registrationService.findByUserId(user.getId());
-}
-```
-
----
-
 ## 7. Thiết kế các cơ chế bảo vệ hệ thống
 
 ### 7.1 Kiểm soát tải đột biến — Rate Limiting (Thành viên 1)
@@ -1090,7 +1016,7 @@ public class IdempotencyService {
 ## 8. Thiết kế AI Summary (Thành viên 2)
 
 ```
-Admin                   Spring Boot               Supabase Storage    Gemini API     PostgreSQL
+Organizer               Spring Boot               Supabase Storage    Gemini API     PostgreSQL
   │                          │                          │                  │               │
   │── Upload PDF ───────────▶│                          │                  │               │
   │                          │── Store PDF ────────────▶│                  │               │
@@ -1120,7 +1046,7 @@ Admin                   Spring Boot               Supabase Storage    Gemini API
   │                          │   ai_summary_status = 'DONE'                 │               │
 ```
 
-**Xử lý lỗi:** Nếu Gemini API thất bại → `ai_summary_status = 'FAILED'` → Admin thấy nút "Thử lại". Không ảnh hưởng đến trang chi tiết workshop (chỉ không hiển thị phần AI Summary).
+**Xử lý lỗi:** Nếu Gemini API thất bại → `ai_summary_status = 'FAILED'` → Ban tổ chức thấy nút "Thử lại". Không ảnh hưởng đến trang chi tiết workshop (chỉ không hiển thị phần AI Summary).
 
 ---
 
@@ -1228,7 +1154,7 @@ public void runCsvImportJob() {
 
 ---
 
-### ADR-05: Một codebase React cho cả 3 app (SV, Admin, Check-in)
+### ADR-05: Một codebase React cho cả 3 app (SV, Organizer, Check-in)
 
 **Quyết định:** Một React + Vite project, routing theo role.
 
