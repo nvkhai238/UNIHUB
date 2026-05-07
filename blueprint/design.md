@@ -164,7 +164,7 @@ flowchart TB
     mobileapp -->|REST / HTTPS| backend
 
     %% Backend to Storage/DB/Cache
-    backend -->|SQL (Pessimistic Lock)| db
+    backend -->|SQL<br/>Pessimistic Lock| db
     backend -->|Read/Write files| storage
     backend -->|Atomic Ops| redis
 
