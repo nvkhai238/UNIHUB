@@ -60,8 +60,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/workshops/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/registrations/**").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.GET, "/api/registrations/my/**").hasRole("STUDENT")
                         .requestMatchers("/api/admin/**").hasRole("ORGANIZER")
-                        .requestMatchers("/api/checkin/**").hasAnyRole("CHECKIN_STAFF", "ORGANIZER")
+                        .requestMatchers("/api/checkins/**").hasAnyRole("CHECKIN_STAFF", "ORGANIZER")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {

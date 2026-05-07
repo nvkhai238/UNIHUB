@@ -50,12 +50,15 @@ public class AuthService {
         );
 
         return AuthResponse.builder()
-                .userId(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .role(user.getRole())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .expiresIn(jwtService.getAccessTokenTtlSeconds())
+                .user(AuthResponse.UserDto.builder()
+                        .id(user.getId())
+                        .email(user.getEmail())
+                        .fullName(user.getFullName())
+                        .role(user.getRole())
+                        .build())
                 .build();
     }
 
@@ -109,12 +112,15 @@ public class AuthService {
         );
 
         return AuthResponse.builder()
-                .userId(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .role(user.getRole())
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
+                .expiresIn(jwtService.getAccessTokenTtlSeconds())
+                .user(AuthResponse.UserDto.builder()
+                        .id(user.getId())
+                        .email(user.getEmail())
+                        .fullName(user.getFullName())
+                        .role(user.getRole())
+                        .build())
                 .build();
     }
 }
