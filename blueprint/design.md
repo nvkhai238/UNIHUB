@@ -88,8 +88,8 @@ flowchart TB
     %% ĐÃ SỬA: Thay đổi hướng mũi tên từ UniHub sang Legacy
     unihub -->|Đồng bộ sinh viên<br/>CSV / Nightly Job| legacy
     
-    unihub -->|Gửi thông báo<br/>SMTP / API| email
-    unihub -->|Tóm tắt PDF<br/>REST API / JSON| ai
+    unihub -->|Gửi thông báo<br/>SMTP| email
+    unihub -->|Tóm tắt PDF<br/>Gemini API| ai
     unihub -->|Thanh toán<br/>REST API| payment
 
     %% ================= STYLES =================
@@ -129,18 +129,16 @@ flowchart TB
 
         subgraph FRONTENDS["Tầng Giao diện"]
             direction LR
-            webapp["&lt;&lt;container&gt;&gt;<br/><b>Web App</b><br/>(React)<br/><span style='font-size:12px'>Xem lịch, đăng ký, nhận QR</span>"]
-            adminweb["&lt;&lt;container&gt;&gt;<br/><b>Admin Web</b><br/>(React)<br/><span style='font-size:12px'>Quản lý workshop, thống kê</span>"]
-            mobileapp["&lt;&lt;container&gt;&gt;<br/><b>Mobile App</b><br/>(React Native)<br/><span style='font-size:12px'>Quét QR, check-in offline</span>"]
+            webapp["&lt;&lt;container&gt;&gt;<br/><b>Web App</b><br/>(React + Vite PWA)<br/><span style='font-size:12px'>Xem lịch, đăng ký, nhận QR</span>"]
+            adminweb["&lt;&lt;container&gt;&gt;<br/><b>Admin Web</b><br/>(React + Vite)<br/><span style='font-size:12px'>Quản lý workshop, thống kê</span>"]
+            mobileapp["&lt;&lt;container&gt;&gt;<br/><b>Check-in App</b><br/>(React + Vite PWA)<br/><span style='font-size:12px'>Quét QR, check-in offline</span>"]
         end
 
-        backend["&lt;&lt;container&gt;&gt;<br/><b>Backend API</b><br/>(Java Spring Boot)<br/><span style='font-size:12px'>Auth, RBAC, Workshop, Đăng ký</span>"]
+        backend["&lt;&lt;container&gt;&gt;<br/><b>Modular Monolith API</b><br/>(Java 21 + Spring Boot 3.x)<br/><span style='font-size:12px'>Auth, Workshop, Booking, Payment, Batch, Mail</span>"]
         
-        payment_svc["&lt;&lt;container&gt;&gt;<br/><b>Payment Service</b><br/>(Java)<br/><span style='font-size:12px'>Thanh toán, Webhook</span>"]
-        
-        worker["&lt;&lt;container&gt;&gt;<br/><b>Background Worker</b><br/>(Java)<br/><span style='font-size:12px'>Gửi mail, AI summary, Import CSV</span>"]
+        redis[("&lt;&lt;database&gt;&gt;<br/><b>Cache & Lock</b><br/>(Redis)<br/><span style='font-size:12px'>Rate limit, Idempotency, Seats</span>")]
 
-        db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(PostgreSQL)<br/><span style='font-size:12px'>User, Workshop, Registration</span>")]
+        db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(Supabase PostgreSQL)<br/><span style='font-size:12px'>User, Workshop, Registration</span>")]
         
         storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>PDF, QR, CSV</span>"]
     end
@@ -149,9 +147,9 @@ flowchart TB
     subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
         direction LR
         legacy["&lt;&lt;external system&gt;&gt;<br/><b>Legacy SIS</b><br/>(CSV Export)"]
-        vnpay["&lt;&lt;external system&gt;&gt;<br/><b>Payment Gateway</b><br/>(VNPay / Stripe)"]
-        ai["&lt;&lt;external system&gt;&gt;<br/><b>AI Model</b><br/>(OpenAI / Gemini)"]
-        email_svc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP / SendGrid)"]
+        vnpay["&lt;&lt;external system&gt;&gt;<br/><b>Mock Payment Gateway</b><br/>(REST API)"]
+        ai["&lt;&lt;external system&gt;&gt;<br/><b>AI Service</b><br/>(Gemini API)"]
+        email_svc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP)"]
     end
 
     %% ================= RELATIONSHIPS =================
@@ -165,21 +163,18 @@ flowchart TB
     adminweb -->|REST / HTTPS| backend
     mobileapp -->|REST / HTTPS| backend
 
-    %% Backend to Services
-    backend -->|REST| payment_svc
-    backend -->|REST / Job| worker
+    %% Backend to Storage/DB/Cache
+    backend -->|SQL (Pessimistic Lock)| db
+    backend -->|Read/Write files| storage
+    backend -->|Atomic Ops| redis
 
-    %% Services to Storage/DB
-    backend & payment_svc & worker -->|SQL| db
-    backend & worker -->|Read/Write files| storage
-
-    %% Services to Externals
-    payment_svc -->|HTTPS / Webhook| vnpay
-    worker -->|REST / HTTPS| ai
-    worker -->|SMTP / HTTPS| email_svc
+    %% Backend to Externals
+    backend -->|HTTPS| vnpay
+    backend -->|Gemini API| ai
+    backend -->|SMTP| email_svc
     
     %% Mũi tên từ UniHub sang Legacy theo yêu cầu trước đó của bạn
-    worker -->|Đồng bộ dữ liệu<br/>CSV Nightly| legacy
+    backend -->|Đồng bộ dữ liệu<br/>CSV Nightly| legacy
 
     %% ================= STYLING =================
     classDef titleStyle fill:transparent,stroke:transparent,font-size:20px;
@@ -193,8 +188,7 @@ flowchart TB
     class student,btc,staff person;
     class webapp,adminweb,mobileapp ui;
     class backend logic;
-    class payment_svc,worker service;
-    class db,storage database;
+    class db,redis,storage database;
     class legacy,vnpay,ai,email_svc external;
 ```
 
