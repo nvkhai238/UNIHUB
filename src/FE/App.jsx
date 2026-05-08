@@ -1,5 +1,10 @@
 import AppRouter from './router/index.jsx';
+import { ToastProvider } from './components/Toast';
 
 export default function App() {
-  return <AppRouter />;
+  return (
+    <ToastProvider>
+      <AppRouter />
+    </ToastProvider>
+  );
 }

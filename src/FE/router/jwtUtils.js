@@ -49,8 +49,11 @@ export function decodeToken(token) {
   try {
     const base64Payload = token.split('.')[1];
     if (!base64Payload) return null;
-    // atob handles standard base64; replace URL-safe chars first
-    const json = atob(base64Payload.replace(/-/g, '+').replace(/_/g, '/'));
+    // Replace URL-safe base64 chars back to standard base64 before decoding
+    const standardBase64 = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+    // Pad with '=' to make length a multiple of 4 (required by atob)
+    const padded = standardBase64.padEnd(standardBase64.length + ((4 - (standardBase64.length % 4)) % 4), '=');
+    const json = atob(padded);
     return JSON.parse(json);
   } catch {
     return null;

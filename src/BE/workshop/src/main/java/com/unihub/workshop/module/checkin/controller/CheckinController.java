@@ -3,6 +3,7 @@ package com.unihub.workshop.module.checkin.controller;
 import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
+import com.unihub.workshop.module.checkin.dto.SyncResponse;
 import com.unihub.workshop.module.checkin.service.CheckinService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,10 +32,12 @@ public class CheckinController {
 
     @PostMapping("/sync")
     @PreAuthorize("hasRole('CHECKIN_STAFF')")
-    public ResponseEntity<ApiResponse<Void>> sync(
+    public ResponseEntity<ApiResponse<SyncResponse>> sync(
             @RequestBody @Valid List<SyncRequest> records
     ) {
-        checkinService.syncCheckins(records);
-        return ResponseEntity.ok(ApiResponse.success("Check-ins synchronized successfully", null));
+        return ResponseEntity.ok(ApiResponse.success(
+                "Check-ins synchronized successfully",
+                checkinService.syncCheckins(records)
+        ));
     }
 }

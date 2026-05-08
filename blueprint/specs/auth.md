@@ -261,6 +261,11 @@ Làm mới access token mà không cần đăng nhập lại.
 
 **Response 204 — Thành công (no body).**
 
+**Yêu cầu UI:**
+- Sau khi đăng nhập thành công, giao diện của từng role phải có action `Đăng xuất` rõ ràng.
+- Khi người dùng bấm đăng xuất, client phải gọi `POST /api/auth/logout`, xóa access token + refresh token ở local storage, rồi điều hướng về màn hình đăng nhập.
+- Với app check-in offline, khi đăng xuất phải dọn `qr_registry` local để tránh giữ dữ liệu preload của phiên trước.
+
 ---
 
 #### `POST /api/auth/change-password`

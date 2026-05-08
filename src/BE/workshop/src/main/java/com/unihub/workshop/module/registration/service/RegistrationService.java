@@ -5,7 +5,9 @@ import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
-import com.unihub.workshop.module.payment.service.PaymentService;
+import com.unihub.workshop.module.payment.service.PaymentProcessorService;
+import com.unihub.workshop.module.notification.service.EmailService;
+import com.unihub.workshop.module.registration.dto.RegistrationQrResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
 import com.unihub.workshop.module.registration.entity.Registration;
@@ -20,8 +22,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,8 +38,10 @@ public class RegistrationService {
     private final RegistrationRepository registrationRepository;
     private final WorkshopRepository workshopRepository;
     private final UserRepository userRepository;
-    private final PaymentService paymentService;
     private final PaymentRepository paymentRepository;
+    private final PaymentProcessorService paymentProcessorService;
+    private final EmailService emailService;
+    private final QrCodeService qrCodeService;
 
     @Transactional
     public RegistrationResponse register(RegistrationRequest request, String idempotencyKey) {
@@ -54,7 +61,6 @@ public class RegistrationService {
         Registration registration = Registration.builder()
                 .user(user)
                 .workshop(workshop)
-                .qrCode(UUID.randomUUID().toString())
                 .build();
 
         if (workshop.getRemainingSeats() <= 0) {
@@ -77,29 +83,16 @@ public class RegistrationService {
                     .gatewayRef(UUID.randomUUID().toString())
                     .build();
             payment = paymentRepository.save(payment);
-
-            try {
-                payment = paymentService.processPayment(payment);
-                if (payment.getStatus() == PaymentStatus.SUCCESS) {
-                    registration.setStatus(RegistrationStatus.CONFIRMED);
-                    registration.setConfirmedAt(java.time.ZonedDateTime.now());
-                } else if (payment.getStatus() == PaymentStatus.FAILED) {
-                    registration.setStatus(RegistrationStatus.CANCELLED);
-                    registration.setCancelledAt(java.time.ZonedDateTime.now());
-                    workshop.setRemainingSeats(workshop.getRemainingSeats() + 1);
-                    workshopRepository.save(workshop);
-                }
-            } catch (Exception e) {
-                workshop.setRemainingSeats(workshop.getRemainingSeats() + 1);
-                workshopRepository.save(workshop);
-                throw e;
-            }
+            schedulePaymentProcessing(payment.getId());
         } else {
             registration.setStatus(RegistrationStatus.CONFIRMED);
-            registration.setConfirmedAt(java.time.ZonedDateTime.now());
+            registration.setQrCode(generateUniqueQrCode());
+            registration.setConfirmedAt(ZonedDateTime.now());
         }
 
-        return RegistrationResponse.from(registrationRepository.save(registration));
+        Registration savedRegistration = registrationRepository.save(registration);
+        scheduleRegistrationConfirmationEmail(savedRegistration);
+        return RegistrationResponse.from(savedRegistration);
     }
 
     @Transactional(readOnly = true)
@@ -108,6 +101,17 @@ public class RegistrationService {
         return registrationRepository.findByUser(user).stream()
                 .map(RegistrationResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public RegistrationResponse getMyRegistration(UUID id) {
+        Registration registration = registrationRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.REGISTRATION_NOT_FOUND));
+        User user = getCurrentUser();
+        if (!registration.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
+        }
+        return RegistrationResponse.from(registration);
     }
 
     @Transactional
@@ -138,31 +142,79 @@ public class RegistrationService {
         Payment payment = paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Payment not found"));
 
-        try {
-            payment = paymentService.processPayment(payment);
-            if (payment.getStatus() == PaymentStatus.SUCCESS) {
-                registration.setStatus(RegistrationStatus.CONFIRMED);
-                registration.setConfirmedAt(java.time.ZonedDateTime.now());
-            } else if (payment.getStatus() == PaymentStatus.FAILED) {
-                registration.setStatus(RegistrationStatus.CANCELLED);
-                registration.setCancelledAt(java.time.ZonedDateTime.now());
-                workshop.setRemainingSeats(workshop.getRemainingSeats() + 1);
-                workshopRepository.save(workshop);
-            }
-        } catch (Exception e) {
-            if (registration.getStatus() == RegistrationStatus.CANCELLED) {
-                workshop.setRemainingSeats(workshop.getRemainingSeats() + 1);
-                workshopRepository.save(workshop);
-            }
-            throw e;
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setGatewayRef(UUID.randomUUID().toString());
+        paymentRepository.save(payment);
+
+        if (registration.getStatus() == RegistrationStatus.CANCELLED) {
+            registration.setStatus(RegistrationStatus.PENDING);
+            registration.setCancelledAt(null);
+            registrationRepository.save(registration);
         }
 
-        return RegistrationResponse.from(registrationRepository.save(registration));
+        schedulePaymentProcessing(payment.getId());
+        return RegistrationResponse.from(registration);
+    }
+
+    @Transactional(readOnly = true)
+    public RegistrationQrResponse getMyQrCode(UUID id) {
+        Registration registration = registrationRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.REGISTRATION_NOT_FOUND));
+
+        User user = getCurrentUser();
+        if (!registration.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
+        }
+
+        if (registration.getStatus() != RegistrationStatus.CONFIRMED || registration.getQrCode() == null) {
+            throw new AppException(ErrorCode.QR_CODE_UNAVAILABLE, "QR code is only available for confirmed registrations");
+        }
+
+        return RegistrationQrResponse.from(registration, qrCodeService.generateDataUri(registration.getQrCode()));
     }
 
     private User getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private String generateUniqueQrCode() {
+        String qrCode;
+        do {
+            qrCode = UUID.randomUUID().toString();
+        } while (registrationRepository.existsByQrCode(qrCode));
+        return qrCode;
+    }
+
+    private void scheduleRegistrationConfirmationEmail(Registration registration) {
+        if (registration.getStatus() != RegistrationStatus.CONFIRMED || registration.getQrCode() == null) {
+            return;
+        }
+
+        UUID registrationId = registration.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emailService.sendRegistrationConfirmation(registrationId);
+                }
+            });
+        } else {
+            emailService.sendRegistrationConfirmation(registrationId);
+        }
+    }
+
+    private void schedulePaymentProcessing(UUID paymentId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    paymentProcessorService.processPendingPayment(paymentId);
+                }
+            });
+        } else {
+            paymentProcessorService.processPendingPayment(paymentId);
+        }
     }
 }

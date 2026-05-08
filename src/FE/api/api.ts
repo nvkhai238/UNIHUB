@@ -93,7 +93,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 15_000,       // 15 s — generous enough for slow college networks
+  timeout: 120_000,     // 120 s — accommodate slow cold-start / network latency
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -266,6 +266,30 @@ export async function changePassword(
   newPassword: string,
 ): Promise<void> {
   await api.post('/api/auth/change-password', { currentPassword, newPassword });
+}
+
+/**
+ * POST /api/auth/register
+ *
+ * Creates a new STUDENT account and returns tokens so the user is
+ * immediately logged in. Throws on duplicate email or studentId.
+ */
+export async function register(payload: {
+  fullName: string;
+  email: string;
+  studentId: string;
+  password: string;
+}): Promise<LoginResponseData> {
+  const { data } = await api.post<ApiResponse<LoginResponseData>>(
+    '/api/auth/register',
+    payload,
+  );
+  const responsePayload = data.data;
+  saveTokens({
+    accessToken: responsePayload.accessToken,
+    refreshToken: responsePayload.refreshToken,
+  });
+  return responsePayload;
 }
 
 // ─── Default export ───────────────────────────────────────────────────────────

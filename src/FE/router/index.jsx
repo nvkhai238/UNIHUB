@@ -12,6 +12,7 @@ import PublicLayout from '../layouts/PublicLayout';
 
 // ─── Auth Pages ───────────────────────────────────────────────────────────────
 import LoginPage from '../pages/auth/LoginPage';
+import RegisterPage from '../pages/auth/RegisterPage';
 
 // ─── Public Pages ─────────────────────────────────────────────────────────────
 import WorkshopListPage from '../pages/public/WorkshopListPage';
@@ -21,6 +22,9 @@ import WorkshopDetailPage from '../pages/public/WorkshopDetailPage';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyRegistrationsPage from '../pages/student/MyRegistrationsPage';
 import MyQrCodePage from '../pages/student/MyQrCodePage';
+import RegistrationDetailPage from '../pages/student/RegistrationDetailPage';
+import NotificationsPage from '../pages/student/NotificationsPage';
+import PaymentStatusPage from '../pages/student/PaymentStatusPage';
 
 // ─── Organizer Pages ──────────────────────────────────────────────────────────
 import OrganizerDashboard from '../pages/organizer/OrganizerDashboard';
@@ -28,6 +32,7 @@ import WorkshopManagePage from '../pages/organizer/WorkshopManagePage';
 import WorkshopCreatePage from '../pages/organizer/WorkshopCreatePage';
 import WorkshopEditPage from '../pages/organizer/WorkshopEditPage';
 import StatisticsPage from '../pages/organizer/StatisticsPage';
+import StudentImportPage from '../pages/organizer/StudentImportPage';
 
 // ─── Check-in Staff Pages ─────────────────────────────────────────────────────
 import CheckinDashboard from '../pages/checkin/CheckinDashboard';
@@ -61,6 +66,10 @@ const router = createBrowserRouter([
     path: '/login',
     element: <LoginPage />,
   },
+  {
+    path: '/register',
+    element: <RegisterPage />,
+  },
 
   // ── Student routes — requires STUDENT role ──────────────────────────────────
   {
@@ -83,6 +92,18 @@ const router = createBrowserRouter([
       {
         path: '/student/registrations/:registrationId/qr',
         element: <MyQrCodePage />,
+      },
+      {
+        path: '/student/registrations/:registrationId',
+        element: <RegistrationDetailPage />,
+      },
+      {
+        path: '/student/registrations/:registrationId/payment',
+        element: <PaymentStatusPage />,
+      },
+      {
+        path: '/student/notifications',
+        element: <NotificationsPage />,
       },
     ],
   },
@@ -116,6 +137,10 @@ const router = createBrowserRouter([
       {
         path: '/admin/statistics',
         element: <StatisticsPage />,
+      },
+      {
+        path: '/admin/student-imports',
+        element: <StudentImportPage />,
       },
     ],
   },

@@ -7,18 +7,22 @@ import com.unihub.workshop.module.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -29,14 +33,23 @@ public class StudentBatchConfig {
     private final UserRepository userRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
+    private final PasswordEncoder passwordEncoder;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@(.+)$");
+    private static final Pattern STUDENT_ID_PATTERN = Pattern.compile("^[0-9]{8}$");
 
     @Bean
-    public ItemReader<StudentCsvDTO> studentReader() {
+    @StepScope
+    public FlatFileItemReader<StudentCsvDTO> studentReader(
+            @Value("#{jobParameters['filePath']}") String filePath
+    ) {
+        String resolvedFilePath = (filePath == null || filePath.isBlank())
+                ? "/data/students_" + LocalDate.now() + ".csv"
+                : filePath;
+
         return new FlatFileItemReaderBuilder<StudentCsvDTO>()
                 .name("studentItemReader")
-                .resource(new ClassPathResource("students.csv"))
+                .resource(new FileSystemResource(resolvedFilePath))
                 .delimited()
                 .names("studentId", "fullName", "email")
                 .linesToSkip(1)
@@ -53,21 +66,40 @@ public class StudentBatchConfig {
             if (item.getStudentId() == null || item.getStudentId().trim().isEmpty()) {
                 return null;
             }
+            if (item.getFullName() == null || item.getFullName().trim().isEmpty()) {
+                return null;
+            }
 
-            Optional<User> existingUserOpt = userRepository.findByStudentId(item.getStudentId().trim());
+            String studentId = item.getStudentId().trim();
+            String fullName = item.getFullName().trim();
+            String email = item.getEmail().trim().toLowerCase();
+
+            if (!STUDENT_ID_PATTERN.matcher(studentId).matches() || fullName.length() > 255) {
+                return null;
+            }
+
+            Optional<User> emailOwner = userRepository.findByEmail(email);
+            if (emailOwner.isPresent() && !studentId.equals(emailOwner.get().getStudentId())) {
+                return null;
+            }
+
+            Optional<User> existingUserOpt = userRepository.findByStudentId(studentId);
             if (existingUserOpt.isPresent()) {
                 User existingUser = existingUserOpt.get();
-                existingUser.setFullName(item.getFullName().trim());
-                existingUser.setEmail(item.getEmail().trim());
+                if (existingUser.getRole() != UserRole.STUDENT) {
+                    return null;
+                }
+                existingUser.setFullName(fullName);
+                existingUser.setEmail(email);
                 return existingUser;
             } else {
                 return User.builder()
-                        .studentId(item.getStudentId().trim())
-                        .fullName(item.getFullName().trim())
-                        .email(item.getEmail().trim())
+                        .studentId(studentId)
+                        .fullName(fullName)
+                        .email(email)
                         .role(UserRole.STUDENT)
                         .isActive(true)
-                        .password("")
+                        .password(passwordEncoder.encode(studentId + "@UniHub"))
                         .build();
             }
         };
@@ -79,10 +111,10 @@ public class StudentBatchConfig {
     }
 
     @Bean
-    public Step studentImportStep() {
+    public Step studentImportStep(FlatFileItemReader<StudentCsvDTO> studentReader) {
         return new StepBuilder("studentImportStep", jobRepository)
                 .<StudentCsvDTO, User>chunk(100, transactionManager)
-                .reader(studentReader())
+                .reader(studentReader)
                 .processor(studentProcessor())
                 .writer(studentWriter())
                 .faultTolerant()
@@ -92,9 +124,9 @@ public class StudentBatchConfig {
     }
 
     @Bean
-    public Job studentImportJob() {
+    public Job studentImportJob(Step studentImportStep) {
         return new JobBuilder("studentImportJob", jobRepository)
-                .start(studentImportStep())
+                .start(studentImportStep)
                 .build();
     }
 }
