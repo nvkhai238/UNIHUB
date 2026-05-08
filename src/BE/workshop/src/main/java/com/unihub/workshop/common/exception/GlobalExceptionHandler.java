@@ -15,6 +15,20 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(DuplicateFieldException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleDuplicateField(DuplicateFieldException ex) {
+        ErrorCode code = ex.getErrorCode();
+        Map<String, String> detail = new HashMap<>();
+        detail.put("field", ex.getField());
+        ApiResponse<Map<String, String>> response = ApiResponse.<Map<String, String>>builder()
+                .status(code.getStatus())
+                .code(code.getCode())
+                .message(ex.getMessage())
+                .data(detail)
+                .build();
+        return ResponseEntity.status(code.getHttpStatus()).body(response);
+    }
+
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
         ErrorCode code = ex.getErrorCode();

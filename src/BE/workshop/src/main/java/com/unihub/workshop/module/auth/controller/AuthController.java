@@ -4,6 +4,7 @@ import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.auth.dto.AuthResponse;
 import com.unihub.workshop.module.auth.dto.LoginRequest;
 import com.unihub.workshop.module.auth.dto.RefreshTokenRequest;
+import com.unihub.workshop.module.auth.dto.RegisterRequest;
 import com.unihub.workshop.module.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,5 +32,10 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(ApiResponse.success(authService.refresh(request.getRefreshToken())));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(authService.register(request)));
     }
 }

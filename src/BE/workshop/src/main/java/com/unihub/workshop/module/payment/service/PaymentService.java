@@ -3,13 +3,29 @@ package com.unihub.workshop.module.payment.service;
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.payment.client.MockPaymentGatewayClient;
+import com.unihub.workshop.module.payment.dto.PaymentStatsResponse;
+import com.unihub.workshop.module.payment.dto.PaymentStatusResponse;
 import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import com.unihub.workshop.module.registration.entity.Registration;
+import com.unihub.workshop.module.registration.entity.RegistrationStatus;
+import com.unihub.workshop.module.registration.repository.RegistrationRepository;
+import com.unihub.workshop.module.user.entity.User;
+import com.unihub.workshop.module.user.repository.UserRepository;
+import com.unihub.workshop.module.workshop.entity.Workshop;
+import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.ZonedDateTime;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +33,11 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final MockPaymentGatewayClient paymentGatewayClient;
+    private final RegistrationRepository registrationRepository;
+    private final WorkshopRepository workshopRepository;
+    private final UserRepository userRepository;
+
+    // ─── Original gateway processing ──────────────────────────────────────────────
 
     @CircuitBreaker(name = "payment", fallbackMethod = "paymentFallback")
     @Retry(name = "payment")
@@ -36,5 +57,103 @@ public class PaymentService {
 
     public Payment paymentFallback(Payment payment, Exception e) {
         throw new AppException(ErrorCode.PAYMENT_UNAVAILABLE, "Payment service is currently unavailable");
+    }
+
+    // ─── Student: get payment status for a registration ──────────────────────────
+
+    @Transactional(readOnly = true)
+    public PaymentStatusResponse getPaymentStatus(UUID registrationId) {
+        User user = getCurrentUser();
+        Registration registration = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new AppException(ErrorCode.REGISTRATION_NOT_FOUND));
+
+        if (!registration.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
+        }
+
+        Payment payment = paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Payment not found"));
+
+        return PaymentStatusResponse.from(payment);
+    }
+
+    // ─── Organizer: payment statistics ──────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public PaymentStatsResponse getPaymentStats(UUID workshopId, PaymentStatus status, ZonedDateTime from, ZonedDateTime to) {
+        BigDecimal totalSuccess = paymentRepository.sumAmountByStatus(PaymentStatus.SUCCESS);
+        BigDecimal totalFailed = paymentRepository.sumAmountByStatus(PaymentStatus.FAILED);
+        long totalPayments = paymentRepository.count();
+
+        Map<String, PaymentStatsResponse.StatusBucket> byStatus = new LinkedHashMap<>();
+        for (PaymentStatus s : PaymentStatus.values()) {
+            BigDecimal sum = paymentRepository.sumAmountByStatus(s);
+            long count = paymentRepository.countByStatus(s);
+            byStatus.put(s.name(), PaymentStatsResponse.StatusBucket.builder()
+                    .count(count)
+                    .amount(sum != null ? sum : BigDecimal.ZERO)
+                    .build());
+        }
+
+        BigDecimal totalAmount = totalSuccess != null ? totalSuccess : BigDecimal.ZERO;
+        long successCount = paymentRepository.countByStatus(PaymentStatus.SUCCESS);
+        String successRate = totalPayments > 0
+                ? BigDecimal.valueOf(successCount)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totalPayments), 2, RoundingMode.HALF_UP)
+                        .toPlainString() + "%"
+                : "0%";
+        BigDecimal averageAmount = totalPayments > 0
+                ? totalAmount.divide(BigDecimal.valueOf(totalPayments), 0, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        List<PaymentStatsResponse.WorkshopPaymentSummary> topWorkshops = buildTopWorkshops();
+
+        return PaymentStatsResponse.builder()
+                .totalPayments(totalPayments)
+                .totalAmount(totalAmount)
+                .currency("VND")
+                .byStatus(byStatus)
+                .successRate(successRate)
+                .averageAmount(averageAmount)
+                .topWorkshops(topWorkshops)
+                .period(PaymentStatsResponse.Period.builder()
+                        .from(from != null ? from : ZonedDateTime.now().minusMonths(1))
+                        .to(to != null ? to : ZonedDateTime.now())
+                        .build())
+                .build();
+    }
+
+    private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops() {
+        List<Workshop> workshops = workshopRepository.findAll();
+        List<PaymentStatsResponse.WorkshopPaymentSummary> summaries = new ArrayList<>();
+        for (Workshop w : workshops) {
+            BigDecimal successAmount = paymentRepository.sumAmountByStatusAndWorkshopId(PaymentStatus.SUCCESS, w.getId());
+            long successCount = countSuccessPaymentsForWorkshop(w.getId());
+            if (successCount > 0) {
+                summaries.add(PaymentStatsResponse.WorkshopPaymentSummary.builder()
+                        .workshopId(w.getId().toString())
+                        .title(w.getTitle())
+                        .totalPayments(successCount)
+                        .successCount(successCount)
+                        .revenue(successAmount != null ? successAmount : BigDecimal.ZERO)
+                        .build());
+            }
+        }
+        summaries.sort((a, b) -> b.getRevenue().compareTo(a.getRevenue()));
+        return summaries.stream().limit(5).toList();
+    }
+
+    private long countSuccessPaymentsForWorkshop(UUID workshopId) {
+        return registrationRepository.findAll().stream()
+                .filter(r -> r.getWorkshop().getId().equals(workshopId))
+                .filter(r -> r.getStatus() == RegistrationStatus.CONFIRMED)
+                .count();
+    }
+
+    private User getCurrentUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 }

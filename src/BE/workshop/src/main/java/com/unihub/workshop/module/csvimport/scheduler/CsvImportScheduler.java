@@ -23,7 +23,7 @@ public class CsvImportScheduler {
     private final StudentImportBatchRepository batchRepository;
 
     @Scheduled(cron = "0 0 2 * * *")
-    public void runImportJob() {
+    public StudentImportBatch runImportJob() {
         StudentImportBatch batch = StudentImportBatch.builder()
                 .fileName("students.csv")
                 .status("RUNNING")
@@ -51,7 +51,8 @@ public class CsvImportScheduler {
             batch.setErrorLog(e.getMessage());
         } finally {
             batch.setCompletedAt(ZonedDateTime.now());
-            batchRepository.save(batch);
+            batch = batchRepository.save(batch);
         }
+        return batch;
     }
 }

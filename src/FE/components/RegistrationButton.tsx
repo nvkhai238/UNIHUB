@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import api from '../../api/api';
+import api from '../api/api';
 import type { AxiosError } from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
