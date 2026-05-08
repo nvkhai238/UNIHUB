@@ -1,8 +1,8 @@
 package com.unihub.workshop.module.registration.controller;
 
-import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
+import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationQrResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
@@ -77,7 +77,7 @@ public class RegistrationController {
                             .code("SUCCESS")
                             .message("Registration processed")
                             .data(response)
-                    .build());
+                            .build());
         }
     }
 
