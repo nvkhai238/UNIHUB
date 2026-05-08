@@ -7,9 +7,18 @@ import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.dto.ChangeStatusRequest;
 import com.unihub.workshop.module.workshop.dto.WorkshopRequest;
 import com.unihub.workshop.module.workshop.dto.WorkshopResponse;
+import com.unihub.workshop.module.workshop.dto.WorkshopStatisticsResponse;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
 import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
+import com.unihub.workshop.module.registration.entity.Registration;
+import com.unihub.workshop.module.registration.entity.RegistrationStatus;
+import com.unihub.workshop.module.registration.repository.RegistrationRepository;
+import com.unihub.workshop.module.payment.entity.Payment;
+import com.unihub.workshop.module.payment.entity.PaymentStatus;
+import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +31,18 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class WorkshopService {
 
+    private static final Logger log = LoggerFactory.getLogger(WorkshopService.class);
+
     private final WorkshopRepository workshopRepository;
     private final UserRepository userRepository;
+    private final RegistrationRepository registrationRepository;
+    private final PaymentRepository paymentRepository;
 
     private static final Map<WorkshopStatus, Set<WorkshopStatus>> TRANSITIONS = Map.of(
             WorkshopStatus.DRAFT, EnumSet.of(WorkshopStatus.PUBLISHED, WorkshopStatus.CANCELLED),
@@ -122,6 +136,58 @@ public class WorkshopService {
             return workshopRepository.findByStatus(status, pageable).map(WorkshopResponse::from);
         }
         return workshopRepository.findAll(pageable).map(WorkshopResponse::from);
+    }
+
+    @Transactional
+    public void cancel(UUID id) {
+        Workshop workshop = findEntityById(id);
+
+        if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Workshop is already cancelled");
+        }
+
+        workshop.setStatus(WorkshopStatus.CANCELLED);
+        workshopRepository.save(workshop);
+
+        List<Registration> registrations = registrationRepository.findByWorkshop(workshop);
+        for (Registration registration : registrations) {
+            // Only refund if confirmed (or pending)
+            if (registration.getStatus() == RegistrationStatus.CONFIRMED || registration.getStatus() == RegistrationStatus.PENDING) {
+                registration.setStatus(RegistrationStatus.CANCELLED);
+                registrationRepository.save(registration);
+
+                paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
+                        .ifPresent(payment -> {
+                            if (payment.getStatus() == PaymentStatus.SUCCESS || payment.getStatus() == PaymentStatus.PENDING) {
+                                payment.setStatus(PaymentStatus.REFUNDED);
+                                paymentRepository.save(payment);
+                            }
+                        });
+                
+                log.info("TODO: Send email notification to user {} regarding workshop cancellation and refund.", registration.getUser().getEmail());
+            } else if (registration.getStatus() == RegistrationStatus.WAITLISTED) {
+                registration.setStatus(RegistrationStatus.CANCELLED);
+                registrationRepository.save(registration);
+                log.info("TODO: Send email notification to WAITLISTED user {} regarding workshop cancellation.", registration.getUser().getEmail());
+            }
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public WorkshopStatisticsResponse getStatistics() {
+        long totalWorkshops = workshopRepository.count();
+        long totalRegistrations = registrationRepository.count();
+
+        List<WorkshopStatisticsResponse.WorkshopRegistrationStat> breakdown = workshopRepository.findAll().stream()
+                .map(workshop -> new WorkshopStatisticsResponse.WorkshopRegistrationStat(
+                        workshop.getId(),
+                        workshop.getTitle(),
+                        registrationRepository.findByWorkshop(workshop).size(),
+                        workshop.getCapacity()
+                ))
+                .toList();
+
+        return new WorkshopStatisticsResponse(totalWorkshops, totalRegistrations, breakdown);
     }
 
     private Workshop findEntityById(UUID id) {

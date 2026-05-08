@@ -47,6 +47,10 @@ public class JwtService {
         return refreshTokenTtl;
     }
 
+    public long getAccessTokenTtlSeconds() {
+        return accessTokenTtl;
+    }
+
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }

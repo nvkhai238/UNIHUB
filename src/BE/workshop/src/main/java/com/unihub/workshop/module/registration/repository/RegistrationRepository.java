@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface RegistrationRepository extends JpaRepository<Registration, UUID> {
     boolean existsByUserAndWorkshop(User user, Workshop workshop);
     List<Registration> findByUser(User user);
+    List<Registration> findByWorkshop(Workshop workshop);
     Optional<Registration> findByQrCode(String qrCode);
     List<Registration> findByStatusAndWorkshop_StartTimeBetween(RegistrationStatus status, ZonedDateTime start, ZonedDateTime end);
 }

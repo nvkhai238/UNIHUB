@@ -4,6 +4,7 @@ import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.workshop.dto.ChangeStatusRequest;
 import com.unihub.workshop.module.workshop.dto.WorkshopRequest;
 import com.unihub.workshop.module.workshop.dto.WorkshopResponse;
+import com.unihub.workshop.module.workshop.dto.WorkshopStatisticsResponse;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
 import com.unihub.workshop.module.workshop.service.WorkshopService;
 import jakarta.validation.Valid;
@@ -45,6 +46,19 @@ public class WorkshopController {
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(workshopService.findAll(status, pageable)));
+    }
+
+    @GetMapping("/statistics")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<WorkshopStatisticsResponse>> getStatistics() {
+        return ResponseEntity.ok(ApiResponse.success(workshopService.getStatistics()));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable UUID id) {
+        workshopService.cancel(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping

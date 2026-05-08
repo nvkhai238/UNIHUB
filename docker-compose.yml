@@ -5,7 +5,7 @@ services:
   # ─── Backend Spring Boot ─────────────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ./src/BE/workshop
       dockerfile: Dockerfile
     container_name: unihub-backend
     ports:
@@ -13,9 +13,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       # PostgreSQL — Supabase (kết nối từ ngoài, không chạy local)
-      SPRING_DATASOURCE_URL: ${SUPABASE_DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${SUPABASE_DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      SPRING_DATASOURCE_URL: ${DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
       # Redis
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
@@ -81,7 +81,7 @@ services:
   # ─── Frontend React + Vite ───────────────────────────────────────────────────
   frontend:
     build:
-      context: ./frontend
+      context: ./src
       dockerfile: Dockerfile
     container_name: unihub-frontend
     ports:
