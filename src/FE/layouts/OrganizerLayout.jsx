@@ -1,19 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import LogoutButton from '../components/LogoutButton';
 
 /**
- * OrganizerLayout — layout dành riêng cho role ORGANIZER (Ban tổ chức).
+ * OrganizerLayout - layout danh rieng cho role ORGANIZER.
  *
- * Hiển thị sau khi AuthGuard + RoleGuard xác thực thành công.
- * Thêm Admin Sidebar / Dashboard Nav ở đây.
+ * Hien thi sau khi AuthGuard + RoleGuard xac thuc thanh cong.
+ * Them Admin Sidebar / Dashboard Nav o day.
  *
- * Quyền hạn (blueprint §5):
- *   ✅ Tạo workshop mới            POST /api/workshops/**
- *   ✅ Sửa / hủy workshop          PUT/DELETE /api/workshops/**
- *   ✅ Upload PDF workshop          (multipart via admin endpoint)
- *   ✅ Xem thống kê đăng ký        GET /api/admin/**
- *   ✅ Xem danh sách / chi tiết    GET /api/workshops/** (public)
- *   ❌ Đăng ký workshop
- *   ❌ Quét QR check-in
+ * Quyen han (blueprint Section 5):
+ *   - Tao workshop moi           POST /api/workshops/**
+ *   - Sua / huy workshop         PUT/DELETE /api/workshops/**
+ *   - Upload PDF workshop        multipart via admin endpoint
+ *   - Xem thong ke dang ky       GET /api/admin/**
+ *   - Xem danh sach / chi tiet   GET /api/workshops/** (public)
+ *   - Khong dang ky workshop
+ *   - Khong quet QR check-in
  */
 export default function OrganizerLayout() {
   return (
@@ -21,13 +22,16 @@ export default function OrganizerLayout() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="font-bold text-rose-700">UniHub Organizer</div>
-          <nav className="flex flex-wrap gap-2 text-sm font-medium">
-            <OrganizerNavLink to="/admin">Tổng quan</OrganizerNavLink>
-            <OrganizerNavLink to="/admin/workshops">Workshop</OrganizerNavLink>
-            <OrganizerNavLink to="/admin/workshops/create">Tạo mới</OrganizerNavLink>
-            <OrganizerNavLink to="/admin/statistics">Thống kê</OrganizerNavLink>
-            <OrganizerNavLink to="/admin/student-imports">Import SV</OrganizerNavLink>
-          </nav>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <nav className="flex flex-wrap gap-2 text-sm font-medium">
+              <OrganizerNavLink to="/admin">Tổng quan</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/workshops">Workshop</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/workshops/create">Tạo mới</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/statistics">Thống kê</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/student-imports">Import SV</OrganizerNavLink>
+            </nav>
+            <LogoutButton />
+          </div>
         </div>
       </header>
       <main>

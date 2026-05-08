@@ -1,6 +1,7 @@
 package com.unihub.workshop.common.exception;
 
 import com.unihub.workshop.common.response.ApiResponse;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,18 @@ public class GlobalExceptionHandler {
                         .message("Request validation failed")
                         .data(errors)
                         .build());
+    }
+
+    @ExceptionHandler(RequestNotPermitted.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimit(RequestNotPermitted ex) {
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "10")
+                .body(ApiResponse.error(
+                        429,
+                        "RATE_LIMIT_EXCEEDED",
+                        "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 giây."
+                ));
     }
 
     @ExceptionHandler(Exception.class)

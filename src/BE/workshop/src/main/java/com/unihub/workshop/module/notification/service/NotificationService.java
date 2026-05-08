@@ -15,7 +15,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,7 +31,7 @@ public class NotificationService {
         User user = getCurrentUser();
         Pageable pageable = PageRequest.of(page, size);
         if (unreadOnly != null && unreadOnly) {
-            return notificationRepository.findByUserAndReadOrderByCreatedAtDesc(false, user, pageable);
+            return notificationRepository.findByUserAndReadOrderByCreatedAtDesc(user, false, pageable);
         }
         return notificationRepository.findByUserOrderByCreatedAtDesc(user, pageable);
     }

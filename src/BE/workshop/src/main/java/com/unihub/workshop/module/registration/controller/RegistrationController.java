@@ -1,8 +1,8 @@
 package com.unihub.workshop.module.registration.controller;
 
-import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
+import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationQrResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
@@ -10,6 +10,7 @@ import com.unihub.workshop.module.registration.service.IdempotencyService;
 import com.unihub.workshop.module.registration.service.RegistrationService;
 import com.unihub.workshop.module.registration.service.StudentRegistrationLockService;
 import com.unihub.workshop.module.registration.service.WorkshopSeatLockService;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class RegistrationController {
     private final WorkshopSeatLockService workshopSeatLockService;
 
     @PostMapping
-    @RateLimiter(name = "registration")
+    @RateLimiter(name = "registration", fallbackMethod = "registrationRateLimitFallback")
     public ResponseEntity<ApiResponse<RegistrationResponse>> register(
             @Valid @RequestBody RegistrationRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -78,6 +79,22 @@ public class RegistrationController {
                             .data(response)
                             .build());
         }
+    }
+
+    public ResponseEntity<ApiResponse<RegistrationResponse>> registrationRateLimitFallback(
+            RegistrationRequest request,
+            String idempotencyKey,
+            Authentication authentication,
+            RequestNotPermitted ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "10")
+                .body(ApiResponse.error(
+                        429,
+                        "RATE_LIMIT_EXCEEDED",
+                        "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 giây."
+                ));
     }
 
     @GetMapping("/my")

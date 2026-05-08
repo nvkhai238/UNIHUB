@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 
 @Component
@@ -24,8 +25,11 @@ public class CsvImportScheduler {
 
     @Scheduled(cron = "0 0 2 * * *")
     public StudentImportBatch runImportJob() {
+        String fileName = "students_" + LocalDate.now() + ".csv";
+        String filePath = "/data/" + fileName;
+
         StudentImportBatch batch = StudentImportBatch.builder()
-                .fileName("students.csv")
+                .fileName(fileName)
                 .status("RUNNING")
                 .build();
         batch = batchRepository.save(batch);
@@ -34,6 +38,7 @@ public class CsvImportScheduler {
             JobExecution execution = jobLauncher.run(studentImportJob, new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
                     .addString("batchId", batch.getId().toString())
+                    .addString("filePath", filePath)
                     .toJobParameters());
 
             batch.setStatus(execution.getStatus().name());
