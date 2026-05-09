@@ -25,6 +25,7 @@ import MyQrCodePage from '../pages/student/MyQrCodePage';
 import RegistrationDetailPage from '../pages/student/RegistrationDetailPage';
 import NotificationsPage from '../pages/student/NotificationsPage';
 import PaymentStatusPage from '../pages/student/PaymentStatusPage';
+import StudentProfilePage from '../pages/student/StudentProfilePage';
 
 // ─── Organizer Pages ──────────────────────────────────────────────────────────
 import OrganizerDashboard from '../pages/organizer/OrganizerDashboard';
@@ -104,6 +105,10 @@ const router = createBrowserRouter([
       {
         path: '/student/notifications',
         element: <NotificationsPage />,
+      },
+      {
+        path: '/student/profile',
+        element: <StudentProfilePage />,
       },
     ],
   },

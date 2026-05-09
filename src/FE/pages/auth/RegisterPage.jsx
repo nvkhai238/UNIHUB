@@ -86,6 +86,13 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#f7f8fb] px-4">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <Link
+            to="/"
+            className="mb-6 inline-flex items-center rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:-translate-y-0.5 hover:bg-gray-50 hover:text-emerald-700"
+          >
+            Trở về
+          </Link>
+
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
               <span className="text-2xl font-bold text-emerald-600">U</span>

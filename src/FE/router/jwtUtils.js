@@ -14,6 +14,7 @@
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
+const USER_PROFILE_KEY = 'currentUser';
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -36,6 +37,21 @@ export function getRefreshToken() {
 export function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(USER_PROFILE_KEY);
+}
+
+export function saveUserProfile(user) {
+  if (!user) return;
+  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(user));
+}
+
+export function getStoredUserProfile() {
+  try {
+    const raw = localStorage.getItem(USER_PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── JWT decode (no-verify — verification is done server-side) ────────────────
@@ -68,10 +84,16 @@ export function getCurrentUser() {
   const token = getAccessToken();
   const payload = decodeToken(token);
   if (!payload) return null;
+  const storedUser = getStoredUserProfile();
   return {
     id: payload.sub,
     email: payload.email,
     role: payload.role,
+    fullName: storedUser?.fullName,
+    ...storedUser,
+    id: storedUser?.id ?? payload.sub,
+    email: storedUser?.email ?? payload.email,
+    role: storedUser?.role ?? payload.role,
   };
 }
 

@@ -24,7 +24,7 @@ import axios, {
   AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from 'axios';
-import { getAccessToken, getRefreshToken, saveTokens, clearTokens } from '../router/jwtUtils';
+import { getAccessToken, getRefreshToken, saveTokens, clearTokens, saveUserProfile } from '../router/jwtUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -231,6 +231,7 @@ export async function login(
   );
   const payload = data.data;
   saveTokens({ accessToken: payload.accessToken, refreshToken: payload.refreshToken });
+  saveUserProfile(payload.user);
   return payload;
 }
 
@@ -289,6 +290,7 @@ export async function register(payload: {
     accessToken: responsePayload.accessToken,
     refreshToken: responsePayload.refreshToken,
   });
+  saveUserProfile(responsePayload.user);
   return responsePayload;
 }
 

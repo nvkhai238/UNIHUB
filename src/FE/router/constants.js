@@ -23,6 +23,8 @@ export const PATHS = Object.freeze({
   // Student
   STUDENT_DASHBOARD: '/student',
   STUDENT_REGISTRATIONS: '/student/registrations',
+  STUDENT_NOTIFICATIONS: '/student/notifications',
+  STUDENT_PROFILE: '/student/profile',
   STUDENT_QR: '/student/registrations/:registrationId/qr',
 
   // Organizer
