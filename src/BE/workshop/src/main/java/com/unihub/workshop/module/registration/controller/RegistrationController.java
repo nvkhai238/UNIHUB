@@ -116,4 +116,12 @@ public class RegistrationController {
     public ResponseEntity<ApiResponse<RegistrationResponse>> retryPayment(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(registrationService.retryPayment(id)));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> cancel(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Registration cancelled",
+                registrationService.cancelMyRegistration(id)
+        ));
+    }
 }

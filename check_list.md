@@ -38,8 +38,8 @@ Quy uoc trang thai:
 ### 1.3 Tai lieu chay repo
 
 - [x] RUN_REPO.md - `HOAN_THANH`
-- [ ] README.md dung theo yeu cau cham bai - `CHUA_CO`
-- [ ] Huong dan seed/sample data ro rang trong README - `CHUA_CO`
+- [x] README.md dung theo yeu cau cham bai - `HOAN_THANH`
+- [x] Huong dan seed/sample data ro rang trong README - `HOAN_THANH`
 
 ---
 
@@ -53,8 +53,8 @@ Quy uoc trang thai:
 - [x] Docker Compose - `HOAN_THANH`
 - [x] Redis config - `HOAN_THANH`
 - [x] Seed data backend - `HOAN_THANH`
-- [ ] Data mau CSV trong thu muc `data/` - `CHUA_CO`
-- [ ] Cap nhat kien truc tu PWA check-in sang mobile app thuan - `CHUA_CO`
+- [x] Data mau CSV trong thu muc `data/` - `HOAN_THANH`
+- [x] Cap nhat kien truc tu PWA check-in sang mobile app thuan - `HOAN_THANH`
 
 ### 2.2 Bao mat va xac thuc
 
@@ -89,8 +89,8 @@ Quy uoc trang thai:
 - [x] Trang My Registrations - `HOAN_THANH`
 - [x] Trang QR cua toi - `HOAN_THANH`
 - [x] Trang payment status - `HOAN_THANH`
-- [ ] Huy dang ky cua sinh vien - `CHUA_CO`
-- [ ] Promote waitlist FIFO khi co ghe trong - `CHUA_CO`
+- [x] Huy dang ky cua sinh vien - `HOAN_THANH`
+- [x] Promote waitlist FIFO khi co ghe trong - `HOAN_THANH`
 - [ ] Phan trang registration theo spec - `CHUA_CO`
 - [ ] Danh sach registration cho organizer theo filter/day du - `CHUA_CO`
 
@@ -144,9 +144,9 @@ Quy uoc trang thai:
 - [x] Xu ly async PDF -> text -> Gemini - `HOAN_THANH`
 - [x] Luu ai_summary va ai_summary_status - `HOAN_THANH`
 - [ ] Validate file size/type/workshop status day du theo spec - `MOT_PHAN`
-- [ ] Retry AI summary endpoint - `CHUA_CO`
-- [ ] API lay trang thai AI summary rieng - `CHUA_CO`
-- [ ] UI retry khi FAILED - `CHUA_CO`
+- [x] Retry AI summary endpoint - `HOAN_THANH`
+- [x] API lay trang thai AI summary rieng - `HOAN_THANH`
+- [x] UI retry khi FAILED - `HOAN_THANH`
 
 ### 4.3 Bao cao va thong ke
 
@@ -166,7 +166,7 @@ Quy uoc trang thai:
 - [x] Sync check-ins len server - `HOAN_THANH`
 - [x] Phat hien duplicate/conflict/invalid QR - `HOAN_THANH`
 - [x] Kiem tra chi registration CONFIRMED moi duoc check-in - `HOAN_THANH`
-- [ ] Endpoint xem danh sach check-in theo workshop - `CHUA_CO`
+- [x] Endpoint xem danh sach check-in theo workshop - `HOAN_THANH`
 
 ### 5.2 Check-in frontend / offline
 
@@ -196,8 +196,8 @@ Quy uoc trang thai:
 - [ ] Validate file ton tai / rong / header sai theo step rieng - `CHUA_CO`
 - [ ] Bao cao chi tiet dong loi / line number / error reason - `CHUA_CO`
 - [ ] Alert email admin khi import loi - `CHUA_CO`
-- [ ] Seed/sample CSV de test nhanh - `CHUA_CO`
-- [ ] Endpoint status dung nhu spec `/api/csv/status` - `CHUA_CO`
+- [x] Seed/sample CSV de test nhanh - `HOAN_THANH`
+- [x] Endpoint status dung nhu spec `/api/csv/status` - `HOAN_THANH`
 
 ---
 
@@ -251,9 +251,9 @@ Quy uoc trang thai:
 ## 8A. Cac Muc Bat Buoc Phai Sua Khi Chuyen Tu PWA Sang Mobile
 
 - [ ] Sua `project-spec` noi bo / demo scope de check-in khong con duoc mo ta la PWA
-- [ ] Sua blueprint `design.md` va cac spec lien quan tu `Check-in PWA` thanh `Mobile App`
-- [ ] Sua C4 Container Diagram: thay `Check-in PWA` bang `Check-in Mobile App`
-- [ ] Sua luong offline: bo `Service Worker`, `Background Sync`, `IndexedDB`; thay bang local DB cua mobile + sync job/app lifecycle
+- [x] Sua blueprint `design.md` tu `Check-in PWA` thanh `Mobile App`
+- [x] Sua C4 Container Diagram: thay `Check-in PWA` bang `Check-in Mobile App`
+- [x] Sua luong offline: bo `Service Worker`, `Background Sync`, `IndexedDB`; thay bang local DB cua mobile + sync job/app lifecycle
 - [ ] Sua checklist kiem thu de bo cac buoc lien quan PWA browser va thay bang test tren thiet bi/emulator mobile
 - [ ] Danh gia lai auth cho app mobile: luu token, refresh token, logout, xoa du lieu offline
 - [ ] Danh gia lai camera permission, storage permission, network recovery tren mobile
@@ -472,12 +472,12 @@ Phoi hop: Thanh vien 2
 
 ### Uu tien 1 - Bat buoc de dung spec
 
-- [ ] Huy dang ky + promote waitlist
+- [x] Huy dang ky + promote waitlist
 - [ ] Payment flow dung spec
 - [ ] Chot va chuyen hoan toan luong check-in tu PWA sang mobile thuan
 - [ ] Check-in offline that su tren mobile
-- [ ] Retry AI summary
-- [ ] README.md + sample data
+- [x] Retry AI summary
+- [x] README.md + sample data
 
 ### Uu tien 2 - Bao ve he thong va chat luong
 

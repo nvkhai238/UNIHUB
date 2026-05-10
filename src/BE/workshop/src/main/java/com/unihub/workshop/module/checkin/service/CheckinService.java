@@ -1,5 +1,8 @@
 package com.unihub.workshop.module.checkin.service;
 
+import com.unihub.workshop.common.exception.AppException;
+import com.unihub.workshop.common.exception.ErrorCode;
+import com.unihub.workshop.module.checkin.dto.CheckinResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
 import com.unihub.workshop.module.checkin.dto.SyncResponse;
@@ -8,6 +11,8 @@ import com.unihub.workshop.module.checkin.repository.CheckinRepository;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
+import com.unihub.workshop.module.workshop.entity.Workshop;
+import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -27,6 +32,7 @@ public class CheckinService {
 
     private final CheckinRepository checkinRepository;
     private final RegistrationRepository registrationRepository;
+    private final WorkshopRepository workshopRepository;
 
     @Transactional(readOnly = true)
     public List<PreloadResponse> preloadCheckins(LocalDate date) {
@@ -106,6 +112,15 @@ public class CheckinService {
                 .invalid(invalid)
                 .items(results)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CheckinResponse> listByWorkshop(java.util.UUID workshopId) {
+        Workshop workshop = workshopRepository.findById(workshopId)
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+        return checkinRepository.findByRegistration_WorkshopOrderByCheckedInAtDesc(workshop).stream()
+                .map(CheckinResponse::from)
+                .toList();
     }
 
     private SyncResponse.Item result(SyncRequest record, Registration registration, String status, String message) {

@@ -25,11 +25,24 @@ export default function RegistrationDetailPage() {
   const retryPayment = async () => {
     setMessage('');
     try {
-      await api.post(`/api/registrations/${registrationId}/payment/retry`);
+      await api.post(`/api/registrations/${registrationId}/payment/retry`, {}, {
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
       setMessage('Đã đưa thanh toán vào hàng xử lý lại.');
       loadRegistration();
     } catch {
       setMessage('Không thể xử lý lại thanh toán lúc này.');
+    }
+  };
+
+  const cancelRegistration = async () => {
+    setMessage('');
+    try {
+      await api.delete(`/api/registrations/${registrationId}`);
+      setMessage('Dang ky da duoc huy.');
+      loadRegistration();
+    } catch {
+      setMessage('Khong the huy dang ky luc nay.');
     }
   };
 
@@ -83,6 +96,15 @@ export default function RegistrationDetailPage() {
                     Xem trạng thái thanh toán
                   </Link>
                 </>
+              )}
+              {registration.status !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  onClick={cancelRegistration}
+                  className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                >
+                  Huy dang ky
+                </button>
               )}
             </div>
           </>

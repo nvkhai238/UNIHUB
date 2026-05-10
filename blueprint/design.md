@@ -1,6 +1,6 @@
 # UniHub Workshop — Technical Design
 
-> **Stack đã chốt:** Java 21 + Spring Boot 3.x · React + Vite PWA · Service Worker + IndexedDB · Supabase (PostgreSQL + Storage) · Redis · Gemini API · SMTP
+> **Stack đã chốt:** Java 21 + Spring Boot 3.x · React + Vite cho Student/Admin Web · Check-in Mobile App native (React Native/Expo) · SQLite/local secure storage · Supabase (PostgreSQL + Storage) · Redis · Gemini API · SMTP
 >
 > **Phân công:** Thành viên 1 — Đăng ký & Giao dịch | Thành viên 2 — Quản trị & AI | Thành viên 3 — Vận hành & Đồng bộ
 
@@ -84,9 +84,9 @@ flowchart TB
     checkinStaff -->|Check-in bằng QR<br/>HTTPS| unihub
     organizer -->|Quản lý, xem báo cáo<br/>HTTPS| unihub
     student -->|Đăng ký, xem lịch<br/>HTTPS| unihub
-    
+
     legacy -->|Export CSV hằng đêm<br/>UniHub đọc file, không gọi API| unihub
-    
+
     unihub -->|Gửi thông báo<br/>SMTP| email
     unihub -->|Tóm tắt PDF<br/>Gemini API| ai
     unihub -->|Thanh toán có phí<br/>REST / HTTPS| payment
@@ -128,12 +128,12 @@ flowchart TB
 
         subgraph FRONTENDS["Tầng Client"]
             direction LR
-            studentWeb["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Student Web PWA</b><br/>(React + Vite)<br/><span style='font-size:12px'>Lịch workshop, đăng ký, mã QR</span></div>"]
+            studentWeb["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Student Web</b><br/>(React + Vite)<br/><span style='font-size:12px'>Lịch workshop, đăng ký, mã QR</span></div>"]
             adminWeb["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Organizer Admin Web</b><br/>(React + Vite)<br/><span style='font-size:12px'>CRUD workshop, PDF, thống kê</span></div>"]
-            checkinPwa["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Check-in PWA</b><br/>(React + Vite)<br/><span style='font-size:12px'>Quét QR, offline sync</span></div>"]
+            checkinMobile["<div style='width:190px'>&lt;&lt;container&gt;&gt;<br/><b>Check-in Mobile App</b><br/>(React Native/Expo)<br/><span style='font-size:12px'>Quét QR, offline sync</span></div>"]
         end
 
-        offlineDb[("&lt;&lt;browser storage&gt;&gt;<br/><b>Offline Check-in Store</b><br/>(IndexedDB)<br/><span style='font-size:12px'>QR preload, pending scans</span>")]
+        offlineDb[("&lt;&lt;mobile local database&gt;&gt;<br/><b>Offline Check-in Store</b><br/>(SQLite + SecureStore)<br/><span style='font-size:12px'>QR preload, pending scans, token an toàn</span>")]
 
         backend["<div style='width:260px'>&lt;&lt;container&gt;&gt;<br/><b>Modular Monolith API</b><br/>(Java 21 + Spring Boot 3.x)<br/><span style='font-size:12px'>Auth/RBAC, Workshop, Registration, Payment, Check-in, Notification, CSV Batch</span></div>"]
 
@@ -161,12 +161,12 @@ flowchart TB
     %% Users to Frontends
     student -->|HTTPS| studentWeb
     organizer -->|HTTPS| adminWeb
-    staff -->|HTTPS| checkinPwa
+    staff -->|HTTPS| checkinMobile
 
     %% Frontends to Backend
-    studentWeb & adminWeb & checkinPwa -->|REST / HTTPS| backend
-    checkinPwa <-->|Preload QR + pending scans| offlineDb
-    offlineDb -->|Background sync| backend
+    studentWeb & adminWeb & checkinMobile -->|REST / HTTPS| backend
+    checkinMobile <-->|Preload QR + pending scans| offlineDb
+    offlineDb -->|Sync job khi app foreground / network restored| backend
 
     %% Backend to Storage/DB/Cache
     backend -->|SQL + transaction lock| db
@@ -189,7 +189,7 @@ flowchart TB
     classDef local fill:#fff7db,stroke:#b7791f,stroke-width:1.2px,color:#6b4e16;
 
     class student,organizer,staff person;
-    class studentWeb,adminWeb,checkinPwa ui;
+    class studentWeb,adminWeb,checkinMobile ui;
     class backend logic;
     class db,redis,storage database;
     class offlineDb local;
@@ -207,10 +207,10 @@ Sơ đồ này thể hiện luồng dữ liệu và điểm tích hợp quan tr�
 flowchart LR
     subgraph CLIENTS["Client Layer"]
         direction TB
-        Web_Student["Student Web PWA<br/>(React + Vite)"]
+        Web_Student["Student Web<br/>(React + Vite)"]
         Web_Admin["Organizer Admin Web<br/>(React + Vite)"]
-        Checkin_PWA["Check-in PWA<br/>(Service Worker)"]
-        LocalDB[("IndexedDB<br/>Offline QR + pending scans")]
+        Checkin_Mobile["Check-in Mobile App<br/>(React Native/Expo)"]
+        LocalDB[("SQLite + SecureStore<br/>Offline QR, pending scans, auth tokens")]
     end
 
     subgraph BACKEND["Spring Boot Modular Monolith"]
@@ -240,8 +240,8 @@ flowchart LR
 
     Web_Student -->|REST / HTTPS| Edge
     Web_Admin -->|REST / HTTPS| Edge
-    Checkin_PWA <-->|Preload + save scans| LocalDB
-    Checkin_PWA -->|REST / HTTPS sync| Edge
+    Checkin_Mobile <-->|Preload + save scans| LocalDB
+    Checkin_Mobile -->|REST / HTTPS sync| Edge
 
     Edge --> Auth_Service
     Edge --> Workshop_Service
@@ -465,7 +465,7 @@ Tài khoản `ORGANIZER` và `CHECKIN_STAFF` được tạo thủ công qua seed
 | Quét QR / đồng bộ check-in offline (`POST /api/checkins/**`) | ❌ | ❌ | ✅ |
 
 ### 5.5. Kiểm soát truy cập tại API Endpoint
-Tất cả request từ Student Web, Organizer Admin Web và Check-in PWA đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend chỉ ẩn/hiện route và nút chức năng theo role để cải thiện UX; bảo mật thật sự phải được kiểm tra ở backend.
+Tất cả request từ Student Web, Organizer Admin Web và Check-in Mobile App đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend chỉ ẩn/hiện route và nút chức năng theo role để cải thiện UX; bảo mật thật sự phải được kiểm tra ở backend.
 
 **Quy trình kiểm tra quyền tại API:**
 1. Người dùng đăng nhập vào hệ thống.
@@ -652,112 +652,91 @@ Client gửi lại request với cùng Idempotency-Key
 sequenceDiagram
   autonumber
   actor Staff as Nhân sự
-  participant PWA as UI (Trình duyệt PWA)
-  participant SW as Service Worker
-  participant IDB as IndexedDB (Local)
+  participant Mobile as Check-in Mobile App
+  participant LocalDB as SQLite + SecureStore
+  participant Sync as Mobile Sync Worker
   participant API as Spring Boot API
   participant DB as PostgreSQL
 
   Note over Staff, DB: GIAI ĐOẠN 1: CÓ MẠNG (Tải trước dữ liệu đầu ngày)
-  Staff->>PWA: Mở ứng dụng Check-in
-  PWA->>API: GET /api/checkins/preload?date=today
+  Staff->>Mobile: Mở ứng dụng Check-in
+  Mobile->>API: GET /api/checkins/preload?date=today
   API->>DB: Query confirmed registrations (Hôm nay)
   DB-->>API: Danh sách hợp lệ
-  API-->>PWA: [{qr, name, workshop_id}]
-  PWA->>IDB: Lưu vào store `qr_registry`
-  IDB-->>PWA: OK
-  PWA-->>Staff: Hiển thị: "Đã tải xong dữ liệu Offline"
+  API-->>Mobile: [{qr, name, workshop_id}]
+  Mobile->>LocalDB: Lưu vào bảng qr_registry
+  LocalDB-->>Mobile: OK
+  Mobile-->>Staff: Hiển thị "Đã tải xong dữ liệu offline"
 
   Note over Staff, DB: GIAI ĐOẠN 2: MẤT MẠNG (Check-in tại cửa sự kiện)
-  Staff->>PWA: Quét mã QR của Sinh viên
-  PWA->>PWA: Kiểm tra navigator.onLine == false
-  PWA->>IDB: SELECT * FROM `qr_registry` WHERE qr = qr_code
-  
+  Staff->>Mobile: Quét mã QR của Sinh viên
+  Mobile->>Mobile: Kiểm tra trạng thái network của OS
+  Mobile->>LocalDB: SELECT * FROM qr_registry WHERE qr = qr_code
+
   alt Không hợp lệ (Không tìm thấy)
-    IDB-->>PWA: null
-    PWA-->>Staff: Báo lỗi Đỏ & Gợi ý nhập tay/kiểm tra lại
+    LocalDB-->>Mobile: null
+    Mobile-->>Staff: Báo lỗi đỏ và gợi ý nhập tay/kiểm tra lại
   else Hợp lệ (Tìm thấy)
-    IDB-->>PWA: {name, workshop_id}
-    PWA->>IDB: INSERT store `pending_sync` {qr_code, timestamp, synced: 0}
-    Note over PWA, IDB: UNIQUE constraint ngăn lưu trùng (SV quét 2 lần)
-    IDB-->>PWA: Insert Success
-    PWA-->>Staff: Báo Xanh "Check-in thành công: [Tên SV]"
+    LocalDB-->>Mobile: {name, workshop_id}
+    Mobile->>LocalDB: INSERT pending_sync {qr_code, timestamp, device_id, synced: 0}
+    Note over Mobile, LocalDB: UNIQUE constraint ngăn lưu trùng trên cùng thiết bị
+    LocalDB-->>Mobile: Insert Success
+    Mobile-->>Staff: Báo xanh "Check-in thành công: [Tên SV]"
   end
 
-  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI (Đồng bộ nền)
-  Note right of SW: Sự kiện 'sync' được hệ điều hành kích hoạt ngầm
-  SW->>IDB: Lấy dữ liệu: SELECT * FROM `pending_sync` WHERE synced = 0
-  IDB-->>SW: [{qr_code, timestamp, device_id, ...}]
-  SW->>API: POST /api/checkins/sync (Gửi Array Batch)
-  API->>DB: UPSERT checkins 
+  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI (Đồng bộ theo lifecycle mobile)
+  Note right of Sync: Chạy khi app foreground, network restored, hoặc lịch sync nền của OS cho phép
+  Sync->>LocalDB: SELECT * FROM pending_sync WHERE synced = 0
+  LocalDB-->>Sync: [{qr_code, timestamp, device_id, ...}]
+  Sync->>API: POST /api/checkins/sync (Gửi array batch)
+  API->>DB: UPSERT checkins
   Note right of API: ON CONFLICT (reg_id) DO NOTHING
-  
+
   alt Kết nối chập chờn / Lỗi Server
     DB-->>API: Error / Timeout
-    API-->>SW: 500 Internal Server Error
-    SW->>SW: Giữ nguyên `synced=0`, chờ lần trigger Background Sync tiếp theo
+    API-->>Sync: 500 Internal Server Error
+    Sync->>LocalDB: Giữ nguyên synced=0, retry với exponential backoff
   else Thành công
     DB-->>API: Số dòng bị ảnh hưởng
-    API-->>SW: 200 OK {synced_ids: [...]}
-    SW->>IDB: UPDATE `pending_sync` SET synced = 1
+    API-->>Sync: 200 OK {synced_ids: [...]}
+    Sync->>LocalDB: UPDATE pending_sync SET synced = 1
   end
 ```
 
 ```
-Nhân sự (PWA)        Service Worker        Spring Boot API        IndexedDB    PostgreSQL
-      │                    │                      │                    │             │
-      │ [Trước sự kiện - có mạng]                 │                    │             │
-      │── Mở app ─────────▶│                      │                    │             │
-      │                    │── GET /checkins/      │                    │             │
-      │                    │   preload?date=today ▶│                    │             │
-      │                    │                      │── Query confirmed ──│─────────────▶
-      │                    │◀── [{qr, name,        │    registrations   │             │
-      │                    │     workshopId}]      │    for today       │             │
-      │                    │── Cache vào ──────────│────────────────────▶│            │
-      │                    │   IndexedDB           │                    │ INSERT batch│
-      │◀── "Đã tải xong" ──│                      │                    │             │
-      │                    │                      │                    │             │
-      │ [Tại cửa phòng - mất mạng]               │                    │             │
-      │── Quét QR SV ─────▶│                      │                    │             │
-      │                    │── navigator.onLine?  │                    │             │
-      │                    │   = false            │                    │             │
-      │                    │── Lookup local ───────│────────────────────▶│            │
-      │                    │◀── {name, workshop}   │                    │ SELECT by   │
-      │                    │                       │                    │ qr_code     │
-      │                    │── Save pending ───────│────────────────────▶│            │
-      │                    │   checkin             │                    │ INSERT:     │
-      │                    │                       │                    │ {qr_code,   │
-      │                    │                       │                    │  timestamp, │
-      │                    │                       │                    │  synced:0}  │
-      │◀── "Check-in OK!" ─│                      │                    │             │
-      │    (hiển thị tên)  │                      │                    │             │
-      │                    │                      │                    │             │
-      │ [Khi mạng trở lại]                        │                    │             │
-      │                    │── Background Sync ────│                    │             │
-      │                    │   event triggered     │                    │             │
-      │                    │── GET pending ─────────│────────────────────▶│            │
-      │                    │   WHERE synced=0      │                    │ SELECT      │
-      │                    │── POST /checkins/sync▶│                    │             │
-      │                    │   [{qr_code,          │                    │             │
-      │                    │     timestamp,        │── UPSERT ──────────│─────────────▶
-      │                    │     device_id}]       │   checkins         │             │ ON CONFLICT
-      │                    │                      │   ON CONFLICT      │             │ (reg_id)
-      │                    │◀── {synced: [ids]} ───│   DO NOTHING       │             │ DO NOTHING
-      │                    │── Mark synced=1 ───────│────────────────────▶│            │
-      │                    │                      │                    │ UPDATE      │
+Nhân sự        Mobile App        Local SQLite        Spring Boot API        PostgreSQL
+   │               │                  │                    │                  │
+   │ [Trước sự kiện - có mạng]        │                    │                  │
+   │── Mở app ───▶│                  │                    │                  │
+   │               │── GET /checkins/preload?date=today ─▶│                  │
+   │               │                  │                    │── Query confirmed registrations
+   │               │◀── [{qr, name, workshopId}] ─────────│                  │
+   │               │── Cache QR registry ────────────────▶│                  │
+   │◀── "Đã tải xong"                                      │                  │
+   │ [Tại cửa phòng - mất mạng]         │                  │                  │
+   │── Quét QR SV ─▶│                  │                  │                  │
+   │               │── Lookup local QR ─────────────────▶│                  │
+   │               │◀── {name, workshop} ────────────────│                  │
+   │               │── Save pending check-in ───────────▶│                  │
+   │◀── "Check-in OK"                                     │                  │
+   │ [Khi mạng trở lại / app foreground]                  │                  │
+   │               │── Read pending rows ───────────────▶│                  │
+   │               │── POST /checkins/sync ───────────────▶│
+   │               │                  │                    │── UPSERT checkins ON CONFLICT
+   │               │◀── {synced:[ids]} ───────────────────│
+   │               │── Mark synced=1 ───────────────────▶│
 ```
 
 **Xử lý lỗi:**
 
-| Tình huống                   | Hành vi                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| QR không có trong IndexedDB  | Hiện "Không tìm thấy sinh viên", ghi log, cho phép nhập thủ công                                  |
-| Sync thất bại (mạng đứt lại) | Giữ nguyên `synced=0`, Background Sync retry tự động                                              |
-| Check-in trùng (SV đã scan)  | IndexedDB UNIQUE constraint ngăn lưu trùng; PostgreSQL `ON CONFLICT DO NOTHING` ngăn trùng server |
-| File preload quá lớn         | Phân trang theo `workshop_id`, chỉ load workshop của ngày hôm nay                                 |
+| Tình huống                   | Hành vi                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| QR không có trong local DB   | Hiện "Không tìm thấy sinh viên", ghi log, cho phép nhập tay/kiểm tra lại                             |
+| Sync thất bại (mạng đứt lại) | Giữ nguyên `synced=0`, mobile sync worker retry khi có mạng hoặc app foreground                      |
+| Check-in trùng (SV đã scan)  | SQLite UNIQUE constraint ngăn lưu trùng local; PostgreSQL `ON CONFLICT DO NOTHING` ngăn trùng server |
+| File preload quá lớn         | Phân trang theo `workshop_id`, chỉ load workshop của ngày hôm nay                                    |
 
 ---
-
 ### Luồng C — Luồng nhập dữ liệu từ CSV đêm (Thành viên 3)
 
 ```mermaid
@@ -771,28 +750,28 @@ sequenceDiagram
 
   Cron->>Worker: Kích hoạt lúc 02:00 AM
   Worker->>FTP: Request tải file `students_export.csv`
-  
+
   alt File không tồn tại / Lỗi kết nối FTP
     FTP-->>Worker: Error (404 / Timeout)
     Worker->>Log: Báo lỗi CRITICAL "Không lấy được file CSV"
     Note over Worker: Đóng Job (Status = FAILED), kết thúc luồng.
   else Lấy file thành công
     FTP-->>Worker: Stream file CSV (UTF-8)
-    
+
     loop Đọc từng Chunk (vd: 1000 dòng/lần)
       Worker->>Worker: FlatFileItemReader (Bỏ qua dòng Header)
       Worker->>Worker: ItemProcessor (Parse & Validate)
-      
+
       alt Có dòng lỗi format (Thiếu cột, sai định dạng)
         Worker->>Log: Ghi cảnh báo "Skip dòng X: Format không hợp lệ"
         Note over Worker: SkipPolicy: Bỏ qua dòng lỗi, tiếp tục xử lý các dòng khác
       end
-      
+
       Worker->>DB: JdbcBatchItemWriter (Gửi mảng dữ liệu đã validate)
       Note right of DB: UPSERT: ON CONFLICT (student_id) <br/> DO UPDATE SET email=EXCLUDED.email, <br/> full_name=EXCLUDED.full_name <br/> (TUYỆT ĐỐI KHÔNG ghi đè Role)
       DB-->>Worker: Trả về số dòng bị ảnh hưởng
     end
-    
+
     Worker->>Log: Báo cáo Job hoàn tất (Thành công: X, Bỏ qua: Y)
     Note over Worker: Job Status = COMPLETED
   end
@@ -1115,18 +1094,18 @@ public void runCsvImportJob() {
 
 ---
 
-### ADR-02: Chọn PWA (Service Worker) thay vì React Native
+### ADR-02: Chọn Check-in Mobile App native cho luồng vận hành
 
-**Quyết định:** Dùng React + Vite với Service Worker cho check-in app, không dùng React Native.
+**Quyết định:** Dùng ứng dụng mobile native cho nhân sự check-in, ưu tiên React Native/Expo để tận dụng lại kinh nghiệm React nhưng vẫn có API native cho camera, local database, bảo mật token và đồng bộ theo lifecycle của thiết bị.
 
 **Lý do:**
 
-- Nhóm chỉ có 3 người, 1 tuần — không đủ thời gian setup Expo + build native.
-- PWA với Service Worker + IndexedDB đáp ứng đầy đủ yêu cầu offline.
-- Camera access qua `getUserMedia` đủ để quét QR (dùng thư viện `html5-qrcode`).
-- Không cần publish lên App Store.
+- Yêu cầu mới chuyển luồng check-in khỏi giải pháp web offline cũ, nên cơ chế đồng bộ và lưu trữ của trình duyệt không còn là implementation chính.
+- Mobile native kiểm soát camera permission, network recovery, app foreground/background và lưu trữ offline ổn định hơn khi check-in tại cửa phòng.
+- SQLite phù hợp cho QR registry và pending scans; SecureStore/Keychain/Keystore phù hợp cho access token, refresh token và device id.
+- Có thể demo trên emulator hoặc thiết bị thật mà không phụ thuộc giới hạn browser/mobile Safari.
 
-**Đánh đổi:** PWA camera trên iOS Safari có giới hạn nhất định. Nếu thiết bị check-in dùng iPhone cũ, cần test kỹ.
+**Đánh đổi:** Cần thêm build mobile và quy trình test thiết bị/emulator. Để giảm rủi ro, backend giữ API REST `/api/checkins/preload` và `/api/checkins/sync`; web check-in hiện có chỉ còn là công cụ debug nội bộ, không phải container chính trong kiến trúc.
 
 ---
 
@@ -1154,14 +1133,14 @@ public void runCsvImportJob() {
 
 ---
 
-### ADR-05: Một codebase React cho cả 3 app (SV, Organizer, Check-in)
+### ADR-05: Một codebase React cho Student Web và Organizer Admin Web
 
-**Quyết định:** Một React + Vite project, routing theo role.
+**Quyết định:** Một React + Vite project cho Student Web và Organizer Admin Web, routing theo role. Luồng check-in chính chuyển sang mobile app native riêng và chỉ dùng chung Backend API contract.
 
 **Lý do:**
 
-- Ba thành viên dùng chung component library, tránh duplicate code.
+- Student và Organizer dùng chung component library, tránh duplicate code.
 - Build ra 1 bundle, deploy 1 nơi.
-- Protected routes theo role: `/admin/*` chỉ cho ORGANIZER, `/checkin/*` chỉ cho CHECKIN_STAFF.
+- Protected routes theo role: `/admin/*` chỉ cho ORGANIZER; các route `/checkin/*` trong web chỉ là công cụ debug tạm thời, không đại diện cho container chính.
 
 **Đánh đổi:** Bundle size lớn hơn. Giải pháp: React lazy loading + code splitting theo route.

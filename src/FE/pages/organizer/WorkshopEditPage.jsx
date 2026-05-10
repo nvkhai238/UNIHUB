@@ -70,6 +70,24 @@ export default function WorkshopEditPage() {
     }
   };
 
+  const refreshAiSummary = async () => {
+    const { data } = await api.get(`/api/workshops/${id}/ai-summary/status`);
+    setAiSummary(data.data?.aiSummary ?? '');
+    setAiSummaryStatus(data.data?.aiSummaryStatus ?? 'NONE');
+  };
+
+  const retryAiSummary = async () => {
+    setUploadMessage('');
+    try {
+      await api.post(`/api/workshops/${id}/ai-summary/retry`);
+      setAiSummary('');
+      setAiSummaryStatus('PROCESSING');
+      setUploadMessage('AI summary retry da duoc dua vao hang xu ly.');
+    } catch {
+      setUploadMessage('Khong the retry AI summary luc nay.');
+    }
+  };
+
   if (!form) {
     return (
       <section className="mx-auto max-w-4xl px-4 py-8">
@@ -162,6 +180,24 @@ export default function WorkshopEditPage() {
           {aiSummaryStatus === 'PROCESSING' && (
             <p className="mt-2 text-sm text-blue-600">AI đang xử lý PDF, tóm tắt sẽ hiển thị sau vài phút.</p>
           )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={refreshAiSummary}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Cap nhat trang thai
+            </button>
+            {aiSummaryStatus === 'FAILED' && (
+              <button
+                type="button"
+                onClick={retryAiSummary}
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+              >
+                Thu lai AI summary
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3">
