@@ -1,6 +1,7 @@
 package com.unihub.workshop.module.checkin.controller;
 
 import com.unihub.workshop.common.response.ApiResponse;
+import com.unihub.workshop.module.checkin.dto.CheckinResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
 import com.unihub.workshop.module.checkin.dto.SyncResponse;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/checkins")
@@ -39,5 +41,11 @@ public class CheckinController {
                 "Check-ins synchronized successfully",
                 checkinService.syncCheckins(records)
         ));
+    }
+
+    @GetMapping("/workshops/{workshopId}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<List<CheckinResponse>>> listByWorkshop(@PathVariable UUID workshopId) {
+        return ResponseEntity.ok(ApiResponse.success(checkinService.listByWorkshop(workshopId)));
     }
 }

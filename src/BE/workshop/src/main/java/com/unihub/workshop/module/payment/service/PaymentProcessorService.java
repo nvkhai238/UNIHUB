@@ -86,8 +86,26 @@ public class PaymentProcessorService {
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
                 .orElse(registration.getWorkshop());
-        workshop.setRemainingSeats(workshop.getRemainingSeats() + 1);
-        workshopRepository.save(workshop);
+        Registration promoted = promoteNextWaitlisted(workshop);
+        if (promoted == null) {
+            workshop.setRemainingSeats(Math.min(workshop.getCapacity(), workshop.getRemainingSeats() + 1));
+            workshopRepository.save(workshop);
+        } else {
+            scheduleConfirmationEmail(promoted.getId());
+        }
+    }
+
+    private Registration promoteNextWaitlisted(Workshop workshop) {
+        return registrationRepository
+                .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
+                .map(waitlisted -> {
+                    waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                    waitlisted.setQrCode(generateUniqueQrCode());
+                    waitlisted.setConfirmedAt(ZonedDateTime.now());
+                    waitlisted.setCancelledAt(null);
+                    return registrationRepository.save(waitlisted);
+                })
+                .orElse(null);
     }
 
     private String generateUniqueQrCode() {

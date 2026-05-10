@@ -4,8 +4,10 @@ import com.unihub.workshop.module.studentimport.entity.StudentImportBatch;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface StudentImportBatchRepository extends JpaRepository<StudentImportBatch, UUID> {
     List<StudentImportBatch> findAllByOrderByStartedAtDesc();
+    Optional<StudentImportBatch> findFirstByOrderByStartedAtDesc();
 }

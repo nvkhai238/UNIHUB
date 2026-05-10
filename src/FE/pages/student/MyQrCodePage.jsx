@@ -12,7 +12,7 @@ export default function MyQrCodePage() {
     let mounted = true;
     api.get(`/api/registrations/${registrationId}/qr`)
       .then(({ data }) => mounted && setQr(data.data))
-      .catch(() => mounted && setError('Mã QR chỉ khả dụng khi đăng ký đã CONFIRMED.'))
+      .catch(() => mounted && setError('Mã QR chỉ khả dụng khi đăng ký đã được xác nhận.'))
       .finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
@@ -28,7 +28,7 @@ export default function MyQrCodePage() {
         {error && <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
         {qr && (
           <div className="mt-6 flex flex-col items-center">
-            <img className="h-72 w-72 rounded-lg border border-gray-200 bg-white p-3" src={qr.qrCodeImage} alt="QR code" />
+            <img className="h-72 w-72 rounded-lg border border-gray-200 bg-white p-3" src={qr.qrCodeImage} alt="Mã QR" />
             <p className="mt-4 text-lg font-semibold text-gray-950">{qr.workshopTitle}</p>
             <p className="mt-2 break-all rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">{qr.qrCode}</p>
           </div>

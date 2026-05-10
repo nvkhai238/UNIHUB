@@ -7,6 +7,8 @@ import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
 import com.unihub.workshop.module.payment.service.PaymentProcessorService;
 import com.unihub.workshop.module.notification.service.EmailService;
+import com.unihub.workshop.module.notification.service.NotificationService;
+import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.registration.dto.RegistrationQrResponse;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
@@ -27,6 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,6 +44,7 @@ public class RegistrationService {
     private final PaymentRepository paymentRepository;
     private final PaymentProcessorService paymentProcessorService;
     private final EmailService emailService;
+    private final NotificationService notificationService;
     private final QrCodeService qrCodeService;
 
     @Transactional
@@ -156,6 +160,45 @@ public class RegistrationService {
         return RegistrationResponse.from(registration);
     }
 
+    @Transactional
+    public RegistrationResponse cancelMyRegistration(UUID id) {
+        Registration registration = registrationRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.REGISTRATION_NOT_FOUND));
+        User user = getCurrentUser();
+        if (!registration.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
+        }
+        if (registration.getStatus() == RegistrationStatus.CANCELLED) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Registration is already cancelled");
+        }
+
+        Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+
+        RegistrationStatus previousStatus = registration.getStatus();
+        registration.setStatus(RegistrationStatus.CANCELLED);
+        registration.setCancelledAt(ZonedDateTime.now());
+        Registration cancelled = registrationRepository.save(registration);
+        settlePaymentOnCancellation(cancelled);
+
+        Registration promoted = null;
+        if (previousStatus == RegistrationStatus.CONFIRMED || previousStatus == RegistrationStatus.PENDING) {
+            promoted = promoteNextWaitlisted(workshop);
+            if (promoted == null) {
+                workshop.setRemainingSeats(Math.min(workshop.getCapacity(), workshop.getRemainingSeats() + 1));
+                workshopRepository.save(workshop);
+            }
+        }
+
+        scheduleRegistrationCancelledNotification(cancelled);
+        if (promoted != null) {
+            scheduleRegistrationConfirmationEmail(promoted);
+            scheduleWaitlistPromotedNotification(promoted);
+        }
+
+        return RegistrationResponse.from(cancelled);
+    }
+
     @Transactional(readOnly = true)
     public RegistrationQrResponse getMyQrCode(UUID id) {
         Registration registration = registrationRepository.findById(id)
@@ -187,6 +230,61 @@ public class RegistrationService {
         return qrCode;
     }
 
+    private Registration promoteNextWaitlisted(Workshop workshop) {
+        return registrationRepository
+                .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
+                .map(waitlisted -> {
+                    waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                    waitlisted.setQrCode(generateUniqueQrCode());
+                    waitlisted.setConfirmedAt(ZonedDateTime.now());
+                    waitlisted.setCancelledAt(null);
+                    return registrationRepository.save(waitlisted);
+                })
+                .orElse(null);
+    }
+
+    private void settlePaymentOnCancellation(Registration registration) {
+        paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
+                .ifPresent(payment -> {
+                    if (payment.getStatus() == PaymentStatus.SUCCESS) {
+                        payment.setStatus(PaymentStatus.REFUNDED);
+                    } else if (payment.getStatus() == PaymentStatus.PENDING) {
+                        payment.setStatus(PaymentStatus.FAILED);
+                    }
+                    paymentRepository.save(payment);
+                });
+    }
+
+    private void scheduleRegistrationCancelledNotification(Registration registration) {
+        UUID userId = registration.getUser().getId();
+        String workshopTitle = registration.getWorkshop().getTitle();
+        UUID workshopId = registration.getWorkshop().getId();
+        UUID registrationId = registration.getId();
+        Runnable task = () -> notificationService.createNotification(
+                userId,
+                Notification.NotificationType.REGISTRATION_CANCELLED,
+                "Dang ky da huy",
+                "Dang ky workshop " + workshopTitle + " da duoc huy.",
+                Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
+        );
+        runAfterCommit(task);
+    }
+
+    private void scheduleWaitlistPromotedNotification(Registration registration) {
+        UUID userId = registration.getUser().getId();
+        String workshopTitle = registration.getWorkshop().getTitle();
+        UUID workshopId = registration.getWorkshop().getId();
+        UUID registrationId = registration.getId();
+        Runnable task = () -> notificationService.createNotification(
+                userId,
+                Notification.NotificationType.REGISTRATION_CONFIRMED,
+                "Da co cho trong workshop",
+                "Ban da duoc chuyen tu danh sach cho sang da xac nhan cho workshop " + workshopTitle + ".",
+                Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
+        );
+        runAfterCommit(task);
+    }
+
     private void scheduleRegistrationConfirmationEmail(Registration registration) {
         if (registration.getStatus() != RegistrationStatus.CONFIRMED || registration.getQrCode() == null) {
             return;
@@ -202,6 +300,19 @@ public class RegistrationService {
             });
         } else {
             emailService.sendRegistrationConfirmation(registrationId);
+        }
+    }
+
+    private void runAfterCommit(Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+        } else {
+            task.run();
         }
     }
 

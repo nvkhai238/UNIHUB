@@ -160,7 +160,7 @@ export default function PaymentStatusPage() {
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
               <h3 className="mb-2 text-sm font-semibold text-emerald-800">Đăng ký đã xác nhận!</h3>
               <p className="mb-3 text-sm text-emerald-700">
-                Bạn đã thanh toán thành công. Hãy đến workshop đúng giờ và show mã QR để check-in.
+                Bạn đã thanh toán thành công. Hãy đến workshop đúng giờ và xuất trình mã QR để check-in.
               </p>
               <Link
                 to={`/student/registrations/${registrationId}/qr`}

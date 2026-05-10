@@ -43,9 +43,9 @@ export default function WorkshopEditPage() {
     try {
       await api.patch(`/api/workshops/${id}/status`, { status: targetStatus });
       setWorkshopStatus(targetStatus);
-      setActionMsg(`Trạng thái đã chuyển sang ${targetStatus}.`);
+      setActionMsg(`Trạng thái đã chuyển sang ${workshopStatusLabel(targetStatus)}.`);
     } catch (err) {
-      setError(err?.response?.data?.message || `Không đổi được trạng thái thành ${targetStatus}.`);
+      setError(err?.response?.data?.message || `Không đổi được trạng thái thành ${workshopStatusLabel(targetStatus)}.`);
     }
   };
 
@@ -59,7 +59,7 @@ export default function WorkshopEditPage() {
       const { data } = await api.post(`/api/workshops/${id}/pdf`, payload, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setUploadMessage('PDF đã tải lên, AI summary đang xử lý nền.');
+      setUploadMessage('PDF đã tải lên, tóm tắt AI đang được xử lý nền.');
       setForm((prev) => ({ ...prev, pdfUrl: data.data ?? prev.pdfUrl }));
       setAiSummary('');
       setAiSummaryStatus('PROCESSING');
@@ -67,6 +67,24 @@ export default function WorkshopEditPage() {
       setUploadMessage('Không tải được PDF. Vui lòng thử lại.');
     } finally {
       setUploadingPdf(false);
+    }
+  };
+
+  const refreshAiSummary = async () => {
+    const { data } = await api.get(`/api/workshops/${id}/ai-summary/status`);
+    setAiSummary(data.data?.aiSummary ?? '');
+    setAiSummaryStatus(data.data?.aiSummaryStatus ?? 'NONE');
+  };
+
+  const retryAiSummary = async () => {
+    setUploadMessage('');
+    try {
+      await api.post(`/api/workshops/${id}/ai-summary/retry`);
+      setAiSummary('');
+      setAiSummaryStatus('PROCESSING');
+      setUploadMessage('Đã đưa yêu cầu tạo lại tóm tắt AI vào hàng xử lý.');
+    } catch {
+      setUploadMessage('Không thể tạo lại tóm tắt AI lúc này.');
     }
   };
 
@@ -89,10 +107,10 @@ export default function WorkshopEditPage() {
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-normal">Chỉnh sửa Workshop</h1>
+        <h1 className="text-3xl font-bold tracking-normal">Chỉnh sửa workshop</h1>
         {workshopStatus && (
           <span className={`rounded-md border px-3 py-1 text-sm font-semibold ${statusStyle[workshopStatus] ?? ''}`}>
-            {workshopStatus}
+            {workshopStatusLabel(workshopStatus)}
           </span>
         )}
       </div>
@@ -107,7 +125,7 @@ export default function WorkshopEditPage() {
             onClick={() => changeStatus('PUBLISHED')}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
           >
-            Publish workshop
+            Xuất bản workshop
           </button>
         )}
         {workshopStatus === 'PUBLISHED' && (
@@ -137,7 +155,7 @@ export default function WorkshopEditPage() {
         <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(v) => update('speakerBio', v)} />
         <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(v) => update('roomLayoutUrl', v)} />
         <label className="text-sm font-semibold text-gray-700">
-          Upload PDF tài liệu
+          Tải PDF tài liệu
           <input
             type="file"
             accept="application/pdf"
@@ -148,13 +166,13 @@ export default function WorkshopEditPage() {
         </label>
 
         <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-500">AI Summary</p>
+          <p className="text-xs font-semibold uppercase text-gray-500">Tóm tắt AI</p>
           <p className={`mt-1 text-sm font-semibold ${
             aiSummaryStatus === 'PROCESSING' ? 'text-blue-600' :
             aiSummaryStatus === 'FAILED' ? 'text-red-600' :
             'text-gray-950'
           }`}>
-            {aiSummaryStatus === 'NONE' ? 'Chưa có (upload PDF để tạo)' : aiSummaryStatus}
+            {aiSummaryStatusLabel(aiSummaryStatus)}
           </p>
           {aiSummary && (
             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{aiSummary}</p>
@@ -162,6 +180,24 @@ export default function WorkshopEditPage() {
           {aiSummaryStatus === 'PROCESSING' && (
             <p className="mt-2 text-sm text-blue-600">AI đang xử lý PDF, tóm tắt sẽ hiển thị sau vài phút.</p>
           )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={refreshAiSummary}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Cập nhật trạng thái
+            </button>
+            {aiSummaryStatus === 'FAILED' && (
+              <button
+                type="button"
+                onClick={retryAiSummary}
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+              >
+                Tạo lại tóm tắt AI
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -245,4 +281,23 @@ function toLocalInput(value) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function workshopStatusLabel(status) {
+  const labels = {
+    DRAFT: 'Nháp',
+    PUBLISHED: 'Đã xuất bản',
+    CANCELLED: 'Đã hủy',
+  };
+  return labels[status] ?? status;
+}
+
+function aiSummaryStatusLabel(status) {
+  const labels = {
+    NONE: 'Chưa có (tải PDF để tạo)',
+    PROCESSING: 'Đang xử lý',
+    COMPLETED: 'Hoàn tất',
+    FAILED: 'Thất bại',
+  };
+  return labels[status] ?? status;
 }

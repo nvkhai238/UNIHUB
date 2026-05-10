@@ -25,11 +25,24 @@ export default function RegistrationDetailPage() {
   const retryPayment = async () => {
     setMessage('');
     try {
-      await api.post(`/api/registrations/${registrationId}/payment/retry`);
+      await api.post(`/api/registrations/${registrationId}/payment/retry`, {}, {
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
       setMessage('Đã đưa thanh toán vào hàng xử lý lại.');
       loadRegistration();
     } catch {
       setMessage('Không thể xử lý lại thanh toán lúc này.');
+    }
+  };
+
+  const cancelRegistration = async () => {
+    setMessage('');
+    try {
+      await api.delete(`/api/registrations/${registrationId}`);
+      setMessage('Đăng ký đã được hủy.');
+      loadRegistration();
+    } catch {
+      setMessage('Không thể hủy đăng ký lúc này.');
     }
   };
 
@@ -50,7 +63,7 @@ export default function RegistrationDetailPage() {
           <>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
               <Info label="Workshop" value={registration.workshopTitle || registration.workshopId} />
-              <Info label="Trạng thái" value={registration.status} />
+              <Info label="Trạng thái" value={registrationStatusLabel(registration.status)} />
               <Info label="Đăng ký lúc" value={formatDate(registration.registeredAt)} />
               <Info label="Xác nhận lúc" value={formatDate(registration.confirmedAt) || 'Chưa xác nhận'} />
               <Info label="Registration ID" value={registration.id} />
@@ -84,6 +97,15 @@ export default function RegistrationDetailPage() {
                   </Link>
                 </>
               )}
+              {registration.status !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  onClick={cancelRegistration}
+                  className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                >
+                  Hủy đăng ký
+                </button>
+              )}
             </div>
           </>
         )}
@@ -107,4 +129,14 @@ function formatDate(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function registrationStatusLabel(status) {
+  const labels = {
+    CONFIRMED: 'Đã xác nhận',
+    PENDING: 'Đang xử lý',
+    WAITLISTED: 'Danh sách chờ',
+    CANCELLED: 'Đã hủy',
+  };
+  return labels[status] ?? status;
 }

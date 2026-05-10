@@ -21,7 +21,7 @@ export default function CheckinDashboard() {
     const rows = data.data ?? [];
     localStorage.setItem(`checkin_preload_${date}`, JSON.stringify(rows));
     setPreload(rows);
-    setMessage(`Đã preload ${rows.length} mã QR hợp lệ cho ngày ${date}.`);
+    setMessage(`Đã tải trước ${rows.length} mã QR hợp lệ cho ngày ${date}.`);
   };
 
   const sync = async () => {
@@ -42,22 +42,22 @@ export default function CheckinDashboard() {
   return (
     <section className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-normal">Preload & đồng bộ check-in</h1>
-        <p className="mt-2 text-sm text-gray-600">Tải danh sách QR hợp lệ trước sự kiện và đồng bộ pending scans khi có mạng.</p>
+        <h1 className="text-3xl font-bold tracking-normal">Tải trước & đồng bộ check-in</h1>
+        <p className="mt-2 text-sm text-gray-600">Tải danh sách QR hợp lệ trước sự kiện và đồng bộ các lượt quét đang chờ khi có mạng.</p>
       </div>
 
       {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{message}</div>}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Preload QR</h2>
+          <h2 className="text-lg font-semibold">Tải trước QR</h2>
           <div className="mt-4 flex gap-2">
             <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
             <button type="button" onClick={loadPreload} className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
               Tải
             </button>
           </div>
-          <p className="mt-4 text-sm text-gray-600">Đang lưu local: <span className="font-semibold text-gray-950">{preload.length}</span> QR</p>
+          <p className="mt-4 text-sm text-gray-600">Đang lưu cục bộ: <span className="font-semibold text-gray-950">{preload.length}</span> QR</p>
           <div className="mt-4 max-h-72 overflow-auto rounded-lg border border-gray-100">
             {preload.slice(0, 20).map((row) => (
               <div key={`${row.workshopId}-${row.qrCode}`} className="border-b border-gray-100 px-3 py-2 text-sm last:border-0">
@@ -69,12 +69,12 @@ export default function CheckinDashboard() {
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Sync pending scans</h2>
+          <h2 className="text-lg font-semibold">Đồng bộ lượt quét đang chờ</h2>
           <textarea
             value={qrLines}
             onChange={(event) => setQrLines(event.target.value)}
             rows={8}
-            placeholder="Dán mỗi QR một dòng để mô phỏng pending queue từ thiết bị offline"
+            placeholder="Dán mỗi QR một dòng để mô phỏng hàng chờ từ thiết bị offline"
             className="mt-4 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
           <button type="button" onClick={sync} className="mt-3 rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
@@ -88,7 +88,7 @@ export default function CheckinDashboard() {
               <div className="mt-3 space-y-2">
                 {(syncResult.items ?? []).map((item, index) => (
                   <p key={`${item.qrCode}-${index}`} className="break-all text-xs text-gray-600">
-                    <span className="font-semibold text-gray-950">{item.status}</span> · {item.message} · {item.qrCode}
+                    <span className="font-semibold text-gray-950">{checkinStatusLabel(item.status)}</span> · {checkinMessage(item)} · {item.qrCode}
                   </p>
                 ))}
               </div>
@@ -107,4 +107,26 @@ function getDeviceId() {
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   return deviceId;
+}
+
+function checkinStatusLabel(status) {
+  const labels = {
+    CREATED: 'Đã ghi nhận',
+    DUPLICATE: 'Trùng lặp',
+    CONFLICT: 'Xung đột',
+    INVALID_QR: 'QR không hợp lệ',
+    NOT_CONFIRMED: 'Chưa xác nhận',
+  };
+  return labels[status] ?? status;
+}
+
+function checkinMessage(item) {
+  const messages = {
+    CREATED: 'Check-in đã được ghi nhận',
+    DUPLICATE: 'QR đã được check-in trên thiết bị này',
+    CONFLICT: 'QR đã được check-in trên thiết bị khác',
+    INVALID_QR: 'QR không khớp với đăng ký nào',
+    NOT_CONFIRMED: 'Đăng ký chưa được xác nhận',
+  };
+  return messages[item.status] ?? item.message;
 }

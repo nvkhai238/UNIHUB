@@ -55,7 +55,7 @@ export default function StudentImportPage() {
         <p className="mt-2 text-sm text-gray-600">
           Chạy job để đồng bộ danh sách sinh viên từ hệ thống cũ (Spring Batch, 2:00 AM hàng ngày).
           File CSV: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/data/students_YYYY-MM-DD.csv</code>
-          — Format: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">student_id,full_name,email</code>
+          — Định dạng: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">student_id,full_name,email</code>
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function StudentImportPage() {
 
       <div className="mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
         <strong>⚠️ Lưu ý:</strong> Job tự động chạy lúc 2:00 AM mỗi ngày. Chạy thủ công chỉ dùng để kiểm tra hoặc khắc phục sự cố.
-        Dữ liệu hiện có của sinh viên (role, registration) không bị ảnh hưởng — chỉ cập nhật họ tên và email.
+        Dữ liệu hiện có của sinh viên (vai trò, đăng ký) không bị ảnh hưởng — chỉ cập nhật họ tên và email.
       </div>
 
       {loading ? (
@@ -117,7 +117,7 @@ export default function StudentImportPage() {
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{batch.id?.slice(0, 8)}...</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusStyle(batch.status)}`}>
-                      {batch.status}
+                      {batchStatusLabel(batch.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3 font-semibold text-emerald-700">{batch.successRows ?? 0}</td>
@@ -139,4 +139,14 @@ export default function StudentImportPage() {
 function formatDate(value) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function batchStatusLabel(status) {
+  const labels = {
+    COMPLETED: 'Hoàn tất',
+    FAILED: 'Thất bại',
+    RUNNING: 'Đang chạy',
+    SKIPPED: 'Đã bỏ qua',
+  };
+  return labels[status] ?? status;
 }
