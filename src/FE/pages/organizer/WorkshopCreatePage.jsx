@@ -34,8 +34,8 @@ export default function WorkshopCreatePage() {
 
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-3xl font-bold tracking-normal">Tạo Workshop mới</h1>
-      <p className="mt-2 text-sm text-gray-600">Workshop mới tạo sẽ ở trạng thái DRAFT để BTC kiểm tra trước khi publish.</p>
+      <h1 className="text-3xl font-bold tracking-normal">Tạo workshop mới</h1>
+      <p className="mt-2 text-sm text-gray-600">Workshop mới tạo sẽ ở trạng thái nháp để ban tổ chức kiểm tra trước khi xuất bản.</p>
       {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
       <WorkshopForm form={form} setForm={setForm} submit={submit} submitText="Tạo workshop" />
     </section>
@@ -60,7 +60,7 @@ function WorkshopForm({ form, setForm, submit, submitText }) {
       <Textarea label="Mô tả" value={form.description} onChange={(v) => update('description', v)} />
       <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(v) => update('speakerBio', v)} />
       <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(v) => update('roomLayoutUrl', v)} />
-      <Field label="PDF URL" value={form.pdfUrl} onChange={(v) => update('pdfUrl', v)} />
+      <Field label="URL tài liệu PDF" value={form.pdfUrl} onChange={(v) => update('pdfUrl', v)} />
       <button type="submit" className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700">
         {submitText}
       </button>

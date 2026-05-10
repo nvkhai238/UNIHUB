@@ -30,7 +30,7 @@ export default function MyRegistrationsPage() {
   const cancelRegistration = async (id) => {
     setMessage('');
     await api.delete(`/api/registrations/${id}`);
-    setMessage('Dang ky da duoc huy. He thong se tu dong chuyen cho sinh vien dau waitlist neu co.');
+    setMessage('Đăng ký đã được hủy. Hệ thống sẽ tự động chuyển chỗ cho sinh viên đầu danh sách chờ nếu có.');
     load();
   };
 
@@ -87,7 +87,7 @@ export default function MyRegistrationsPage() {
                       onClick={() => cancelRegistration(registration.id)}
                       className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
                     >
-                      Huy dang ky
+                      Hủy đăng ký
                     </button>
                   )}
                 </div>
@@ -107,7 +107,17 @@ function StatusBadge({ status }) {
     WAITLISTED: 'bg-sky-50 text-sky-700',
     CANCELLED: 'bg-gray-100 text-gray-600',
   };
-  return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>{status}</span>;
+  return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>{registrationStatusLabel(status)}</span>;
+}
+
+function registrationStatusLabel(status) {
+  const labels = {
+    CONFIRMED: 'Đã xác nhận',
+    PENDING: 'Đang xử lý',
+    WAITLISTED: 'Danh sách chờ',
+    CANCELLED: 'Đã hủy',
+  };
+  return labels[status] ?? status;
 }
 
 function formatDate(value) {

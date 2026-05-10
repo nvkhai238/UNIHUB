@@ -28,7 +28,7 @@ export default function CheckinLayout() {
           <div className="font-bold text-amber-700">UniHub Check-in</div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <nav className="flex flex-wrap gap-2 text-sm font-medium">
-              <CheckinNavLink to="/checkin">Preload & Sync</CheckinNavLink>
+              <CheckinNavLink to="/checkin">Tải trước & đồng bộ</CheckinNavLink>
               <CheckinNavLink to="/checkin/scan">Quét QR</CheckinNavLink>
             </nav>
             <LogoutButton onLoggedOut={clearQrRegistry} />

@@ -21,11 +21,11 @@ export default function QrScannerPage() {
     <section className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-normal">Quét QR check-in</h1>
-        <p className="mt-2 text-sm text-gray-600">Bản UI này dùng nhập QR thủ công để kiểm thử API sync và conflict handling.</p>
+        <p className="mt-2 text-sm text-gray-600">Giao diện này dùng nhập QR thủ công để kiểm thử API đồng bộ và xử lý xung đột.</p>
       </div>
 
       <form onSubmit={submit} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <label className="text-sm font-semibold text-gray-700" htmlFor="qr">QR code</label>
+        <label className="text-sm font-semibold text-gray-700" htmlFor="qr">Mã QR</label>
         <input
           id="qr"
           value={qrCode}
@@ -41,8 +41,8 @@ export default function QrScannerPage() {
 
       {result && (
         <div className={['mt-4 rounded-lg border p-4 text-sm', result.status === 'CREATED' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'].join(' ')}>
-          <p className="font-semibold">{result.status}</p>
-          <p className="mt-1">{result.message}</p>
+          <p className="font-semibold">{checkinStatusLabel(result.status)}</p>
+          <p className="mt-1">{checkinMessage(result)}</p>
         </div>
       )}
     </section>
@@ -56,4 +56,26 @@ function getDeviceId() {
     localStorage.setItem('unihub_checkin_device_id', deviceId);
   }
   return deviceId;
+}
+
+function checkinStatusLabel(status) {
+  const labels = {
+    CREATED: 'Đã ghi nhận',
+    DUPLICATE: 'Trùng lặp',
+    CONFLICT: 'Xung đột',
+    INVALID_QR: 'QR không hợp lệ',
+    NOT_CONFIRMED: 'Chưa xác nhận',
+  };
+  return labels[status] ?? status;
+}
+
+function checkinMessage(result) {
+  const messages = {
+    CREATED: 'Check-in đã được ghi nhận',
+    DUPLICATE: 'QR đã được check-in trên thiết bị này',
+    CONFLICT: 'QR đã được check-in trên thiết bị khác',
+    INVALID_QR: 'QR không khớp với đăng ký nào',
+    NOT_CONFIRMED: 'Đăng ký chưa được xác nhận',
+  };
+  return messages[result.status] ?? result.message;
 }

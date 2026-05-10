@@ -30,7 +30,7 @@ export default function WorkshopDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <article className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{workshop.status}</span>
+            <span className="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{workshopStatusLabel(workshop.status)}</span>
             <span className="text-gray-500">{formatDate(workshop.startTime)}</span>
           </div>
           <h1 className="text-3xl font-bold tracking-normal text-gray-950">{workshop.title}</h1>
@@ -123,6 +123,15 @@ function statusMessage(status) {
   if (status === 'WAITLISTED') return 'Workshop đã hết chỗ. Bạn đã vào danh sách chờ.';
   if (status === 'PENDING') return 'Đăng ký đã giữ chỗ. Thanh toán đang được xử lý.';
   return 'Yêu cầu đã được ghi nhận.';
+}
+
+function workshopStatusLabel(status) {
+  const labels = {
+    DRAFT: 'Nháp',
+    PUBLISHED: 'Đã xuất bản',
+    CANCELLED: 'Đã hủy',
+  };
+  return labels[status] ?? status;
 }
 
 function formatDate(value) {

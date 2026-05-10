@@ -50,7 +50,7 @@ export default function StatisticsPage() {
         <>
           <div className="grid gap-4 md:grid-cols-4">
             <Metric label="Workshop" value={stats.totalWorkshops} />
-            <Metric label="Registration" value={stats.totalRegistrations} />
+            <Metric label="Đăng ký" value={stats.totalRegistrations} />
             <Metric label="Check-in" value={stats.totalCheckins} />
             <Metric label="Doanh thu" value={formatMoney(stats.totalRevenue)} />
           </div>
@@ -64,9 +64,9 @@ export default function StatisticsPage() {
                 <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
                   <tr>
                     <th className="px-4 py-3">Workshop</th>
-                    <th className="px-4 py-3">Confirmed</th>
-                    <th className="px-4 py-3">Waitlist</th>
-                    <th className="px-4 py-3">Pending</th>
+                    <th className="px-4 py-3">Đã xác nhận</th>
+                    <th className="px-4 py-3">Danh sách chờ</th>
+                    <th className="px-4 py-3">Đang xử lý</th>
                     <th className="px-4 py-3">Check-in</th>
                     <th className="px-4 py-3">Tỷ lệ</th>
                     <th className="px-4 py-3">Doanh thu</th>
@@ -102,7 +102,7 @@ export default function StatisticsPage() {
                 <p className="font-medium text-gray-950">{batch.fileName}</p>
                 <p className="text-sm text-gray-500">{formatDate(batch.startedAt)} · {batch.successRows ?? 0} OK · {batch.errorRows ?? 0} lỗi</p>
               </div>
-              <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">{batch.status}</span>
+              <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">{batchStatusLabel(batch.status)}</span>
             </div>
           ))}
         </div>
@@ -123,6 +123,16 @@ function Metric({ label, value }) {
 function formatMoney(value) {
   const amount = Number(value ?? 0);
   return amount === 0 ? '0đ' : `${amount.toLocaleString('vi-VN')}đ`;
+}
+
+function batchStatusLabel(status) {
+  const labels = {
+    COMPLETED: 'Hoàn tất',
+    FAILED: 'Thất bại',
+    RUNNING: 'Đang chạy',
+    SKIPPED: 'Đã bỏ qua',
+  };
+  return labels[status] ?? status;
 }
 
 function formatDate(value) {
