@@ -46,6 +46,11 @@ public class EmailService {
     @Value("${app.mail.from:noreply@unihub.edu.vn}")
     private String fromAddress;
 
+    public boolean isEmailSendingAvailable() {
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        return mailEnabled && mailSender != null && StringUtils.hasText(fromAddress);
+    }
+
     @Async("notificationTaskExecutor")
     @Transactional(readOnly = true)
     public void sendRegistrationConfirmation(UUID registrationId) {
@@ -104,6 +109,23 @@ public class EmailService {
 
         if (!sent) {
             releaseEmailSend(dedupKey);
+        }
+    }
+
+    @Async("notificationTaskExecutor")
+    public void sendRegistrationOtp(String email, String fullName, String otpCode, int expiresInMinutes) {
+        boolean sent = sendWithRetry(
+                email,
+                "[UniHub] Ma xac thuc dang ky tai khoan",
+                helper -> helper.setText(buildRegistrationOtpHtml(fullName, otpCode, expiresInMinutes), true),
+                "registration otp"
+        );
+
+        if (!sent) {
+            throw new com.unihub.workshop.common.exception.AppException(
+                    com.unihub.workshop.common.exception.ErrorCode.OTP_SEND_FAILED,
+                    "Không thể gửi mã OTP qua email lúc này."
+            );
         }
     }
 
@@ -190,6 +212,25 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle);
+    }
+
+    private String buildRegistrationOtpHtml(String fullName, String otpCode, int expiresInMinutes) {
+        String recipientName = escape(fullName);
+        String safeOtp = escape(otpCode);
+
+        return """
+                <!doctype html>
+                <html lang="vi">
+                <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
+                  <h2 style="margin:0 0 12px">Xac thuc dang ky tai khoan</h2>
+                  <p>Xin chao %s,</p>
+                  <p>Ban dang tao tai khoan sinh vien tren UniHub Workshop. Ma OTP cua ban la:</p>
+                  <p style="margin:20px 0;font-size:28px;font-weight:700;letter-spacing:6px">%s</p>
+                  <p>Ma nay co hieu luc trong %d phut.</p>
+                  <p style="font-size:12px;color:#6b7280">Neu ban khong thuc hien yeu cau nay, vui long bo qua email.</p>
+                </body>
+                </html>
+                """.formatted(recipientName, safeOtp, expiresInMinutes);
     }
 
     private boolean claimEmailSend(String key) {

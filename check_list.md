@@ -63,6 +63,7 @@ Quy uoc trang thai:
 - [x] Logout + blacklist refresh token - `HOAN_THANH`
 - [x] Role-based access control cho STUDENT / ORGANIZER / CHECKIN_STAFF - `HOAN_THANH`
 - [x] Route guard frontend theo role - `HOAN_THANH`
+- [x] Dang ky tai khoan voi OTP qua email - `HOAN_THANH`
 - [ ] Change password endpoint dung theo spec - `CHUA_CO`
 - [ ] Test day du cho auth va phan quyen - `CHUA_CO`
 
@@ -117,7 +118,7 @@ Quy uoc trang thai:
 - [x] Delete all notifications - `HOAN_THANH`
 - [x] Email registration confirmation co QR - `HOAN_THANH`
 - [x] Email workshop cancellation - `HOAN_THANH`
-- [ ] In-app notification tu dong tao day du cho moi su kien nghiep vu - `MOT_PHAN`
+- [x] In-app notification tu dong cho dang ky / huy dang ky / payment co ban - `HOAN_THANH`
 - [ ] Notification realtime push qua Supabase Realtime - `CHUA_CO`
 - [ ] Kien truc mo rong Telegram/SMS adapter - `CHUA_CO`
 
@@ -281,6 +282,7 @@ Quy uoc trang thai:
 ### Da o muc kha on
 
 - Auth/JWT/RBAC co ban
+- Dang ky tai khoan voi OTP email
 - CRUD workshop co ban
 - Registration co ban
 - QR code cho registration confirmed
@@ -291,7 +293,6 @@ Quy uoc trang thai:
 ### Dang do / can hoan thien gap
 
 - Payment flow dung spec
-- Waitlist promote
 - Check-in offline that su
 - AI summary retry + status
 - Realtime updates
@@ -299,7 +300,6 @@ Quy uoc trang thai:
 
 ### Chua co hoac thieu ro
 
-- Huy dang ky
 - Endpoint/view check-in list
 - Realtime notification
 - Workshop-read rate limit
@@ -323,8 +323,8 @@ Pham vi chinh:
 
 Checklist thuc hien:
 
-- [ ] Hoan thien `DELETE /api/registrations/{id}` de huy dang ky
-- [ ] Hoan thien waitlist promotion FIFO khi co ghe trong
+- [x] Hoan thien `DELETE /api/registrations/{id}` de huy dang ky
+- [x] Hoan thien waitlist promotion FIFO khi co ghe trong
 - [ ] Chinh sua retry payment dung spec
 - [ ] Chinh sua payment fail/timeout/cancel/release-seat cho khop blueprint
 - [ ] Hoan thien payment stats filter

@@ -2,7 +2,7 @@ import { Link, NavLink } from 'react-router-dom';
 import { getCurrentUser } from '../router/jwtUtils';
 
 const navLinkBase =
-  'inline-flex h-10 items-center rounded-md px-3 text-sm font-semibold transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200';
+  'inline-flex h-10 items-center rounded-md border border-transparent px-3 text-sm font-semibold transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200';
 
 export default function StudentHeader() {
   const user = getCurrentUser();
@@ -14,9 +14,9 @@ export default function StudentHeader() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <Link
           to="/student"
-          className="group inline-flex items-center gap-3 rounded-md pr-2 transition duration-200 ease-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          className="group inline-flex items-center gap-3 rounded-md pr-2 transition duration-200 ease-out hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-base font-bold text-white shadow-sm transition duration-200 group-hover:bg-emerald-700 group-hover:shadow-md">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-base font-bold text-white shadow-sm transition duration-200 group-hover:bg-emerald-500">
             U
           </span>
           <span className="text-lg font-bold tracking-normal text-emerald-700">
@@ -42,12 +42,12 @@ export default function StudentHeader() {
             to="/student/profile"
             title="Hồ sơ sinh viên"
             aria-label="Hồ sơ sinh viên"
-            className={({ isActive }) =>
-              [
-                'ml-1 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-200',
-                isActive
-                  ? 'border-emerald-600 bg-emerald-600 text-white'
-                  : 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200 hover:bg-emerald-100',
+          className={({ isActive }) =>
+            [
+              'ml-1 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
+              isActive
+                  ? 'border-emerald-700 bg-emerald-700 text-white'
+                  : 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200 hover:bg-amber-50 hover:text-amber-700',
               ].join(' ')
             }
           >
@@ -68,8 +68,8 @@ function StudentNavLink({ to, end = false, children }) {
         [
           navLinkBase,
           isActive
-            ? 'bg-emerald-50 text-emerald-700 shadow-sm'
-            : 'text-gray-600',
+            ? 'border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm'
+            : 'text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
         ].join(' ')
       }
     >
@@ -86,10 +86,10 @@ function NotificationNavLink() {
       aria-label="Thông báo"
       className={({ isActive }) =>
         [
-          'inline-flex h-10 w-10 items-center justify-center rounded-md transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200',
+          'inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
           isActive
-            ? 'bg-emerald-50 text-emerald-700 shadow-sm'
-            : 'text-gray-600',
+            ? 'border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm'
+            : 'text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
         ].join(' ')
       }
     >

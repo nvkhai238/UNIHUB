@@ -46,7 +46,7 @@ export default function LogoutButton({
       onClick={handleLogout}
       disabled={submitting}
       className={[
-        'rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 disabled:cursor-not-allowed disabled:opacity-60',
+        'rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60',
         className,
       ].join(' ')}
     >

@@ -69,7 +69,9 @@ public class RegistrationService {
 
         if (workshop.getRemainingSeats() <= 0) {
             registration.setStatus(RegistrationStatus.WAITLISTED);
-            return RegistrationResponse.from(registrationRepository.save(registration));
+            Registration savedWaitlisted = registrationRepository.save(registration);
+            scheduleWaitlistCreatedNotification(savedWaitlisted);
+            return RegistrationResponse.from(savedWaitlisted);
         }
 
         workshop.setRemainingSeats(workshop.getRemainingSeats() - 1);
@@ -96,6 +98,7 @@ public class RegistrationService {
 
         Registration savedRegistration = registrationRepository.save(registration);
         scheduleRegistrationConfirmationEmail(savedRegistration);
+        scheduleRegistrationCreatedNotification(savedRegistration);
         return RegistrationResponse.from(savedRegistration);
     }
 
@@ -169,11 +172,14 @@ public class RegistrationService {
             throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
         }
         if (registration.getStatus() == RegistrationStatus.CANCELLED) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Registration is already cancelled");
+            throw new AppException(ErrorCode.REGISTRATION_ALREADY_CANCELLED, "Registration is already cancelled");
         }
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
                 .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+        if (!workshop.getStartTime().isAfter(ZonedDateTime.now())) {
+            throw new AppException(ErrorCode.WORKSHOP_IN_PROGRESS, "Cannot cancel a registration after the workshop has started");
+        }
 
         RegistrationStatus previousStatus = registration.getStatus();
         registration.setStatus(RegistrationStatus.CANCELLED);
@@ -265,6 +271,43 @@ public class RegistrationService {
                 Notification.NotificationType.REGISTRATION_CANCELLED,
                 "Dang ky da huy",
                 "Dang ky workshop " + workshopTitle + " da duoc huy.",
+                Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
+        );
+        runAfterCommit(task);
+    }
+
+    private void scheduleRegistrationCreatedNotification(Registration registration) {
+        Notification.NotificationType type = registration.getStatus() == RegistrationStatus.PENDING
+                ? Notification.NotificationType.PAYMENT_PENDING
+                : Notification.NotificationType.REGISTRATION_CONFIRMED;
+        String title = registration.getStatus() == RegistrationStatus.PENDING
+                ? "Dang ky dang cho thanh toan"
+                : "Dang ky thanh cong";
+        String body = registration.getStatus() == RegistrationStatus.PENDING
+                ? "Dang ky workshop " + registration.getWorkshop().getTitle() + " dang cho xac nhan thanh toan."
+                : "Ban da dang ky thanh cong workshop " + registration.getWorkshop().getTitle() + ".";
+        UUID userId = registration.getUser().getId();
+        UUID workshopId = registration.getWorkshop().getId();
+        UUID registrationId = registration.getId();
+        Runnable task = () -> notificationService.createNotification(
+                userId,
+                type,
+                title,
+                body,
+                Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
+        );
+        runAfterCommit(task);
+    }
+
+    private void scheduleWaitlistCreatedNotification(Registration registration) {
+        UUID userId = registration.getUser().getId();
+        UUID workshopId = registration.getWorkshop().getId();
+        UUID registrationId = registration.getId();
+        Runnable task = () -> notificationService.createNotification(
+                userId,
+                Notification.NotificationType.REGISTRATION_PENDING,
+                "Da vao danh sach cho",
+                "Workshop " + registration.getWorkshop().getTitle() + " hien da het cho. Ban da duoc them vao danh sach cho.",
                 Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
         );
         runAfterCommit(task);

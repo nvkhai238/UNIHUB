@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/student-imports")
@@ -31,5 +32,24 @@ public class StudentImportController {
     @PostMapping("/run")
     public ResponseEntity<ApiResponse<StudentImportBatch>> runImport() {
         return ResponseEntity.ok(ApiResponse.success("Student CSV import completed", csvImportScheduler.runImportJob()));
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getLatestStatus() {
+        StudentImportBatch latestBatch = batchRepository.findAllByOrderByStartedAtDesc().stream().findFirst().orElse(null);
+        if (latestBatch == null) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of(
+                    "status", "NOT_STARTED",
+                    "processedRecords", 0,
+                    "failedRecords", 0
+            )));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "jobId", latestBatch.getId(),
+                "status", latestBatch.getStatus(),
+                "processedRecords", latestBatch.getSuccessRows() != null ? latestBatch.getSuccessRows() : 0,
+                "failedRecords", latestBatch.getErrorRows() != null ? latestBatch.getErrorRows() : 0
+        )));
     }
 }

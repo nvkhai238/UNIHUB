@@ -30,7 +30,6 @@ import StudentProfilePage from '../pages/student/StudentProfilePage';
 // ─── Organizer Pages ──────────────────────────────────────────────────────────
 import OrganizerDashboard from '../pages/organizer/OrganizerDashboard';
 import WorkshopManagePage from '../pages/organizer/WorkshopManagePage';
-import WorkshopCreatePage from '../pages/organizer/WorkshopCreatePage';
 import WorkshopEditPage from '../pages/organizer/WorkshopEditPage';
 import StatisticsPage from '../pages/organizer/StatisticsPage';
 import StudentImportPage from '../pages/organizer/StudentImportPage';
@@ -133,7 +132,7 @@ const router = createBrowserRouter([
       },
       {
         path: '/admin/workshops/create',
-        element: <WorkshopCreatePage />,
+        element: <WorkshopManagePage />,
       },
       {
         path: '/admin/workshops/:id/edit',

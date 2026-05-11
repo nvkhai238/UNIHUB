@@ -61,6 +61,12 @@ export interface LoginResponseData {
   };
 }
 
+export interface OtpChallengeData {
+  email: string;
+  expiresInSeconds: number;
+  message: string;
+}
+
 // ─── Error codes that should trigger a token refresh ──────────────────────────
 // INVALID_CREDENTIALS is a login failure — it must NOT trigger refresh.
 const REFRESH_TRIGGER_CODES = new Set(['TOKEN_EXPIRED', 'TOKEN_INVALID']);
@@ -283,6 +289,36 @@ export async function register(payload: {
 }): Promise<LoginResponseData> {
   const { data } = await api.post<ApiResponse<LoginResponseData>>(
     '/api/auth/register',
+    payload,
+  );
+  const responsePayload = data.data;
+  saveTokens({
+    accessToken: responsePayload.accessToken,
+    refreshToken: responsePayload.refreshToken,
+  });
+  saveUserProfile(responsePayload.user);
+  return responsePayload;
+}
+
+export async function requestRegistrationOtp(payload: {
+  fullName: string;
+  email: string;
+  studentId: string;
+  password: string;
+}): Promise<OtpChallengeData> {
+  const { data } = await api.post<ApiResponse<OtpChallengeData>>(
+    '/api/auth/register/request-otp',
+    payload,
+  );
+  return data.data;
+}
+
+export async function verifyRegistrationOtp(payload: {
+  email: string;
+  otpCode: string;
+}): Promise<LoginResponseData> {
+  const { data } = await api.post<ApiResponse<LoginResponseData>>(
+    '/api/auth/register/verify-otp',
     payload,
   );
   const responsePayload = data.data;
