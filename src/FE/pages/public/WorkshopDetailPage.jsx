@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import RegistrationButton from '../../components/RegistrationButton';
 import api from '../../api/api';
+import { getCurrentUser } from '../../router/jwtUtils';
 
 export default function WorkshopDetailPage() {
   const { id } = useParams();
@@ -9,13 +10,31 @@ export default function WorkshopDetailPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    api.get(`/api/workshops/${id}`)
-      .then(({ data }) => mounted && setWorkshop(data.data))
+    const currentUser = getCurrentUser();
+
+    Promise.all([
+      api.get(`/api/workshops/${id}`),
+      currentUser?.role === 'STUDENT'
+        ? api.get('/api/registrations/my').catch(() => ({ data: { data: [] } }))
+        : Promise.resolve({ data: { data: [] } }),
+    ])
+      .then(([workshopRes, registrationsRes]) => {
+        if (!mounted) return;
+        const workshopData = workshopRes.data.data;
+        setWorkshop(workshopData);
+        const myRegistrations = registrationsRes.data?.data ?? [];
+        setAlreadyRegistered(
+          myRegistrations.some((registration) =>
+            registration.workshopId === workshopData?.id && registration.status !== 'CANCELLED')
+        );
+      })
       .catch(() => mounted && setError('Không tải được chi tiết workshop.'))
       .finally(() => mounted && setLoading(false));
+
     return () => {
       mounted = false;
     };
@@ -73,8 +92,22 @@ export default function WorkshopDetailPage() {
             workshopId={workshop.id}
             workshopPrice={Number(workshop.price ?? 0)}
             remainingSeats={workshop.remainingSeats ?? 0}
-            onSuccess={setResult}
+            alreadyRegistered={alreadyRegistered}
+            onSuccess={(data) => {
+              setResult(data);
+              setAlreadyRegistered(true);
+            }}
           />
+
+          {alreadyRegistered && !result && (
+            <p className="mt-3 text-sm text-gray-500">
+              Bạn đã có đăng ký cho workshop này. Vào mục{' '}
+              <Link className="font-semibold text-emerald-700 underline" to="/student/registrations">
+                Đăng ký của tôi
+              </Link>{' '}
+              để theo dõi trạng thái.
+            </p>
+          )}
 
           {result && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">

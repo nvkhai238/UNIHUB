@@ -31,6 +31,11 @@ GEMINI_API_KEY=...
 SMTP_HOST=
 SMTP_USER=
 SMTP_PASS=
+MAIL_ENABLED=true
+MAIL_FROM=...
+SMTP_PORT=587
+SMTP_AUTH=true
+SMTP_STARTTLS_ENABLE=true
 ```
 
 For local demo without real email, keep `MAIL_ENABLED=false` in backend config or leave SMTP empty.
@@ -110,7 +115,7 @@ Organizer APIs:
 
 ## Key Flows
 
-- Students browse workshops, register, pay for paid workshops through mock payment, view QR codes, and cancel registrations.
+- Students create accounts with email OTP verification, browse workshops, register, pay for paid workshops through mock payment, view QR codes, and cancel registrations.
 - Confirmed or pending cancellations release the seat; the first waitlisted student is promoted automatically.
 - Organizers create/publish/cancel workshops, upload PDFs, retry AI summary generation, and view statistics.
 - Check-in staff use the mobile-native check-in contract: preload valid QR data, store scans offline locally, then sync with `POST /api/checkins/sync`.

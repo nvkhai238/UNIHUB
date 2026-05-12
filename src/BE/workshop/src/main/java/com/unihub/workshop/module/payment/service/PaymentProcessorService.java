@@ -2,6 +2,8 @@ package com.unihub.workshop.module.payment.service;
 
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.module.notification.service.EmailService;
+import com.unihub.workshop.module.notification.service.NotificationService;
+import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
@@ -20,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,6 +36,7 @@ public class PaymentProcessorService {
     private final RegistrationRepository registrationRepository;
     private final WorkshopRepository workshopRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     @Async("notificationTaskExecutor")
     @Transactional
@@ -77,12 +81,32 @@ public class PaymentProcessorService {
         registration.setConfirmedAt(ZonedDateTime.now());
         Registration savedRegistration = registrationRepository.save(registration);
         scheduleConfirmationEmail(savedRegistration.getId());
+        scheduleNotification(
+                savedRegistration.getUser().getId(),
+                Notification.NotificationType.PAYMENT_SUCCESS,
+                "Thanh toán thành công",
+                "Thanh toán cho workshop " + savedRegistration.getWorkshop().getTitle() + " đã thành công.",
+                Map.of(
+                        "registrationId", savedRegistration.getId().toString(),
+                        "workshopId", savedRegistration.getWorkshop().getId().toString()
+                )
+        );
     }
 
     private void cancelRegistrationAndReleaseSeat(Registration registration) {
         registration.setStatus(RegistrationStatus.CANCELLED);
         registration.setCancelledAt(ZonedDateTime.now());
         registrationRepository.save(registration);
+        scheduleNotification(
+                registration.getUser().getId(),
+                Notification.NotificationType.PAYMENT_FAILED,
+                "Thanh toán thất bại",
+                "Thanh toán cho workshop " + registration.getWorkshop().getTitle() + " không thành công. Đăng ký đã được hủy.",
+                Map.of(
+                        "registrationId", registration.getId().toString(),
+                        "workshopId", registration.getWorkshop().getId().toString()
+                )
+        );
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
                 .orElse(registration.getWorkshop());
@@ -92,6 +116,19 @@ public class PaymentProcessorService {
             workshopRepository.save(workshop);
         } else {
             scheduleConfirmationEmail(promoted.getId());
+        }
+    }
+
+    private void scheduleNotification(UUID userId, Notification.NotificationType type, String title, String body, Map<String, Object> data) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notificationService.createNotification(userId, type, title, body, data);
+                }
+            });
+        } else {
+            notificationService.createNotification(userId, type, title, body, data);
         }
     }
 

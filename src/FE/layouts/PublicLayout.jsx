@@ -26,7 +26,7 @@ function PublicHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <Link
           to="/"
-          className="inline-flex items-center gap-3 rounded-md pr-2 transition duration-200 ease-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          className="inline-flex items-center gap-3 rounded-md pr-2 transition duration-200 ease-out hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-base font-bold text-white shadow-sm">
             U
@@ -37,13 +37,13 @@ function PublicHeader() {
         </Link>
         <nav className="flex items-center gap-1 text-sm font-semibold text-gray-600">
           <Link
-            className="inline-flex h-10 items-center rounded-md px-3 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700"
+            className="inline-flex h-10 items-center rounded-md border border-transparent px-3 transition duration-200 ease-out hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
             to="/"
           >
             Workshops
           </Link>
           <Link
-            className="inline-flex h-10 items-center rounded-md bg-gray-950 px-4 text-white transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-md"
+            className="inline-flex h-10 items-center rounded-md bg-gray-950 px-4 text-white transition duration-200 ease-out hover:bg-emerald-700 hover:shadow-md"
             to="/login"
           >
             Đăng nhập

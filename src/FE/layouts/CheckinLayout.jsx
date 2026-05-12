@@ -23,7 +23,7 @@ import { clearQrRegistry } from '../lib/checkin-db';
 export default function CheckinLayout() {
   return (
     <div className="min-h-screen bg-[#f7f8fb] text-gray-950">
-      <header className="border-b border-gray-200 bg-white">
+      <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="font-bold text-amber-700">UniHub Check-in</div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -48,8 +48,10 @@ function CheckinNavLink({ to, children }) {
       to={to}
       className={({ isActive }) =>
         [
-          'rounded-md px-3 py-2',
-          isActive ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950',
+          'rounded-md border border-transparent px-3 py-2 transition duration-200 ease-out',
+          isActive
+            ? 'border-amber-200 bg-amber-100 text-amber-800 shadow-sm'
+            : 'text-gray-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700',
         ].join(' ')
       }
     >
