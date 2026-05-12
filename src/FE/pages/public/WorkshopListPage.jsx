@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../../api/api';
 
 export default function WorkshopListPage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const detailPrefix = location.pathname.startsWith('/student') ? '/student/workshops' : '/workshops';
 
   const loadWorkshops = () => {
     setLoading(true);
@@ -46,7 +48,7 @@ export default function WorkshopListPage() {
           {workshops.map((workshop) => (
             <Link
               key={workshop.id}
-              to={`/workshops/${workshop.id}`}
+              to={`${detailPrefix}/${workshop.id}`}
               className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
             >
               <div className="mb-4 flex items-start justify-between gap-3">

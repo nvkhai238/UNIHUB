@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import LogoutButton from '../components/LogoutButton';
+import UserDropdown from '../components/UserDropdown';
 
 export default function OrganizerLayout() {
   return (
@@ -14,7 +14,9 @@ export default function OrganizerLayout() {
               <OrganizerNavLink to="/admin/statistics">Thong ke</OrganizerNavLink>
               <OrganizerNavLink to="/admin/student-imports">Import SV</OrganizerNavLink>
             </nav>
-            <LogoutButton />
+            <div className="ml-2">
+              <UserDropdown />
+            </div>
           </div>
         </div>
       </header>

@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import { getCurrentUser } from '../router/jwtUtils';
+import UserDropdown from './UserDropdown';
 
 const navLinkBase =
   'inline-flex h-10 items-center rounded-md border border-transparent px-3 text-sm font-semibold transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200';
@@ -29,7 +30,7 @@ export default function StudentHeader() {
             <StudentNavLink to="/student" end>
               Tổng quan
             </StudentNavLink>
-            <StudentNavLink to="/" end>
+            <StudentNavLink to="/student/workshops">
               Lịch workshop
             </StudentNavLink>
             <StudentNavLink to="/student/registrations">
@@ -38,21 +39,9 @@ export default function StudentHeader() {
             <NotificationNavLink />
           </nav>
 
-          <NavLink
-            to="/student/profile"
-            title="Hồ sơ sinh viên"
-            aria-label="Hồ sơ sinh viên"
-          className={({ isActive }) =>
-            [
-              'ml-1 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
-              isActive
-                  ? 'border-emerald-700 bg-emerald-700 text-white'
-                  : 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200 hover:bg-amber-50 hover:text-amber-700',
-              ].join(' ')
-            }
-          >
-            {initial}
-          </NavLink>
+          <div className="ml-1 flex items-center">
+            <UserDropdown />
+          </div>
         </div>
       </div>
     </header>

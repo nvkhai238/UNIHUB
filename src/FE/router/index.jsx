@@ -86,16 +86,28 @@ const router = createBrowserRouter([
         element: <StudentDashboard />,
       },
       {
+        path: '/student/profile',
+        element: <StudentProfilePage />,
+      },
+      {
+        path: '/student/workshops',
+        element: <WorkshopListPage />,
+      },
+      {
+        path: '/student/workshops/:id',
+        element: <WorkshopDetailPage />,
+      },
+      {
         path: '/student/registrations',
         element: <MyRegistrationsPage />,
       },
       {
-        path: '/student/registrations/:registrationId/qr',
-        element: <MyQrCodePage />,
-      },
-      {
         path: '/student/registrations/:registrationId',
         element: <RegistrationDetailPage />,
+      },
+      {
+        path: '/student/registrations/:registrationId/qr',
+        element: <MyQrCodePage />,
       },
       {
         path: '/student/registrations/:registrationId/payment',

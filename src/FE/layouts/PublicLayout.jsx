@@ -1,18 +1,21 @@
 import { Link, Outlet } from 'react-router-dom';
 import StudentHeader from '../components/StudentHeader';
 import { isTokenValid, getCurrentRole } from '../router/jwtUtils';
-import { ROLES } from '../router/constants';
+import { ROLES, ROLE_HOME } from '../router/constants';
+import UserDropdown from '../components/UserDropdown';
 
 /**
  * PublicLayout - wrapper cho cac trang khong yeu cau dang nhap.
  * Neu sinh vien da dang nhap, giu dung header sinh vien khi xem lich workshop.
  */
 export default function PublicLayout() {
-  const showStudentHeader = isTokenValid() && getCurrentRole() === ROLES.STUDENT;
+  const role = getCurrentRole();
+  const loggedIn = isTokenValid();
+  const showStudentHeader = loggedIn && role === ROLES.STUDENT;
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] text-gray-950">
-      {showStudentHeader ? <StudentHeader /> : <PublicHeader />}
+      {showStudentHeader ? <StudentHeader /> : <PublicHeader loggedIn={loggedIn} role={role} />}
       <main>
         <Outlet />
       </main>
@@ -20,7 +23,7 @@ export default function PublicLayout() {
   );
 }
 
-function PublicHeader() {
+function PublicHeader({ loggedIn, role }) {
   return (
     <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
@@ -42,12 +45,26 @@ function PublicHeader() {
           >
             Workshops
           </Link>
-          <Link
-            className="inline-flex h-10 items-center rounded-md bg-gray-950 px-4 text-white transition duration-200 ease-out hover:bg-emerald-700 hover:shadow-md"
-            to="/login"
-          >
-            Đăng nhập
-          </Link>
+          {loggedIn && role ? (
+            <>
+              <Link
+                className="inline-flex h-10 items-center rounded-md bg-emerald-600 px-4 text-white transition duration-200 ease-out hover:bg-emerald-700 hover:shadow-md ml-2"
+                to={ROLE_HOME[role] ?? '/'}
+              >
+                Bảng điều khiển
+              </Link>
+              <div className="ml-2 border-l border-gray-200 pl-3">
+                <UserDropdown />
+              </div>
+            </>
+          ) : (
+            <Link
+              className="inline-flex h-10 items-center rounded-md bg-gray-950 px-4 text-white transition duration-200 ease-out hover:bg-emerald-700 hover:shadow-md ml-2"
+              to="/login"
+            >
+              Đăng nhập
+            </Link>
+          )}
         </nav>
       </div>
     </header>

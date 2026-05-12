@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import LogoutButton from '../components/LogoutButton';
+import UserDropdown from '../components/UserDropdown';
 import { clearQrRegistry } from '../lib/checkin-db';
 
 /**
@@ -31,7 +31,9 @@ export default function CheckinLayout() {
               <CheckinNavLink to="/checkin">Tải trước & đồng bộ</CheckinNavLink>
               <CheckinNavLink to="/checkin/scan">Quét QR</CheckinNavLink>
             </nav>
-            <LogoutButton onLoggedOut={clearQrRegistry} />
+            <div className="ml-2">
+              <UserDropdown onLoggedOut={clearQrRegistry} />
+            </div>
           </div>
         </div>
       </header>

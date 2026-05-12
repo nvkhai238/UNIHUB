@@ -30,7 +30,7 @@ export default function StudentDashboard() {
           <h1 className="text-3xl font-bold tracking-normal">Tổng quan sinh viên</h1>
           <p className="mt-2 text-sm text-gray-600">Theo dõi đăng ký, thanh toán pending và mã QR check-in.</p>
         </div>
-        <Link to="/" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        <Link to="/student/workshops" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
           Xem lịch workshop
         </Link>
       </div>
