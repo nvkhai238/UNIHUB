@@ -92,21 +92,21 @@ Quy uoc trang thai:
 - [x] Trang payment status - `HOAN_THANH`
 - [x] Huy dang ky cua sinh vien - `HOAN_THANH`
 - [x] Promote waitlist FIFO khi co ghe trong - `HOAN_THANH`
-- [ ] Phan trang registration theo spec - `CHUA_CO`
-- [ ] Danh sach registration cho organizer theo filter/day du - `CHUA_CO`
+- [x] Phan trang registration theo spec - `HOAN_THANH`
+- [x] Danh sach registration cho organizer theo filter/day du - `HOAN_THANH`
 
 ### 3.3 Thanh toan va giao dich
 
-- [x] Mock payment integration - `HOAN_THANH`
+- [x] Mock payment integration - `HOAN_THANH` (SePay webhook + QR code)
 - [x] Payment status endpoint - `HOAN_THANH`
-- [x] Payment retry UI/API co ban - `MOT_PHAN`
-- [x] Idempotency key cho registration button - `MOT_PHAN`
-- [x] Circuit breaker co cau hinh co ban - `MOT_PHAN`
-- [x] Payment pending timeout scheduler - `MOT_PHAN`
-- [ ] Luong retry payment dung hoan toan theo spec - `CHUA_CO`
-- [ ] Xu ly timeout/fail/cancel/hoan ghe dung 100% theo spec - `CHUA_CO`
-- [ ] Payment stats co filter chinh xac theo workshop/status/date - `MOT_PHAN`
-- [ ] Refund flow ro rang khi workshop bi huy - `MOT_PHAN`
+- [x] Payment retry UI/API co ban - `HOAN_THANH` (retry reset payment PENDING, navigate to payment page, wait SePay webhook)
+- [x] Idempotency key cho registration button - `HOAN_THANH` (Redis lock + header key + clear on success)
+- [x] Circuit breaker co cau hinh co ban - `HOAN_THANH` (Resilience4j @CircuitBreaker + @Retry on processPayment)
+- [x] Payment pending timeout scheduler - `HOAN_THANH` (15 phut, scan 60s, cancel + release seat + promote waitlist)
+- [x] Luong retry payment dung hoan toan theo spec - `HOAN_THANH` (retry -> PENDING -> new UH code -> wait webhook -> confirm/timeout)
+- [x] Xu ly timeout/fail/cancel/hoan ghe dung 100% theo spec - `HOAN_THANH` (timeout->FAIL+cancel+release seat, cancel->REFUNDED/FAILED+release+promote, re-register reuse cancelled row)
+- [x] Payment stats co filter chinh xac theo workshop/status/date - `HOAN_THANH` (countFiltered + sumAmountFiltered ap dung workshopId, status, from, to)
+- [x] Refund flow ro rang khi workshop bi huy - `HOAN_THANH` (settlePaymentOnCancellation: SUCCESS->REFUNDED, PENDING->FAILED)
 
 ### 3.4 Thong bao cho sinh vien
 
@@ -119,8 +119,8 @@ Quy uoc trang thai:
 - [x] Email registration confirmation co QR - `HOAN_THANH`
 - [x] Email workshop cancellation - `HOAN_THANH`
 - [x] In-app notification tu dong cho dang ky / huy dang ky / payment co ban - `HOAN_THANH`
-- [ ] Notification realtime push qua Supabase Realtime - `CHUA_CO`
-- [ ] Kien truc mo rong Telegram/SMS adapter - `CHUA_CO`
+- [x] Notification realtime push qua Supabase Realtime - `HOAN_THANH`
+- [x] Kien truc mo rong Telegram/SMS adapter - `HOAN_THANH`
 
 ---
 

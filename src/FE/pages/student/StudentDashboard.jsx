@@ -8,8 +8,8 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    api.get('/api/registrations/my')
-      .then(({ data }) => mounted && setRegistrations(data.data ?? []))
+    api.get('/api/registrations/my?size=5') // Fetch 5 most recent registrations for dashboard
+      .then(({ data }) => mounted && setRegistrations(data.data?.content ?? []))
       .catch(() => mounted && setRegistrations([]))
       .finally(() => mounted && setLoading(false));
     return () => {

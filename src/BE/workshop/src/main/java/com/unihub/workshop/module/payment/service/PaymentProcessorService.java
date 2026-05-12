@@ -1,7 +1,7 @@
 package com.unihub.workshop.module.payment.service;
 
 import com.unihub.workshop.common.exception.AppException;
-import com.unihub.workshop.module.notification.service.EmailService;
+
 import com.unihub.workshop.module.notification.service.NotificationService;
 import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.payment.entity.Payment;
@@ -35,7 +35,6 @@ public class PaymentProcessorService {
     private final PaymentService paymentService;
     private final RegistrationRepository registrationRepository;
     private final WorkshopRepository workshopRepository;
-    private final EmailService emailService;
     private final NotificationService notificationService;
 
     @Async("notificationTaskExecutor")
@@ -73,6 +72,31 @@ public class PaymentProcessorService {
         }
     }
 
+    @Transactional
+    public void processSepayWebhook(String paymentCode, java.math.BigDecimal transferAmount) {
+        Payment payment = paymentRepository.findByGatewayRef(paymentCode).orElse(null);
+        if (payment == null) {
+            log.warn("Webhook received for unknown payment code: {}", paymentCode);
+            return;
+        }
+
+        Registration registration = payment.getRegistration();
+        if (payment.getStatus() == PaymentStatus.SUCCESS || registration.getStatus() == RegistrationStatus.CONFIRMED) {
+            log.info("Payment {} is already confirmed", paymentCode);
+            return;
+        }
+
+        if (transferAmount.compareTo(payment.getAmount()) >= 0) {
+            payment.setStatus(PaymentStatus.SUCCESS);
+            payment.setGatewayResponse("{\"status\":\"SEPAY_SUCCESS\"}");
+            paymentRepository.save(payment);
+            confirmRegistration(registration);
+            log.info("Successfully processed sepay payment {}", paymentCode);
+        } else {
+            log.warn("Transfer amount {} is less than required amount {} for payment {}", transferAmount, payment.getAmount(), paymentCode);
+        }
+    }
+
     private void confirmRegistration(Registration registration) {
         if (registration.getQrCode() == null) {
             registration.setQrCode(generateUniqueQrCode());
@@ -80,7 +104,6 @@ public class PaymentProcessorService {
         registration.setStatus(RegistrationStatus.CONFIRMED);
         registration.setConfirmedAt(ZonedDateTime.now());
         Registration savedRegistration = registrationRepository.save(registration);
-        scheduleConfirmationEmail(savedRegistration.getId());
         scheduleNotification(
                 savedRegistration.getUser().getId(),
                 Notification.NotificationType.PAYMENT_SUCCESS,
@@ -114,8 +137,6 @@ public class PaymentProcessorService {
         if (promoted == null) {
             workshop.setRemainingSeats(Math.min(workshop.getCapacity(), workshop.getRemainingSeats() + 1));
             workshopRepository.save(workshop);
-        } else {
-            scheduleConfirmationEmail(promoted.getId());
         }
     }
 
@@ -153,16 +174,4 @@ public class PaymentProcessorService {
         return qrCode;
     }
 
-    private void scheduleConfirmationEmail(UUID registrationId) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    emailService.sendRegistrationConfirmation(registrationId);
-                }
-            });
-        } else {
-            emailService.sendRegistrationConfirmation(registrationId);
-        }
-    }
 }

@@ -28,6 +28,14 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentStatus(registrationId)));
     }
 
+    @GetMapping("/api/registrations/{registrationId}/payment-info")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<com.unihub.workshop.module.payment.dto.PaymentInfoResponse>> getPaymentInfo(
+            @PathVariable UUID registrationId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentInfo(registrationId)));
+    }
+
     @GetMapping("/api/admin/payments/stats")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<PaymentStatsResponse>> getPaymentStats(

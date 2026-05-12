@@ -77,26 +77,52 @@ public class PaymentService {
         return PaymentStatusResponse.from(payment);
     }
 
+    @Transactional(readOnly = true)
+    public com.unihub.workshop.module.payment.dto.PaymentInfoResponse getPaymentInfo(UUID registrationId) {
+        User user = getCurrentUser();
+        Registration registration = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new AppException(ErrorCode.REGISTRATION_NOT_FOUND));
+
+        if (!registration.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Not your registration");
+        }
+
+        Payment payment = paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Payment not found"));
+
+        return com.unihub.workshop.module.payment.dto.PaymentInfoResponse.builder()
+                .paymentCode(payment.getGatewayRef())
+                .amount(payment.getAmount())
+                .bankName("MBBank")
+                .accountNumber("0123456789")
+                .accountName("NGUYEN VAN A")
+                .build();
+    }
+
     // ─── Organizer: payment statistics ──────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public PaymentStatsResponse getPaymentStats(UUID workshopId, PaymentStatus status, ZonedDateTime from, ZonedDateTime to) {
-        BigDecimal totalSuccess = paymentRepository.sumAmountByStatus(PaymentStatus.SUCCESS);
-        BigDecimal totalFailed = paymentRepository.sumAmountByStatus(PaymentStatus.FAILED);
-        long totalPayments = paymentRepository.count();
+    public PaymentStatsResponse getPaymentStats(UUID workshopId, PaymentStatus statusFilter, ZonedDateTime from, ZonedDateTime to) {
+        // Total payments matching all filters
+        long totalPayments = paymentRepository.countFiltered(statusFilter, workshopId, from, to);
 
+        // Breakdown by status (apply workshopId + date filters, iterate each status)
         Map<String, PaymentStatsResponse.StatusBucket> byStatus = new LinkedHashMap<>();
         for (PaymentStatus s : PaymentStatus.values()) {
-            BigDecimal sum = paymentRepository.sumAmountByStatus(s);
-            long count = paymentRepository.countByStatus(s);
+            // If user specified a status filter, only show that one bucket
+            if (statusFilter != null && s != statusFilter) continue;
+            BigDecimal sum = paymentRepository.sumAmountFiltered(s, workshopId, from, to);
+            long count = paymentRepository.countByStatusFiltered(s, workshopId, from, to);
             byStatus.put(s.name(), PaymentStatsResponse.StatusBucket.builder()
                     .count(count)
                     .amount(sum != null ? sum : BigDecimal.ZERO)
                     .build());
         }
 
+        // Success metrics (always computed with workshopId + date filters)
+        BigDecimal totalSuccess = paymentRepository.sumAmountFiltered(PaymentStatus.SUCCESS, workshopId, from, to);
         BigDecimal totalAmount = totalSuccess != null ? totalSuccess : BigDecimal.ZERO;
-        long successCount = paymentRepository.countByStatus(PaymentStatus.SUCCESS);
+        long successCount = paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, workshopId, from, to);
         String successRate = totalPayments > 0
                 ? BigDecimal.valueOf(successCount)
                         .multiply(BigDecimal.valueOf(100))
@@ -107,7 +133,7 @@ public class PaymentService {
                 ? totalAmount.divide(BigDecimal.valueOf(totalPayments), 0, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        List<PaymentStatsResponse.WorkshopPaymentSummary> topWorkshops = buildTopWorkshops();
+        List<PaymentStatsResponse.WorkshopPaymentSummary> topWorkshops = buildTopWorkshops(workshopId, from, to);
 
         return PaymentStatsResponse.builder()
                 .totalPayments(totalPayments)
@@ -124,17 +150,24 @@ public class PaymentService {
                 .build();
     }
 
-    private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops() {
-        List<Workshop> workshops = workshopRepository.findAll();
+    private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops(UUID workshopIdFilter, ZonedDateTime from, ZonedDateTime to) {
+        List<Workshop> workshops;
+        if (workshopIdFilter != null) {
+            workshops = workshopRepository.findById(workshopIdFilter).map(List::of).orElse(List.of());
+        } else {
+            workshops = workshopRepository.findAll();
+        }
+
         List<PaymentStatsResponse.WorkshopPaymentSummary> summaries = new ArrayList<>();
         for (Workshop w : workshops) {
-            BigDecimal successAmount = paymentRepository.sumAmountByStatusAndWorkshopId(PaymentStatus.SUCCESS, w.getId());
-            long successCount = countSuccessPaymentsForWorkshop(w.getId());
-            if (successCount > 0) {
+            BigDecimal successAmount = paymentRepository.sumAmountFiltered(PaymentStatus.SUCCESS, w.getId(), from, to);
+            long successCount = paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, w.getId(), from, to);
+            long totalCount = paymentRepository.countFiltered(null, w.getId(), from, to);
+            if (totalCount > 0) {
                 summaries.add(PaymentStatsResponse.WorkshopPaymentSummary.builder()
                         .workshopId(w.getId().toString())
                         .title(w.getTitle())
-                        .totalPayments(successCount)
+                        .totalPayments(totalCount)
                         .successCount(successCount)
                         .revenue(successAmount != null ? successAmount : BigDecimal.ZERO)
                         .build());
@@ -142,13 +175,6 @@ public class PaymentService {
         }
         summaries.sort((a, b) -> b.getRevenue().compareTo(a.getRevenue()));
         return summaries.stream().limit(5).toList();
-    }
-
-    private long countSuccessPaymentsForWorkshop(UUID workshopId) {
-        return registrationRepository.findAll().stream()
-                .filter(r -> r.getWorkshop().getId().equals(workshopId))
-                .filter(r -> r.getStatus() == RegistrationStatus.CONFIRMED)
-                .count();
     }
 
     private User getCurrentUser() {

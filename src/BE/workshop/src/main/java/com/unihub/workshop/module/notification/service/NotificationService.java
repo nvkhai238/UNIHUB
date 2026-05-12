@@ -6,6 +6,7 @@ import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.notification.repository.NotificationRepository;
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.user.repository.UserRepository;
+import com.unihub.workshop.module.notification.adapter.NotificationAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +26,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final List<NotificationAdapter> adapters;
 
     @Transactional(readOnly = true)
     public Page<Notification> getMyNotifications(Boolean unreadOnly, int page, int size) {
@@ -94,7 +96,14 @@ public class NotificationService {
                 .read(false)
                 .data(data)
                 .build();
-        notificationRepository.save(notification);
+        Notification saved = notificationRepository.save(notification);
+
+        // Dispatch notification qua các adapter (Email, Telegram, SMS)
+        for (NotificationAdapter adapter : adapters) {
+            if (adapter.supports(saved.getType())) {
+                adapter.send(saved);
+            }
+        }
     }
 
     private User getCurrentUser() {

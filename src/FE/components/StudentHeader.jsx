@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import { getCurrentUser } from '../router/jwtUtils';
 import UserDropdown from './UserDropdown';
+import { useNotificationContext } from './NotificationProvider';
 
 const navLinkBase =
   'inline-flex h-10 items-center rounded-md border border-transparent px-3 text-sm font-semibold transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200';
@@ -68,6 +69,8 @@ function StudentNavLink({ to, end = false, children }) {
 }
 
 function NotificationNavLink() {
+  const { unreadCount } = useNotificationContext();
+
   return (
     <NavLink
       to="/student/notifications"
@@ -75,7 +78,7 @@ function NotificationNavLink() {
       aria-label="Thông báo"
       className={({ isActive }) =>
         [
-          'inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
+          'relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
           isActive
             ? 'border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm'
             : 'text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
@@ -83,6 +86,11 @@ function NotificationNavLink() {
       }
     >
       <BellIcon />
+      {unreadCount > 0 && (
+        <span className="absolute right-1 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
     </NavLink>
   );
 }

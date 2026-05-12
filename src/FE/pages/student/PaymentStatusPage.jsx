@@ -5,27 +5,60 @@ import api from '../../api/api';
 export default function PaymentStatusPage() {
   const { registrationId } = useParams();
   const navigate = useNavigate();
+
   const [payment, setPayment] = useState(null);
   const [registration, setRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retrying, setRetrying] = useState(false);
   const [message, setMessage] = useState('');
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [countdown, setCountdown] = useState(null); // seconds remaining
+
+  const PAYMENT_TIMEOUT_MINUTES = 15;
 
   useEffect(() => {
     loadData();
-  }, [registrationId]);
+    let pollInterval;
+    if (payment?.paymentStatus === 'PENDING') {
+      pollInterval = setInterval(loadData, 3000);
+    }
+    return () => clearInterval(pollInterval);
+  }, [registrationId, payment?.paymentStatus]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!payment || payment.paymentStatus !== 'PENDING' || !payment.createdAt) {
+      setCountdown(null);
+      return;
+    }
+    const createdAt = new Date(payment.createdAt).getTime();
+    const deadline = createdAt + PAYMENT_TIMEOUT_MINUTES * 60 * 1000;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        loadData(); // refresh to get FAILED status from backend
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [payment?.createdAt, payment?.paymentStatus]);
 
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const [regRes, payRes] = await Promise.all([
+      const [regRes, payRes, infoRes] = await Promise.all([
         api.get(`/api/registrations/${registrationId}`),
         api.get(`/api/registrations/${registrationId}/payment-status`),
+        api.get(`/api/registrations/${registrationId}/payment-info`).catch(() => ({ data: { data: null } })),
       ]);
       setRegistration(regRes.data.data);
       setPayment(payRes.data.data);
+      setPaymentInfo(infoRes.data.data);
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Không tải được dữ liệu.';
       setError(msg);
@@ -72,7 +105,7 @@ export default function PaymentStatusPage() {
     return map[status] ?? status;
   };
 
-  if (loading) {
+  if (loading && !payment) {
     return (
       <section className="mx-auto max-w-2xl px-4 py-12 text-center">
         <div className="text-sm text-gray-500">Đang tải thông tin thanh toán...</div>
@@ -140,7 +173,57 @@ export default function PaymentStatusPage() {
             </div>
           </div>
 
-          {payment.paymentStatus !== 'SUCCESS' && (
+          {payment.paymentStatus === 'PENDING' && paymentInfo && (
+            <div className="rounded-lg border border-amber-200 bg-white p-5">
+              <h3 className="mb-4 text-center text-lg font-bold text-amber-800">Quét mã QR để thanh toán</h3>
+              
+              {/* Countdown timer */}
+              {countdown !== null && (
+                <div className={`mb-4 rounded-lg p-4 text-center ${
+                  countdown <= 60
+                    ? 'border border-red-300 bg-red-50'
+                    : countdown <= 300
+                    ? 'border border-amber-300 bg-amber-50'
+                    : 'border border-blue-200 bg-blue-50'
+                }`}>
+                  <p className={`text-xs font-medium uppercase tracking-wide ${
+                    countdown <= 60 ? 'text-red-600' : countdown <= 300 ? 'text-amber-600' : 'text-blue-600'
+                  }`}>Thời gian còn lại</p>
+                  <p className={`mt-1 text-3xl font-bold font-mono ${
+                    countdown <= 60 ? 'text-red-700 animate-pulse' : countdown <= 300 ? 'text-amber-700' : 'text-blue-700'
+                  }`}>
+                    {String(Math.floor(countdown / 60)).padStart(2, '0')}:{String(countdown % 60).padStart(2, '0')}
+                  </p>
+                  {countdown <= 60 && countdown > 0 && (
+                    <p className="mt-1 text-xs text-red-600 font-semibold">⚠ Sắp hết thời gian thanh toán!</p>
+                  )}
+                  {countdown === 0 && (
+                    <p className="mt-1 text-xs text-red-700 font-bold">Đã hết thời gian thanh toán. Giao dịch sẽ bị huỷ.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="mx-auto max-w-sm rounded-lg border border-gray-100 p-4 shadow-sm">
+                <img
+                  src={`https://qr.sepay.vn/img?acc=${paymentInfo.accountNumber}&bank=${paymentInfo.bankName}&amount=${paymentInfo.amount}&des=${paymentInfo.paymentCode}`}
+                  alt="VietQR"
+                  className="w-full rounded-md"
+                />
+                <div className="mt-4 space-y-2 text-sm">
+                  <InfoRow label="Ngân hàng" value={paymentInfo.bankName} />
+                  <InfoRow label="Số tài khoản" value={paymentInfo.accountNumber} mono />
+                  <InfoRow label="Tên người nhận" value={paymentInfo.accountName} />
+                  <InfoRow label="Số tiền" value={formatMoney(paymentInfo.amount)} />
+                  <InfoRow label="Nội dung" value={paymentInfo.paymentCode} mono />
+                </div>
+              </div>
+              <p className="mt-4 text-center text-sm text-gray-500">
+                Hệ thống đang tự động kiểm tra trạng thái thanh toán...
+              </p>
+            </div>
+          )}
+
+          {payment.paymentStatus !== 'SUCCESS' && payment.paymentStatus !== 'PENDING' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
               <h3 className="mb-2 text-sm font-semibold text-amber-800">Thử lại thanh toán</h3>
               <p className="mb-3 text-sm text-amber-700">

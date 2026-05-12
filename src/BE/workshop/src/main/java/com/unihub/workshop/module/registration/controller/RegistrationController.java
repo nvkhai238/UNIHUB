@@ -20,6 +20,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -98,8 +102,10 @@ public class RegistrationController {
     }
 
     @GetMapping("/my")
-    public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getMyRegistrations() {
-        return ResponseEntity.ok(ApiResponse.success(registrationService.getMyRegistrations()));
+    public ResponseEntity<ApiResponse<Page<RegistrationResponse>>> getMyRegistrations(
+            @PageableDefault(size = 10, sort = "registeredAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(registrationService.getMyRegistrations(pageable)));
     }
 
     @GetMapping("/{id}")

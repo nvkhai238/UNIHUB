@@ -3,6 +3,8 @@ package com.unihub.workshop.module.payment.service;
 import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import com.unihub.workshop.module.notification.service.NotificationService;
+import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -26,6 +29,7 @@ public class PaymentTimeoutScheduler {
     private final PaymentRepository paymentRepository;
     private final RegistrationRepository registrationRepository;
     private final WorkshopRepository workshopRepository;
+    private final NotificationService notificationService;
 
     @Value("${app.payment.pending-timeout-minutes:15}")
     private long pendingTimeoutMinutes;
@@ -52,9 +56,33 @@ public class PaymentTimeoutScheduler {
 
             Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
                     .orElse(registration.getWorkshop());
-            if (promoteNextWaitlisted(workshop) == null) {
+                    
+            notificationService.createNotification(
+                    registration.getUser().getId(),
+                    Notification.NotificationType.PAYMENT_FAILED,
+                    "Thanh toán hết hạn",
+                    "Đăng ký workshop " + workshop.getTitle() + " đã bị hủy do hết hạn thanh toán.",
+                    Map.of(
+                            "registrationId", registration.getId().toString(),
+                            "workshopId", workshop.getId().toString()
+                    )
+            );
+
+            Registration promoted = promoteNextWaitlisted(workshop);
+            if (promoted == null) {
                 workshop.setRemainingSeats(Math.min(workshop.getCapacity(), workshop.getRemainingSeats() + 1));
                 workshopRepository.save(workshop);
+            } else {
+                notificationService.createNotification(
+                        promoted.getUser().getId(),
+                        Notification.NotificationType.REGISTRATION_CONFIRMED,
+                        "Đã có chỗ trong workshop",
+                        "Bạn đã được chuyển từ danh sách chờ sang đã xác nhận cho workshop " + workshop.getTitle() + ".",
+                        Map.of(
+                                "registrationId", promoted.getId().toString(),
+                                "workshopId", workshop.getId().toString()
+                        )
+                );
             }
         }
     }

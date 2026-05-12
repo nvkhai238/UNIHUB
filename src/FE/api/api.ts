@@ -95,7 +95,7 @@ function flushQueueFailure(error: unknown): void {
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:8080`;
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,

@@ -50,6 +50,21 @@ public class SchemaInitializer {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_notif_user_read ON notifications(user_id, is_read) WHERE is_read = false");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at DESC)");
 
+            try {
+                // Thêm các cột cho tính năng mở rộng SMS & Telegram
+                stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+                stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id VARCHAR(50)");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: columns phone/telegram_id may already exist or error occurred.", e);
+            }
+
+            try {
+                stmt.execute("ALTER PUBLICATION supabase_realtime ADD TABLE notifications;");
+                log.info("SchemaInitializer: added notifications to supabase_realtime publication.");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: skipped adding to supabase_realtime (might not be a Supabase DB or already added).");
+            }
+
             log.info("SchemaInitializer: notifications table ready.");
         }
     }

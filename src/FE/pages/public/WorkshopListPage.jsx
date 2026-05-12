@@ -13,17 +13,21 @@ export default function WorkshopListPage() {
     setLoading(true);
     setError('');
     api.get('/api/workshops?size=24')
-      .then(({ data }) => {
-        setWorkshops(data.data?.content ?? []);
-      })
-      .catch((err) => {
-        setError(resolveErrorMessage(err));
-      })
+      .then(({ data }) => setWorkshops(data.data?.content ?? []))
+      .catch((err) => setError(resolveErrorMessage(err)))
       .finally(() => setLoading(false));
+  };
+
+  const pollWorkshops = () => {
+    api.get('/api/workshops?size=24')
+      .then(({ data }) => setWorkshops(data.data?.content ?? []))
+      .catch(() => {}); // ignore polling errors to avoid disrupting UI
   };
 
   useEffect(() => {
     loadWorkshops();
+    const interval = setInterval(pollWorkshops, 10000); // 10s polling
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -58,9 +62,10 @@ export default function WorkshopListPage() {
                 </span>
               </div>
               <div className="space-y-2 text-sm text-gray-600">
-                <p>{formatDate(workshop.startTime)}</p>
-                <p>{workshop.room}</p>
-                <p className="font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
+                <p><strong>Thời gian:</strong> {formatDate(workshop.startTime)}</p>
+                <p><strong>Phòng:</strong> {workshop.room}</p>
+                <p><strong>Diễn giả:</strong> {workshop.speakerName || 'Đang cập nhật'}</p>
+                <p className="font-semibold text-gray-950 mt-1">{formatPrice(workshop.price)}</p>
               </div>
             </Link>
           ))}

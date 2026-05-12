@@ -4,6 +4,8 @@ import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.workshop.entity.Workshop;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 
@@ -13,8 +15,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RegistrationRepository extends JpaRepository<Registration, UUID> {
-    boolean existsByUserAndWorkshop(User user, Workshop workshop);
+    boolean existsByUserAndWorkshopAndStatusNot(User user, Workshop workshop, RegistrationStatus status);
+    Optional<Registration> findByUserAndWorkshop(User user, Workshop workshop);
     boolean existsByQrCode(String qrCode);
+    Page<Registration> findByUserOrderByRegisteredAtDesc(User user, Pageable pageable);
+    Page<Registration> findByWorkshopOrderByRegisteredAtDesc(Workshop workshop, Pageable pageable);
+    Page<Registration> findByWorkshopAndStatusOrderByRegisteredAtDesc(Workshop workshop, RegistrationStatus status, Pageable pageable);
+    
+    // Legacy non-paginated queries used by internal logic
     List<Registration> findByUser(User user);
     List<Registration> findByWorkshop(Workshop workshop);
     Optional<Registration> findByQrCode(String qrCode);

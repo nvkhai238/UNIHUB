@@ -66,6 +66,8 @@ public class AuthService {
                         .email(user.getEmail())
                         .fullName(user.getFullName())
                         .role(user.getRole())
+                        .phone(user.getPhone())
+                        .telegramId(user.getTelegramId())
                         .build())
                 .build();
     }
@@ -142,6 +144,8 @@ public class AuthService {
                         .email(user.getEmail())
                         .fullName(user.getFullName())
                         .role(user.getRole())
+                        .phone(user.getPhone())
+                        .telegramId(user.getTelegramId())
                         .build())
                 .build();
     }
@@ -198,6 +202,8 @@ public class AuthService {
                         .email(user.getEmail())
                         .fullName(user.getFullName())
                         .role(user.getRole())
+                        .phone(user.getPhone())
+                        .telegramId(user.getTelegramId())
                         .build())
                 .build();
     }

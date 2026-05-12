@@ -1,30 +1,44 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 
 export default function MyRegistrationsPage() {
+  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   const load = () => {
     setLoading(true);
-    api.get('/api/registrations/my')
-      .then(({ data }) => setRegistrations(data.data ?? []))
+    api.get(`/api/registrations/my?page=${page}&size=10`)
+      .then(({ data }) => {
+        setRegistrations(data.data?.content ?? []);
+        setTotalPages(data.data?.totalPages ?? 0);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [page]);
 
-  const retryPayment = async (id) => {
+  const retryPayment = async (id, status) => {
+    if (status === 'PENDING') {
+      navigate(`/student/registrations/${id}/payment`);
+      return;
+    }
     setMessage('');
-    await api.post(`/api/registrations/${id}/payment/retry`, {}, {
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-    });
-    setMessage('Đã đưa thanh toán vào hàng xử lý lại. Trạng thái sẽ cập nhật sau ít phút.');
-    load();
+    try {
+      await api.post(`/api/registrations/${id}/payment/retry`, {}, {
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
+      navigate(`/student/registrations/${id}/payment`);
+    } catch (err) {
+      setMessage(err?.response?.data?.message || 'Không thể thử lại. Vui lòng liên hệ BTC.');
+    }
   };
 
   const cancelRegistration = async (id) => {
@@ -75,10 +89,10 @@ export default function MyRegistrationsPage() {
                   {(registration.status === 'PENDING' || registration.status === 'CANCELLED') && (
                     <button
                       type="button"
-                      onClick={() => retryPayment(registration.id)}
+                      onClick={() => retryPayment(registration.id, registration.status)}
                       className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
                     >
-                      Xử lý lại thanh toán
+                      {registration.status === 'PENDING' ? 'Thanh toán' : 'Thử lại thanh toán'}
                     </button>
                   )}
                   {registration.status !== 'CANCELLED' && (
@@ -96,6 +110,30 @@ export default function MyRegistrationsPage() {
           </div>
         )}
       </div>
+      
+      {totalPages > 1 && (
+        <div className="mt-6 flex justify-center gap-2">
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+            className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
+          >
+            Trang trước
+          </button>
+          <span className="flex items-center px-3 text-sm text-gray-600">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(page + 1)}
+            className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
+          >
+            Trang sau
+          </button>
+        </div>
+      )}
     </section>
   );
 }

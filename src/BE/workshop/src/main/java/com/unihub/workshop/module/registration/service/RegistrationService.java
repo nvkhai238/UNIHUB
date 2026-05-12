@@ -6,7 +6,6 @@ import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
 import com.unihub.workshop.module.payment.service.PaymentProcessorService;
-import com.unihub.workshop.module.notification.service.EmailService;
 import com.unihub.workshop.module.notification.service.NotificationService;
 import com.unihub.workshop.module.notification.entity.Notification;
 import com.unihub.workshop.module.registration.dto.RegistrationQrResponse;
@@ -20,6 +19,8 @@ import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
 import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,8 +32,10 @@ import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -43,9 +46,9 @@ public class RegistrationService {
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentProcessorService paymentProcessorService;
-    private final EmailService emailService;
     private final NotificationService notificationService;
     private final QrCodeService qrCodeService;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public RegistrationResponse register(RegistrationRequest request, String idempotencyKey) {
@@ -57,15 +60,26 @@ public class RegistrationService {
             throw new AppException(ErrorCode.FORBIDDEN, "Workshop is not published");
         }
 
-        boolean alreadyRegistered = registrationRepository.existsByUserAndWorkshop(user, workshop);
+        // Check if user already has an active (non-cancelled) registration
+        boolean alreadyRegistered = registrationRepository.existsByUserAndWorkshopAndStatusNot(user, workshop, RegistrationStatus.CANCELLED);
         if (alreadyRegistered) {
             throw new AppException(ErrorCode.DUPLICATE_REGISTRATION);
         }
 
-        Registration registration = Registration.builder()
-                .user(user)
-                .workshop(workshop)
-                .build();
+        // Try to find and reuse a CANCELLED registration (DB has unique constraint on user_id + workshop_id)
+        Optional<Registration> existingCancelled = registrationRepository.findByUserAndWorkshop(user, workshop);
+        Registration registration;
+        if (existingCancelled.isPresent() && existingCancelled.get().getStatus() == RegistrationStatus.CANCELLED) {
+            registration = existingCancelled.get();
+            registration.setCancelledAt(null);
+            registration.setQrCode(null);
+            registration.setConfirmedAt(null);
+        } else {
+            registration = Registration.builder()
+                    .user(user)
+                    .workshop(workshop)
+                    .build();
+        }
 
         if (workshop.getRemainingSeats() <= 0) {
             registration.setStatus(RegistrationStatus.WAITLISTED);
@@ -81,15 +95,17 @@ public class RegistrationService {
             registration.setStatus(RegistrationStatus.PENDING);
             registration = registrationRepository.save(registration);
             
+            String paymentCode = "UH" + (100000 + new java.util.Random().nextInt(900000));
             Payment payment = Payment.builder()
                     .registration(registration)
                     .amount(workshop.getPrice())
-                    .idempotencyKey(idempotencyKey)
+                    .idempotencyKey(UUID.randomUUID().toString())
                     .status(PaymentStatus.PENDING)
-                    .gatewayRef(UUID.randomUUID().toString())
+                    .gatewayRef(paymentCode)
                     .build();
             payment = paymentRepository.save(payment);
-            schedulePaymentProcessing(payment.getId());
+            // Không tự động xử lý thanh toán ở đây. Sinh viên phải tự bấm "Thanh toán" ở trang My Registrations.
+            // schedulePaymentProcessing(payment.getId());
         } else {
             registration.setStatus(RegistrationStatus.CONFIRMED);
             registration.setQrCode(generateUniqueQrCode());
@@ -97,17 +113,28 @@ public class RegistrationService {
         }
 
         Registration savedRegistration = registrationRepository.save(registration);
-        scheduleRegistrationConfirmationEmail(savedRegistration);
         scheduleRegistrationCreatedNotification(savedRegistration);
         return RegistrationResponse.from(savedRegistration);
     }
 
     @Transactional(readOnly = true)
-    public List<RegistrationResponse> getMyRegistrations() {
+    public Page<RegistrationResponse> getMyRegistrations(Pageable pageable) {
         User user = getCurrentUser();
-        return registrationRepository.findByUser(user).stream()
-                .map(RegistrationResponse::from)
-                .collect(Collectors.toList());
+        return registrationRepository.findByUserOrderByRegisteredAtDesc(user, pageable)
+                .map(RegistrationResponse::from);
+    }
+    
+    @Transactional(readOnly = true)
+    public Page<RegistrationResponse> getRegistrationsByWorkshop(UUID workshopId, RegistrationStatus status, Pageable pageable) {
+        Workshop workshop = workshopRepository.findById(workshopId)
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+        
+        if (status != null) {
+            return registrationRepository.findByWorkshopAndStatusOrderByRegisteredAtDesc(workshop, status, pageable)
+                    .map(RegistrationResponse::from);
+        }
+        return registrationRepository.findByWorkshopOrderByRegisteredAtDesc(workshop, pageable)
+                .map(RegistrationResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -150,7 +177,8 @@ public class RegistrationService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Payment not found"));
 
         payment.setStatus(PaymentStatus.PENDING);
-        payment.setGatewayRef(UUID.randomUUID().toString());
+        payment.setGatewayRef("UH" + (100000 + new java.util.Random().nextInt(900000)));
+        payment.setGatewayResponse(null); // Clear old gateway response
         paymentRepository.save(payment);
 
         if (registration.getStatus() == RegistrationStatus.CANCELLED) {
@@ -159,7 +187,7 @@ public class RegistrationService {
             registrationRepository.save(registration);
         }
 
-        schedulePaymentProcessing(payment.getId());
+        // Don't auto-process payment - wait for SePay webhook confirmation
         return RegistrationResponse.from(registration);
     }
 
@@ -198,7 +226,6 @@ public class RegistrationService {
 
         scheduleRegistrationCancelledNotification(cancelled);
         if (promoted != null) {
-            scheduleRegistrationConfirmationEmail(promoted);
             scheduleWaitlistPromotedNotification(promoted);
         }
 
@@ -219,7 +246,20 @@ public class RegistrationService {
             throw new AppException(ErrorCode.QR_CODE_UNAVAILABLE, "QR code is only available for confirmed registrations");
         }
 
-        return RegistrationQrResponse.from(registration, qrCodeService.generateDataUri(registration.getQrCode()));
+        String qrPayload;
+        try {
+            qrPayload = String.format("--- VÉ ĐIỆN TỬ UNIHUB ---\nID: %s\nSinh viên: %s\nWorkshop: %s\nPhòng: %s\nThời gian: %s",
+                    registration.getQrCode(),
+                    user.getFullName(),
+                    registration.getWorkshop().getTitle(),
+                    registration.getWorkshop().getRoom(),
+                    registration.getWorkshop().getStartTime().toString()
+            );
+        } catch (Exception e) {
+            qrPayload = registration.getQrCode(); // fallback
+        }
+
+        return RegistrationQrResponse.from(registration, qrCodeService.generateDataUri(qrPayload));
     }
 
     private User getCurrentUser() {
@@ -326,24 +366,6 @@ public class RegistrationService {
                 Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
         );
         runAfterCommit(task);
-    }
-
-    private void scheduleRegistrationConfirmationEmail(Registration registration) {
-        if (registration.getStatus() != RegistrationStatus.CONFIRMED || registration.getQrCode() == null) {
-            return;
-        }
-
-        UUID registrationId = registration.getId();
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    emailService.sendRegistrationConfirmation(registrationId);
-                }
-            });
-        } else {
-            emailService.sendRegistrationConfirmation(registrationId);
-        }
     }
 
     private void runAfterCommit(Runnable task) {

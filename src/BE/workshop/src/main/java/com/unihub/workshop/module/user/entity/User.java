@@ -31,5 +31,11 @@ public class User extends BaseEntity {
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Column(name = "telegram_id", length = 50)
+    private String telegramId;
 }
 

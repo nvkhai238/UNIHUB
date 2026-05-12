@@ -10,6 +10,9 @@ import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import com.unihub.workshop.module.workshop.service.AiSummaryService;
 import com.unihub.workshop.module.workshop.service.SupabaseStorageService;
 import com.unihub.workshop.module.workshop.service.WorkshopService;
+import com.unihub.workshop.module.registration.entity.RegistrationStatus;
+import com.unihub.workshop.module.registration.service.RegistrationService;
+import com.unihub.workshop.module.registration.dto.RegistrationResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,6 +37,7 @@ public class WorkshopController {
     private final SupabaseStorageService supabaseStorageService;
     private final AiSummaryService aiSummaryService;
     private final WorkshopRepository workshopRepository;
+    private final RegistrationService registrationService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<WorkshopResponse>>> getPublished(
@@ -60,6 +64,16 @@ public class WorkshopController {
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<WorkshopStatisticsResponse>> getStatistics() {
         return ResponseEntity.ok(ApiResponse.success(workshopService.getStatistics()));
+    }
+
+    @GetMapping("/{id}/registrations")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<Page<RegistrationResponse>>> getWorkshopRegistrations(
+            @PathVariable UUID id,
+            @RequestParam(required = false) RegistrationStatus status,
+            @PageableDefault(size = 20, sort = "registeredAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(registrationService.getRegistrationsByWorkshop(id, status, pageable)));
     }
 
     @PostMapping("/{id}/cancel")

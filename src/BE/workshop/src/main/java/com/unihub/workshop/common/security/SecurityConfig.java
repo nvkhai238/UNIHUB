@@ -69,10 +69,12 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/workshops/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations/**").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.GET, "/api/registrations/my/**").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.GET, "/api/registrations/*/payment-status").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.GET, "/api/registrations/*/payment-info").hasRole("STUDENT")
                         .requestMatchers("/api/admin/**").hasRole("ORGANIZER")
                         .requestMatchers("/api/checkins/**").hasAnyRole("CHECKIN_STAFF", "ORGANIZER")
                         .requestMatchers("/api/notifications/**").authenticated()
@@ -99,10 +101,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+        List<String> origins = new java.util.ArrayList<>(Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
-                .toList();
+                .toList());
+                
+        try {
+            String ip = java.net.InetAddress.getLocalHost().getHostAddress();
+            origins.add("http://" + ip + ":5173");
+        } catch (Exception ignored) {
+            // Ignore error if local host cannot be resolved
+        }
+        
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

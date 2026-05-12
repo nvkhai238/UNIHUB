@@ -42,6 +42,8 @@ public class PaymentStatusResponse {
 
     private static String extractErrorMessage(String gatewayResponse) {
         if (gatewayResponse == null || gatewayResponse.isEmpty()) return null;
+        // Don't show success responses as errors
+        if (gatewayResponse.contains("SUCCESS")) return null;
         if (gatewayResponse.contains("PENDING_RETRY")) {
             return "Giao dịch đang chờ xử lý lại. Vui lòng kiểm tra sau.";
         }

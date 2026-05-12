@@ -1,42 +1,78 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import RegistrationButton from '../../components/RegistrationButton';
 import api from '../../api/api';
 import { getCurrentUser } from '../../router/jwtUtils';
 
 export default function WorkshopDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [workshop, setWorkshop] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [existingRegistration, setExistingRegistration] = useState(null);
+
+  const currentUser = getCurrentUser();
+
+  const refreshRegistrationState = (workshopData) => {
+    if (currentUser?.role !== 'STUDENT') return;
+    api.get('/api/registrations/my?size=50')
+      .then(({ data }) => {
+        const myRegistrations = data.data?.content ?? [];
+        const existing = myRegistrations.find((r) =>
+          r.workshopId === workshopData?.id && r.status !== 'CANCELLED');
+        setAlreadyRegistered(!!existing);
+        setExistingRegistration(existing || null);
+        // Reset result if registration was cancelled
+        if (!existing) setResult(null);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     let mounted = true;
-    const currentUser = getCurrentUser();
 
-    Promise.all([
-      api.get(`/api/workshops/${id}`),
-      currentUser?.role === 'STUDENT'
-        ? api.get('/api/registrations/my').catch(() => ({ data: { data: [] } }))
-        : Promise.resolve({ data: { data: [] } }),
-    ])
+    const fetchAll = () => {
+      return Promise.all([
+        api.get(`/api/workshops/${id}`),
+        currentUser?.role === 'STUDENT'
+          ? api.get('/api/registrations/my?size=50').catch(() => ({ data: { data: { content: [] } } }))
+          : Promise.resolve({ data: { data: [] } }),
+      ]);
+    };
+
+    fetchAll()
       .then(([workshopRes, registrationsRes]) => {
         if (!mounted) return;
         const workshopData = workshopRes.data.data;
         setWorkshop(workshopData);
-        const myRegistrations = registrationsRes.data?.data ?? [];
-        setAlreadyRegistered(
-          myRegistrations.some((registration) =>
-            registration.workshopId === workshopData?.id && registration.status !== 'CANCELLED')
-        );
+        const myRegistrations = registrationsRes.data?.data?.content ?? [];
+        const existing = myRegistrations.find((registration) =>
+            registration.workshopId === workshopData?.id && registration.status !== 'CANCELLED');
+        
+        setAlreadyRegistered(!!existing);
+        setExistingRegistration(existing || null);
       })
       .catch(() => mounted && setError('Không tải được chi tiết workshop.'))
       .finally(() => mounted && setLoading(false));
 
+    const poll = () => {
+      api.get(`/api/workshops/${id}`)
+        .then(({ data }) => {
+          if (!mounted) return;
+          setWorkshop(data.data);
+          refreshRegistrationState(data.data);
+        })
+        .catch(() => {});
+    };
+
+    const interval = setInterval(poll, 5000);
+
     return () => {
       mounted = false;
+      clearInterval(interval);
     };
   }, [id]);
 
@@ -62,8 +98,25 @@ export default function WorkshopDetailPage() {
             <Info label="Thời gian kết thúc" value={formatDate(workshop.endTime)} />
           </dl>
 
-          {(workshop.pdfUrl || workshop.aiSummary) && (
+          {workshop.speakerBio && (
+            <div className="mt-6 border-t border-gray-100 pt-6">
+              <h3 className="text-sm font-semibold uppercase text-gray-500 mb-2">Tiểu sử diễn giả</h3>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">{workshop.speakerBio}</p>
+            </div>
+          )}
+
+          {(workshop.pdfUrl || workshop.aiSummary || workshop.roomLayoutUrl) && (
             <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
+              {workshop.roomLayoutUrl && (
+                <a
+                  className="mb-3 block text-sm font-semibold text-emerald-700 underline"
+                  href={workshop.roomLayoutUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Xem sơ đồ phòng
+                </a>
+              )}
               {workshop.pdfUrl && (
                 <a
                   className="text-sm font-semibold text-emerald-700 underline"
@@ -96,17 +149,38 @@ export default function WorkshopDetailPage() {
             onSuccess={(data) => {
               setResult(data);
               setAlreadyRegistered(true);
+              if (data.status === 'PENDING') {
+                navigate(`/student/registrations/${data.registrationId || data.id}/payment`);
+              }
             }}
           />
 
-          {alreadyRegistered && !result && (
-            <p className="mt-3 text-sm text-gray-500">
-              Bạn đã có đăng ký cho workshop này. Vào mục{' '}
-              <Link className="font-semibold text-emerald-700 underline" to="/student/registrations">
-                Đăng ký của tôi
-              </Link>{' '}
-              để theo dõi trạng thái.
-            </p>
+          {alreadyRegistered && !result && existingRegistration && (
+            <div className="mt-4 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              <p className="font-semibold">Bạn đã đăng ký workshop này.</p>
+              
+              {existingRegistration.status === 'PENDING' && (
+                <button
+                  onClick={() => navigate(`/student/registrations/${existingRegistration.registrationId || existingRegistration.id}/payment`)}
+                  className="w-full rounded-md bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700"
+                >
+                  Tiếp tục thanh toán
+                </button>
+              )}
+              
+              {existingRegistration.status === 'CONFIRMED' && (
+                <button
+                  onClick={() => navigate(`/student/registrations/${existingRegistration.registrationId || existingRegistration.id}/qr`)}
+                  className="w-full rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
+                >
+                  Xem mã QR check-in
+                </button>
+              )}
+              
+              <Link className="block text-center font-semibold text-emerald-700 underline" to="/student/registrations">
+                Quản lý đăng ký của tôi
+              </Link>
+            </div>
           )}
 
           {result && (

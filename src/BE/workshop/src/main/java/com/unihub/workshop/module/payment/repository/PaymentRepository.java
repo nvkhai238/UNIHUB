@@ -15,6 +15,7 @@ import java.util.UUID;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findTopByRegistrationOrderByCreatedAtDesc(Registration registration);
+    Optional<Payment> findByGatewayRef(String gatewayRef);
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, ZonedDateTime cutoff);
 
     long countByStatus(PaymentStatus status);
@@ -31,5 +32,49 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     BigDecimal sumAmountByStatusAndWorkshopId(
             @Param("status") PaymentStatus status,
             @Param("workshopId") UUID workshopId
+    );
+
+    // ─── Filtered queries for payment stats ─────────────────────────────────────
+
+    @Query("""
+            select count(p) from Payment p
+            where (:status is null or p.status = :status)
+              and (:workshopId is null or p.registration.workshop.id = :workshopId)
+              and (:from is null or p.createdAt >= :from)
+              and (:to is null or p.createdAt <= :to)
+            """)
+    long countFiltered(
+            @Param("status") PaymentStatus status,
+            @Param("workshopId") UUID workshopId,
+            @Param("from") ZonedDateTime from,
+            @Param("to") ZonedDateTime to
+    );
+
+    @Query("""
+            select coalesce(sum(p.amount), 0) from Payment p
+            where p.status = :status
+              and (:workshopId is null or p.registration.workshop.id = :workshopId)
+              and (:from is null or p.createdAt >= :from)
+              and (:to is null or p.createdAt <= :to)
+            """)
+    BigDecimal sumAmountFiltered(
+            @Param("status") PaymentStatus status,
+            @Param("workshopId") UUID workshopId,
+            @Param("from") ZonedDateTime from,
+            @Param("to") ZonedDateTime to
+    );
+
+    @Query("""
+            select count(p) from Payment p
+            where p.status = :status
+              and (:workshopId is null or p.registration.workshop.id = :workshopId)
+              and (:from is null or p.createdAt >= :from)
+              and (:to is null or p.createdAt <= :to)
+            """)
+    long countByStatusFiltered(
+            @Param("status") PaymentStatus status,
+            @Param("workshopId") UUID workshopId,
+            @Param("from") ZonedDateTime from,
+            @Param("to") ZonedDateTime to
     );
 }

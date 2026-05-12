@@ -149,8 +149,8 @@ export default function RegistrationButton({
       // Idempotent replay (X-Idempotent-Replayed: true) — handled transparently;
       // the response shape is the same, so we treat it identically.
 
-      // Step 2: clear the key only on definitive success/waitlist
-      if (data.status === 'CONFIRMED' || data.status === 'WAITLISTED') {
+      // Step 2: clear the key only on definitive success/waitlist/pending
+      if (data.status === 'CONFIRMED' || data.status === 'WAITLISTED' || data.status === 'PENDING') {
         clearIdempotencyKey(workshopId);
       }
 

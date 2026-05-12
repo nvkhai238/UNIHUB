@@ -29,6 +29,12 @@ services:
       SMTP_HOST: ${SMTP_HOST}
       SMTP_USERNAME: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASS}
+      # Twilio SMS
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       # Mock Payment Gateway
       MOCK_PAYMENT_URL: http://mock-payment:3001
     depends_on:

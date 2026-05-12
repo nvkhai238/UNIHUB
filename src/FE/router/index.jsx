@@ -17,6 +17,7 @@ import RegisterPage from '../pages/auth/RegisterPage';
 // ─── Public Pages ─────────────────────────────────────────────────────────────
 import WorkshopListPage from '../pages/public/WorkshopListPage';
 import WorkshopDetailPage from '../pages/public/WorkshopDetailPage';
+import TicketPage from '../pages/public/TicketPage';
 
 // ─── Student Pages ────────────────────────────────────────────────────────────
 import StudentDashboard from '../pages/student/StudentDashboard';
@@ -33,6 +34,7 @@ import WorkshopManagePage from '../pages/organizer/WorkshopManagePage';
 import WorkshopEditPage from '../pages/organizer/WorkshopEditPage';
 import StatisticsPage from '../pages/organizer/StatisticsPage';
 import StudentImportPage from '../pages/organizer/StudentImportPage';
+import AdminWorkshopRegistrationsPage from '../pages/organizer/AdminWorkshopRegistrationsPage';
 
 // ─── Check-in Staff Pages ─────────────────────────────────────────────────────
 import CheckinDashboard from '../pages/checkin/CheckinDashboard';
@@ -57,6 +59,10 @@ const router = createBrowserRouter([
       {
         path: '/workshops/:id',
         element: <WorkshopDetailPage />,
+      },
+      {
+        path: '/ticket',
+        element: <TicketPage />,
       },
     ],
   },
@@ -149,6 +155,10 @@ const router = createBrowserRouter([
       {
         path: '/admin/workshops/:id/edit',
         element: <WorkshopEditPage />,
+      },
+      {
+        path: '/admin/workshops/:id/registrations',
+        element: <AdminWorkshopRegistrationsPage />,
       },
       {
         path: '/admin/statistics',
