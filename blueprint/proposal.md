@@ -54,7 +54,7 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 
 ### Nhân sự check-in
 
-**Nhu cầu:** Dùng ứng dụng web (PWA) để quét mã QR tại cửa phòng, xác nhận sinh viên có đăng ký hợp lệ không. **Đặc biệt phải hoạt động được khi kết nối mạng nội bộ không ổn định.**
+**Nhu cầu:** Dùng ứng dụng mobile native để quét mã QR tại cửa phòng, xác nhận sinh viên có đăng ký hợp lệ không. **Đặc biệt phải hoạt động được khi kết nối mạng nội bộ không ổn định.**
 
 **Điều quan trọng nhất:** Không để sinh viên chờ lâu tại cửa; dữ liệu check-in không được mất dù mạng có bị đứt.
 
@@ -66,7 +66,7 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 
 - **Web App cho Sinh viên:** Xem danh sách workshop, đăng ký (miễn phí và có phí), xem mã QR, nhận thông báo in-app.
 - **Web App cho Ban tổ chức (Admin):** Dashboard CRUD workshop, upload PDF, xem thống kê đăng ký, quản lý người dùng.
-- **Web App Check-in (PWA):** Quét QR bằng camera trình duyệt, hỗ trợ offline qua Service Worker + IndexedDB, đồng bộ nền khi có mạng trở lại.
+- **Check-in Mobile App:** Quét QR bằng camera thiết bị, hỗ trợ offline qua local database, đồng bộ lại khi có mạng trở lại hoặc app foreground.
 - **Backend API (Spring Boot 3.x):** Toàn bộ logic nghiệp vụ, bảo mật JWT, Rate Limiting, Circuit Breaker, Idempotency Key, phân quyền RBAC.
 - **Tích hợp AI Summary:** Nhận PDF → trích xuất văn bản → gửi Gemini API → lưu bản tóm tắt vào trang chi tiết workshop.
 - **Đồng bộ CSV sinh viên:** Spring Batch đọc file CSV export từ hệ thống cũ mỗi đêm, upsert dữ liệu vào PostgreSQL.
@@ -79,7 +79,7 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 | Cổng thanh toán thực tế (VNPay, Momo)         | Dùng Mock Payment Gateway giả lập để kiểm thử Circuit Breaker và Idempotency Key mà không cần tài khoản merchant thật   |
 | Triển khai production (AWS, GCP, domain, SSL) | Đóng gói bằng Docker Compose để chạy local — đủ để chấm điểm, không cần hạ tầng cloud thật                              |
 | Đăng nhập qua SSO/tài khoản trường            | Hệ thống trường không có API auth; sinh viên đăng nhập bằng email được xác thực qua dữ liệu CSV đồng bộ hàng đêm        |
-| Ứng dụng mobile native (iOS/Android)          | Chức năng check-in được thực hiện qua PWA (Progressive Web App) — đủ yêu cầu offline và không cần publish lên App Store |
+| Ứng dụng mobile native (iOS/Android)          | Check-in được thực hiện bằng mobile app native riêng cho CHECKIN_STAFF |
 | Thanh toán hoàn tiền tự động (refund)         | Admin xử lý hoàn tiền thủ công; hệ thống chỉ ghi nhận trạng thái `REFUNDED`                                             |
 
 ---
@@ -101,7 +101,7 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 → _Giải pháp: Idempotency Key — client sinh UUID trước khi gọi API, server cache kết quả trong Redis 24h._
 
 **Check-in mất mạng:** Nhiều khu vực trong trường có WiFi không ổn định.
-→ _Giải pháp: PWA với Service Worker + IndexedDB, preload danh sách QR hợp lệ trước khi vào phòng, đồng bộ nền khi có mạng trở lại._
+→ _Giải pháp: Mobile app native với local database, preload danh sách QR hợp lệ trước khi vào phòng, đồng bộ lại khi có mạng hoặc app foreground._
 
 **Tích hợp một chiều với hệ thống cũ:** Hệ thống quản lý sinh viên không có API. Dữ liệu chỉ có thể lấy qua file CSV export ban đêm.
 → _Giải pháp: Spring Batch chạy cron job lúc 2:00 AM, xử lý file CSV với error handling đầy đủ, không làm gián đoạn hệ thống đang chạy._
@@ -112,4 +112,4 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 
 1. Chốt Database Schema chung (bảng `users`, `workshops`, `registrations`) trên Supabase và export file SQL cho cả nhóm.
 2. Cài đặt xong Spring Security + JWT và thống nhất Response Format JSON toàn hệ thống.
-3. Thiết lập khung Service Worker trên React để hỗ trợ PWA offline từ đầu.
+3. Chốt contract mobile check-in: preload, sync, local storage, camera permission và quy trình test thiết bị.

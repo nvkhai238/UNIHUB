@@ -16,6 +16,8 @@ import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import com.unihub.workshop.module.notification.entity.Notification;
+import com.unihub.workshop.module.notification.service.NotificationService;
 import com.unihub.workshop.module.notification.service.EmailService;
 import com.unihub.workshop.module.checkin.repository.CheckinRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +33,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.List;
@@ -45,6 +49,7 @@ public class WorkshopService {
     private final UserRepository userRepository;
     private final RegistrationRepository registrationRepository;
     private final PaymentRepository paymentRepository;
+    private final NotificationService notificationService;
     private final EmailService emailService;
     private final CheckinRepository checkinRepository;
 
@@ -87,6 +92,25 @@ public class WorkshopService {
             throw new AppException(ErrorCode.FORBIDDEN, "Cannot update a cancelled workshop");
         }
 
+        String originalTitle = workshop.getTitle();
+        String originalRoom = workshop.getRoom();
+        ZonedDateTime originalStartTime = workshop.getStartTime();
+        ZonedDateTime originalEndTime = workshop.getEndTime();
+
+        List<String> changeMessages = new ArrayList<>();
+        if (!Objects.equals(originalTitle, request.getTitle())) {
+            changeMessages.add("Tieu de workshop da duoc cap nhat");
+        }
+        if (!Objects.equals(originalRoom, request.getRoom())) {
+            changeMessages.add("Phong hoc da doi tu " + safeValue(originalRoom) + " sang " + safeValue(request.getRoom()));
+        }
+        if (!Objects.equals(originalStartTime, request.getStartTime())) {
+            changeMessages.add("Gio bat dau da doi tu " + formatDateTime(originalStartTime) + " sang " + formatDateTime(request.getStartTime()));
+        }
+        if (!Objects.equals(originalEndTime, request.getEndTime())) {
+            changeMessages.add("Gio ket thuc da doi tu " + formatDateTime(originalEndTime) + " sang " + formatDateTime(request.getEndTime()));
+        }
+
         workshop.setTitle(request.getTitle());
         workshop.setDescription(request.getDescription());
         workshop.setSpeakerName(request.getSpeakerName());
@@ -104,7 +128,10 @@ public class WorkshopService {
             workshop.setRemainingSeats(Math.max(0, workshop.getRemainingSeats() + diff));
         }
 
-        return WorkshopResponse.from(workshopRepository.save(workshop));
+        Workshop saved = workshopRepository.save(workshop);
+        promoteWaitlistIfSeatsAvailable(saved);
+        scheduleWorkshopUpdateNotifications(saved, changeMessages);
+        return WorkshopResponse.from(saved);
     }
 
     @Transactional
@@ -155,6 +182,7 @@ public class WorkshopService {
 
         List<Registration> registrations = registrationRepository.findByWorkshop(workshop);
         List<UUID> cancellationEmailRegistrationIds = new ArrayList<>();
+        List<UUID> cancellationNotificationRegistrationIds = new ArrayList<>();
         for (Registration registration : registrations) {
             // Only refund if confirmed (or pending)
             if (registration.getStatus() == RegistrationStatus.CONFIRMED || registration.getStatus() == RegistrationStatus.PENDING) {
@@ -162,6 +190,7 @@ public class WorkshopService {
                 registration.setCancelledAt(ZonedDateTime.now());
                 registrationRepository.save(registration);
                 cancellationEmailRegistrationIds.add(registration.getId());
+                cancellationNotificationRegistrationIds.add(registration.getId());
 
                 paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
                         .ifPresent(payment -> {
@@ -175,20 +204,36 @@ public class WorkshopService {
                 registration.setCancelledAt(ZonedDateTime.now());
                 registrationRepository.save(registration);
                 cancellationEmailRegistrationIds.add(registration.getId());
+                cancellationNotificationRegistrationIds.add(registration.getId());
             }
         }
         scheduleWorkshopCancellationEmails(cancellationEmailRegistrationIds);
+        scheduleWorkshopCancellationNotifications(workshop, cancellationNotificationRegistrationIds);
     }
 
     @Transactional(readOnly = true)
     public WorkshopStatisticsResponse getStatistics() {
-        long totalWorkshops = workshopRepository.count();
-        long totalRegistrations = registrationRepository.count();
-        long totalCheckins = checkinRepository.count();
-        long successfulPayments = paymentRepository.countByStatus(PaymentStatus.SUCCESS);
-        BigDecimal totalRevenue = paymentRepository.sumAmountByStatus(PaymentStatus.SUCCESS);
+        return getStatistics(null, null, null, null);
+    }
 
-        List<WorkshopStatisticsResponse.WorkshopRegistrationStat> breakdown = workshopRepository.findAll().stream()
+    @Transactional(readOnly = true)
+    public WorkshopStatisticsResponse getStatistics(
+            UUID workshopId,
+            WorkshopStatus status,
+            ZonedDateTime from,
+            ZonedDateTime to
+    ) {
+        List<Workshop> filteredWorkshops = workshopRepository.findAll().stream()
+                .filter(workshop -> workshopId == null || workshop.getId().equals(workshopId))
+                .filter(workshop -> status == null || workshop.getStatus() == status)
+                .filter(workshop -> from == null || !workshop.getStartTime().isBefore(from))
+                .filter(workshop -> to == null || !workshop.getStartTime().isAfter(to))
+                .sorted(Comparator.comparing(Workshop::getStartTime))
+                .toList();
+
+        long totalWorkshops = filteredWorkshops.size();
+
+        List<WorkshopStatisticsResponse.WorkshopRegistrationStat> breakdown = filteredWorkshops.stream()
                 .map(workshop -> {
                     List<Registration> registrations = registrationRepository.findByWorkshop(workshop);
                     long confirmed = countByStatus(registrations, RegistrationStatus.CONFIRMED);
@@ -218,6 +263,20 @@ public class WorkshopService {
                     );
                 })
                 .toList();
+
+        long totalRegistrations = breakdown.stream()
+                .mapToLong(WorkshopStatisticsResponse.WorkshopRegistrationStat::getRegistrationsCount)
+                .sum();
+        long totalCheckins = breakdown.stream()
+                .mapToLong(WorkshopStatisticsResponse.WorkshopRegistrationStat::getCheckinCount)
+                .sum();
+        long successfulPayments = filteredWorkshops.stream()
+                .mapToLong(workshop -> paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, workshop.getId(), from, to))
+                .sum();
+        BigDecimal totalRevenue = breakdown.stream()
+                .map(WorkshopStatisticsResponse.WorkshopRegistrationStat::getRevenue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return new WorkshopStatisticsResponse(
                 totalWorkshops,
@@ -266,5 +325,143 @@ public class WorkshopService {
         } else {
             registrationIds.forEach(emailService::sendWorkshopCancellation);
         }
+    }
+
+    private void scheduleWorkshopCancellationNotifications(Workshop workshop, List<UUID> registrationIds) {
+        if (registrationIds.isEmpty()) {
+            return;
+        }
+
+        Runnable action = () -> registrationIds.forEach(registrationId -> registrationRepository.findById(registrationId)
+                .ifPresent(registration -> notificationService.createNotification(
+                        registration.getUser().getId(),
+                        Notification.NotificationType.WORKSHOP_CANCELLED,
+                        "Workshop da bi huy",
+                        "Workshop " + workshop.getTitle() + " da bi huy.",
+                        Map.of(
+                                "registrationId", registration.getId().toString(),
+                                "workshopId", workshop.getId().toString()
+                        )
+                )));
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private void scheduleWorkshopUpdateNotifications(Workshop workshop, List<String> changeMessages) {
+        if (changeMessages.isEmpty()) {
+            return;
+        }
+
+        List<Registration> registrations = registrationRepository.findByWorkshopAndStatusIn(
+                workshop,
+                List.of(RegistrationStatus.CONFIRMED, RegistrationStatus.PENDING, RegistrationStatus.WAITLISTED)
+        );
+        if (registrations.isEmpty()) {
+            return;
+        }
+
+        String changeSummary = String.join("; ", changeMessages);
+        Runnable action = () -> registrations.forEach(registration -> {
+            notificationCreateForWorkshopUpdate(registration, workshop, changeSummary);
+            emailService.sendWorkshopUpdated(registration.getId(), changeSummary);
+        });
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private void promoteWaitlistIfSeatsAvailable(Workshop workshop) {
+        List<UUID> promotedRegistrationIds = new ArrayList<>();
+        while (workshop.getRemainingSeats() > 0) {
+            Registration promoted = registrationRepository
+                    .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
+                    .map(waitlisted -> {
+                        waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                        waitlisted.setQrCode(generateUniqueQrCode());
+                        waitlisted.setConfirmedAt(ZonedDateTime.now());
+                        waitlisted.setCancelledAt(null);
+                        workshop.setRemainingSeats(workshop.getRemainingSeats() - 1);
+                        registrationRepository.save(waitlisted);
+                        workshopRepository.save(workshop);
+                        return waitlisted;
+                    })
+                    .orElse(null);
+            if (promoted == null) {
+                break;
+            }
+            promotedRegistrationIds.add(promoted.getId());
+        }
+
+        if (promotedRegistrationIds.isEmpty()) {
+            return;
+        }
+
+        Runnable action = () -> promotedRegistrationIds.forEach(registrationId -> {
+            notificationService.createNotification(
+                    registrationRepository.findById(registrationId).orElseThrow().getUser().getId(),
+                    Notification.NotificationType.REGISTRATION_CONFIRMED,
+                    "Da co cho trong workshop",
+                    "Ban da duoc chuyen tu danh sach cho sang da xac nhan.",
+                    Map.of("registrationId", registrationId.toString(), "workshopId", workshop.getId().toString())
+            );
+        });
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private void notificationCreateForWorkshopUpdate(Registration registration, Workshop workshop, String changeSummary) {
+        notificationService.createNotification(
+                registration.getUser().getId(),
+                Notification.NotificationType.WORKSHOP_UPDATED,
+                "Workshop da duoc cap nhat",
+                workshop.getTitle() + ": " + changeSummary,
+                Map.of(
+                        "registrationId", registration.getId().toString(),
+                        "workshopId", workshop.getId().toString(),
+                        "changeSummary", changeSummary
+                )
+        );
+    }
+
+    private String safeValue(String value) {
+        return value == null || value.isBlank() ? "(trong)" : value;
+    }
+
+    private String formatDateTime(ZonedDateTime value) {
+        return value == null ? "(trong)" : value.toString();
+    }
+
+    private String generateUniqueQrCode() {
+        String qrCode;
+        do {
+            qrCode = UUID.randomUUID().toString();
+        } while (registrationRepository.existsByQrCode(qrCode));
+        return qrCode;
     }
 }

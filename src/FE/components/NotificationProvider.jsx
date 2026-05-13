@@ -38,6 +38,7 @@ export function NotificationProvider({ children }) {
         (payload) => {
           const newNotif = payload.new;
           setUnreadCount(prev => prev + 1);
+          window.dispatchEvent(new CustomEvent('unihub:notification', { detail: newNotif }));
           setToast({
             id: newNotif.id,
             title: newNotif.title,

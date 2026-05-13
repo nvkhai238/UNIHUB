@@ -13,9 +13,12 @@ import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
@@ -40,9 +43,9 @@ public class IdempotencyService {
         }
     }
 
-    public Optional<RegistrationResponse> getCachedRegistrationResponse(String idempotencyKey) {
+    public Optional<RegistrationResponse> getCachedRegistrationResponse(String idempotencyKey, String principal) {
         try {
-            String cached = redisTemplate.opsForValue().get(IDEMPOTENCY_PREFIX + idempotencyKey);
+            String cached = redisTemplate.opsForValue().get(buildScopedKey(idempotencyKey, principal));
             if (cached == null) {
                 return Optional.empty();
             }
@@ -56,14 +59,25 @@ public class IdempotencyService {
         }
     }
 
-    public void cacheRegistrationResponse(String idempotencyKey, RegistrationResponse response) {
+    public void cacheRegistrationResponse(String idempotencyKey, String principal, RegistrationResponse response) {
         try {
             String payload = objectMapper.writeValueAsString(response);
-            redisTemplate.opsForValue().set(IDEMPOTENCY_PREFIX + idempotencyKey, payload, CACHE_TTL);
+            redisTemplate.opsForValue().set(buildScopedKey(idempotencyKey, principal), payload, CACHE_TTL);
         } catch (RedisConnectionFailureException | RedisSystemException e) {
             log.warn("Redis unavailable while writing idempotency key {}; response will not be cached", idempotencyKey, e);
         } catch (JsonProcessingException e) {
             log.warn("Could not serialize idempotency response for key {}; response will not be cached", idempotencyKey, e);
         }
+    }
+
+    public String generatePaymentRetryKey(UUID registrationId, String principal) {
+        String scoped = registrationId + ":" + principal;
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(scoped.getBytes(StandardCharsets.UTF_8));
+        return "payment-retry:" + encoded;
+    }
+
+    private String buildScopedKey(String idempotencyKey, String principal) {
+        return IDEMPOTENCY_PREFIX + principal + ":" + idempotencyKey;
     }
 }

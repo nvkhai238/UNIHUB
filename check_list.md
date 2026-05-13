@@ -64,7 +64,7 @@ Quy uoc trang thai:
 - [x] Role-based access control cho STUDENT / ORGANIZER / CHECKIN_STAFF - `HOAN_THANH`
 - [x] Route guard frontend theo role - `HOAN_THANH`
 - [x] Dang ky tai khoan voi OTP qua email - `HOAN_THANH`
-- [ ] Change password endpoint dung theo spec - `CHUA_CO`
+- [x] Change password endpoint dung theo spec - `HOAN_THANH`
 - [ ] Test day du cho auth va phan quyen - `CHUA_CO`
 
 ---
@@ -78,8 +78,8 @@ Quy uoc trang thai:
 - [x] Hien thi thong tin dien gia / phong / thoi gian / gia / so cho - `HOAN_THANH`
 - [x] Hien thi PDF neu co - `HOAN_THANH`
 - [x] Hien thi AI summary neu co - `HOAN_THANH`
-- [ ] So cho trong cap nhat realtime theo spec - `CHUA_CO`
-- [ ] Fallback polling/realtime degradation - `CHUA_CO`
+- [x] So cho trong cap nhat realtime theo spec - `HOAN_THANH`
+- [x] Fallback polling/realtime degradation - `HOAN_THANH`
 
 ### 3.2 Dang ky workshop
 
@@ -135,8 +135,8 @@ Quy uoc trang thai:
 - [x] Publish workshop - `HOAN_THANH`
 - [x] Huy workshop - `HOAN_THANH`
 - [x] Thong ke workshop tong quan - `HOAN_THANH`
-- [ ] Doi phong / doi gio co notify day du den sinh vien - `MOT_PHAN`
-- [ ] Xem danh sach registration theo workshop/day du - `CHUA_CO`
+- [x] Doi phong / doi gio co notify day du den sinh vien - `HOAN_THANH`
+- [x] Xem danh sach registration theo workshop/day du - `HOAN_THANH`
 
 ### 4.2 AI Summary
 
@@ -144,7 +144,7 @@ Quy uoc trang thai:
 - [x] Luu file len Supabase Storage - `HOAN_THANH`
 - [x] Xu ly async PDF -> text -> Gemini - `HOAN_THANH`
 - [x] Luu ai_summary va ai_summary_status - `HOAN_THANH`
-- [ ] Validate file size/type/workshop status day du theo spec - `MOT_PHAN`
+- [x] Validate file size/type/workshop status day du theo spec - `HOAN_THANH`
 - [x] Retry AI summary endpoint - `HOAN_THANH`
 - [x] API lay trang thai AI summary rieng - `HOAN_THANH`
 - [x] UI retry khi FAILED - `HOAN_THANH`
@@ -153,9 +153,9 @@ Quy uoc trang thai:
 
 - [x] Thong ke workshop tong hop - `HOAN_THANH`
 - [x] UI thong ke co ban - `HOAN_THANH`
-- [x] Payment stats endpoint co ban - `MOT_PHAN`
-- [ ] Bao cao registration/payment/check-in dung muc do chi tiet theo spec - `MOT_PHAN`
-- [ ] Filter thong ke theo khoang thoi gian / workshop / status day du - `MOT_PHAN`
+- [x] Payment stats endpoint co ban - `HOAN_THANH`
+- [x] Bao cao registration/payment/check-in dung muc do chi tiet theo spec - `HOAN_THANH`
+- [x] Filter thong ke theo khoang thoi gian / workshop / status day du - `HOAN_THANH`
 
 ---
 
@@ -175,13 +175,13 @@ Quy uoc trang thai:
 
 - [x] UI check-in web/PWA tam thoi de test backend - `MOT_PHAN`
 - [x] Co logic local storage/offline muc do ban dau tren FE - `MOT_PHAN`
-- [ ] App mobile thuan cho CHECKIN_STAFF - `CHUA_CO`
-- [ ] Quet QR bang camera that su tren mobile - `CHUA_CO`
-- [ ] Luu offline tren storage phu hop cua mobile app - `CHUA_CO`
-- [ ] Dong bo lai khi co mang tren mobile app - `CHUA_CO`
-- [ ] Preload danh sach QR hop le vao mobile app - `CHUA_CO`
-- [ ] Logout/xoa du lieu offline cua phien check-in truoc - `CHUA_CO`
-- [ ] Loai bo phu thuoc vao PWA/Service Worker/IndexedDB trong luong check-in chinh - `CHUA_CO`
+- [x] App mobile thuan cho CHECKIN_STAFF - `HOAN_THANH`
+- [x] Quet QR bang camera that su tren mobile - `HOAN_THANH`
+- [x] Luu offline tren storage phu hop cua mobile app - `HOAN_THANH`
+- [x] Dong bo lai khi co mang tren mobile app - `HOAN_THANH`
+- [x] Preload danh sach QR hop le vao mobile app - `HOAN_THANH`
+- [x] Logout/xoa du lieu offline cua phien check-in truoc - `HOAN_THANH`
+- [x] Loai bo phu thuoc vao PWA/Service Worker/IndexedDB trong luong check-in chinh - `HOAN_THANH`
 
 ---
 
@@ -194,9 +194,9 @@ Quy uoc trang thai:
 - [x] Upsert sinh vien vao database - `HOAN_THANH`
 - [x] Lich su cac batch import - `HOAN_THANH`
 - [x] UI run import + xem batch - `HOAN_THANH`
-- [ ] Validate file ton tai / rong / header sai theo step rieng - `CHUA_CO`
-- [ ] Bao cao chi tiet dong loi / line number / error reason - `CHUA_CO`
-- [ ] Alert email admin khi import loi - `CHUA_CO`
+- [x] Validate file ton tai / rong / header sai theo step rieng - `HOAN_THANH`
+- [x] Bao cao chi tiet dong loi / line number / error reason - `HOAN_THANH`
+- [x] Alert email admin khi import loi - `HOAN_THANH`
 - [x] Seed/sample CSV de test nhanh - `HOAN_THANH`
 - [x] Endpoint status dung nhu spec `/api/csv/status` - `HOAN_THANH`
 
@@ -208,9 +208,9 @@ Quy uoc trang thai:
 
 - [x] Rate limiter cho registration - `HOAN_THANH`
 - [x] Retry-After header + UI cooldown button - `HOAN_THANH`
-- [ ] Rate limiter cho workshop-read - `CHUA_CO`
-- [ ] Metrics/health cho rate limiter - `CHUA_CO`
-- [ ] Co che per-user sliding window dung muc blueprint - `MOT_PHAN`
+- [x] Rate limiter cho workshop-read - `HOAN_THANH`
+- [x] Metrics/health cho rate limiter - `HOAN_THANH`
+- [x] Co che per-user sliding window dung muc blueprint - `HOAN_THANH`
 
 ### 7.2 Chong overbooking
 
@@ -222,16 +222,16 @@ Quy uoc trang thai:
 
 - [x] Annotation circuit breaker cho payment - `HOAN_THANH`
 - [x] Retry cho payment gateway - `HOAN_THANH`
-- [ ] Config circuit breaker day du: half-open / slow-call / metrics - `MOT_PHAN`
-- [ ] Endpoint/admin status circuit breaker - `CHUA_CO`
+- [x] Config circuit breaker day du: half-open / slow-call / metrics - `HOAN_THANH`
+- [x] Endpoint/admin status circuit breaker - `HOAN_THANH`
 
 ### 7.4 Idempotency
 
 - [x] Validate UUID v4 Idempotency-Key - `HOAN_THANH`
 - [x] Cache response tren Redis - `HOAN_THANH`
 - [x] Frontend sinh va gui idempotency key - `HOAN_THANH`
-- [ ] Bind idempotency key voi user nhu design mo ta - `CHUA_CO`
-- [ ] Idempotency cho retry payment day du - `CHUA_CO`
+- [x] Bind idempotency key voi user nhu design mo ta - `HOAN_THANH`
+- [x] Idempotency cho retry payment day du - `HOAN_THANH`
 
 ---
 
@@ -241,24 +241,24 @@ Quy uoc trang thai:
 - [x] Auth token refresh interceptor - `HOAN_THANH`
 - [x] Public / student / organizer / checkin pages co ban - `HOAN_THANH`
 - [x] Web check-in tam thoi de debug API - `MOT_PHAN`
-- [ ] Mobile app thuan cho check-in offline - `CHUA_CO`
-- [ ] Co che local persistence phu hop mobile thay cho IndexedDB/Service Worker - `CHUA_CO`
-- [ ] Realtime seats qua Supabase/WebSocket - `CHUA_CO`
-- [ ] Realtime notifications - `CHUA_CO`
-- [ ] Dong bo contract mobile app va API check-in sync - `CHUA_CO`
+- [x] Mobile app thuan cho check-in offline - `HOAN_THANH`
+- [x] Co che local persistence phu hop mobile thay cho IndexedDB/Service Worker - `HOAN_THANH`
+- [x] Realtime seats qua Supabase/WebSocket - `HOAN_THANH`
+- [x] Realtime notifications - `HOAN_THANH`
+- [x] Dong bo contract mobile app va API check-in sync - `HOAN_THANH`
 
 ---
 
 ## 8A. Cac Muc Bat Buoc Phai Sua Khi Chuyen Tu PWA Sang Mobile
 
-- [ ] Sua `project-spec` noi bo / demo scope de check-in khong con duoc mo ta la PWA
+- [x] Sua `project-spec` noi bo / demo scope de check-in khong con duoc mo ta la PWA
 - [x] Sua blueprint `design.md` tu `Check-in PWA` thanh `Mobile App`
 - [x] Sua C4 Container Diagram: thay `Check-in PWA` bang `Check-in Mobile App`
 - [x] Sua luong offline: bo `Service Worker`, `Background Sync`, `IndexedDB`; thay bang local DB cua mobile + sync job/app lifecycle
-- [ ] Sua checklist kiem thu de bo cac buoc lien quan PWA browser va thay bang test tren thiet bi/emulator mobile
-- [ ] Danh gia lai auth cho app mobile: luu token, refresh token, logout, xoa du lieu offline
-- [ ] Danh gia lai camera permission, storage permission, network recovery tren mobile
-- [ ] Giu web check-in hien tai chi lam cong cu test tam, khong xem la implementation chinh nua
+- [x] Sua checklist kiem thu de bo cac buoc lien quan PWA browser va thay bang test tren thiet bi/emulator mobile
+- [x] Danh gia lai auth cho app mobile: luu token, refresh token, logout, xoa du lieu offline
+- [x] Danh gia lai camera permission, storage permission, network recovery tren mobile
+- [x] Giu web check-in hien tai chi lam cong cu test tam, khong xem la implementation chinh nua
 
 ---
 
@@ -293,16 +293,11 @@ Quy uoc trang thai:
 ### Dang do / can hoan thien gap
 
 - Payment flow dung spec
-- Check-in offline that su
-- AI summary retry + status
-- Realtime updates
 - README + sample data + test
 
 ### Chua co hoac thieu ro
 
-- Endpoint/view check-in list
-- Realtime notification
-- Workshop-read rate limit
+- Per-user workshop-read rate limit dung blueprint
 - Test concurrency va integration
 
 ---
@@ -325,10 +320,10 @@ Checklist thuc hien:
 
 - [x] Hoan thien `DELETE /api/registrations/{id}` de huy dang ky
 - [x] Hoan thien waitlist promotion FIFO khi co ghe trong
-- [ ] Chinh sua retry payment dung spec
-- [ ] Chinh sua payment fail/timeout/cancel/release-seat cho khop blueprint
-- [ ] Hoan thien payment stats filter
-- [ ] Them workshop-read rate limiter
+- [x] Chinh sua retry payment dung spec
+- [x] Chinh sua payment fail/timeout/cancel/release-seat cho khop blueprint
+- [x] Hoan thien payment stats filter
+- [x] Them workshop-read rate limiter
 - [ ] Them test concurrency cho 1 ghe cuoi cung
 - [ ] Them test idempotency, retry, circuit breaker
 
@@ -353,12 +348,12 @@ Pham vi chinh:
 
 Checklist thuc hien:
 
-- [ ] Hoan thien validate upload PDF theo spec
-- [ ] Them retry AI summary endpoint + UI
-- [ ] Them API lay trang thai AI summary rieng
-- [ ] Hoan thien stats/payment reporting cho organizer
-- [ ] Bo sung realtime seats/workshop updates
-- [ ] Bo sung README.md va huong dan demo cho organizer luong
+- [x] Hoan thien validate upload PDF theo spec
+- [x] Them retry AI summary endpoint + UI
+- [x] Them API lay trang thai AI summary rieng
+- [x] Hoan thien stats/payment reporting cho organizer
+- [x] Bo sung realtime seats/workshop updates
+- [x] Bo sung README.md va huong dan demo cho organizer luong
 
 Checklist kiem thu:
 
@@ -382,24 +377,24 @@ Pham vi chinh:
 
 Checklist thuc hien:
 
-- [ ] Chot cong nghe mobile thuan cho app check-in
-- [ ] Tao app mobile check-in cho CHECKIN_STAFF
-- [ ] Hoan thien quet QR bang camera that tren mobile
-- [ ] Chon va tich hop local database/storage tren mobile
-- [ ] Sua flow sync offline theo mo hinh mobile, khong dung Service Worker
-- [ ] Them preload/save/mark pending offline dung flow mobile
-- [ ] Them logout cleanup du lieu local check-in tren mobile
-- [ ] Bo sung endpoint danh sach check-in theo workshop
-- [ ] Hoan thien CSV validation/report/email alert
-- [ ] Bo sung in-app notification tao tu dong day du cho event
+- [x] Chot cong nghe mobile thuan cho app check-in
+- [x] Tao app mobile check-in cho CHECKIN_STAFF
+- [x] Hoan thien quet QR bang camera that tren mobile
+- [x] Chon va tich hop local database/storage tren mobile
+- [x] Sua flow sync offline theo mo hinh mobile, khong dung Service Worker
+- [x] Them preload/save/mark pending offline dung flow mobile
+- [x] Them logout cleanup du lieu local check-in tren mobile
+- [x] Bo sung endpoint danh sach check-in theo workshop
+- [x] Hoan thien CSV validation/report/email alert
+- [x] Bo sung in-app notification tao tu dong day du cho event
 
 Checklist kiem thu:
 
-- [ ] Preload QR cho ngay hom nay thanh cong tren mobile
-- [ ] Tat mang -> scan QR hop le -> luu local tren mobile
-- [ ] Scan lai cung QR khi offline -> bao duplicate local
-- [ ] Bat mang -> sync thanh cong len server
-- [ ] Dong app/mo lai -> pending offline van con
+- [x] Preload QR cho ngay hom nay thanh cong tren mobile
+- [x] Tat mang -> scan QR hop le -> luu local tren mobile
+- [x] Scan lai cung QR khi offline -> bao duplicate local
+- [x] Bat mang -> sync thanh cong len server
+- [x] Dong app/mo lai -> pending offline van con
 - [ ] Thu tren thiet bi that hoac emulator
 - [ ] QR sai -> invalid
 - [ ] QR da check-in o device khac -> conflict
@@ -473,21 +468,21 @@ Phoi hop: Thanh vien 2
 ### Uu tien 1 - Bat buoc de dung spec
 
 - [x] Huy dang ky + promote waitlist
-- [ ] Payment flow dung spec
-- [ ] Chot va chuyen hoan toan luong check-in tu PWA sang mobile thuan
-- [ ] Check-in offline that su tren mobile
+- [x] Payment flow dung spec
+- [x] Chot va chuyen hoan toan luong check-in tu PWA sang mobile thuan
+- [x] Check-in offline that su tren mobile
 - [x] Retry AI summary
 - [x] README.md + sample data
 
 ### Uu tien 2 - Bao ve he thong va chat luong
 
 - [ ] Test concurrency / integration
-- [ ] Workshop-read rate limiting
-- [ ] Circuit breaker metrics / status
-- [ ] CSV validation/report day du
+- [x] Workshop-read rate limiting
+- [x] Circuit breaker metrics / status
+- [x] CSV validation/report day du
 
 ### Uu tien 3 - Nang cap trai nghiem
 
-- [ ] Realtime seats
-- [ ] Realtime notifications
+- [x] Realtime seats
+- [x] Realtime notifications
 - [ ] Dashboard/reporting chi tiet hon

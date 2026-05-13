@@ -22,6 +22,25 @@ export default function NotificationsPage() {
 
   useEffect(() => { load(filter === 'unread'); }, [filter]);
 
+  useEffect(() => {
+    const handleIncomingNotification = (event) => {
+      const incoming = event.detail;
+      if (!incoming) return;
+
+      setNotifications((prev) => {
+        const exists = prev.some((item) => item.id === incoming.id);
+        if (exists) return prev;
+        if (filter === 'unread') {
+          return [{ ...incoming, isRead: false }, ...prev];
+        }
+        return [{ ...incoming, isRead: false }, ...prev];
+      });
+    };
+
+    window.addEventListener('unihub:notification', handleIncomingNotification);
+    return () => window.removeEventListener('unihub:notification', handleIncomingNotification);
+  }, [filter]);
+
   const markRead = async (id) => {
     await api.patch(`/api/notifications/${id}`);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));

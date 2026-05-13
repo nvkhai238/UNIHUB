@@ -27,6 +27,7 @@ GEMINI_API_KEY=
 SMTP_HOST=
 SMTP_USER=
 SMTP_PASS=
+MAIL_ADMIN=
 ```
 
 Ban co the tao file `.env` o root repo va dien cac gia tri tren.
@@ -204,4 +205,33 @@ npm.cmd start
 
 # Full Docker
 docker compose up --build
+```
+
+## 6. Khac phuc loi thuong gap
+
+### Docker BuildKit snapshot loi
+
+Neu `docker compose up --build` bao loi kieu:
+
+```text
+parent snapshot ... does not exist
+```
+
+thi day thuong la loi cache build cua Docker, khong phai loi source code. Thu lan luot:
+
+```powershell
+docker builder prune -af
+docker compose build --no-cache
+docker compose up
+```
+
+Neu van loi, khoi dong lai Docker Desktop roi chay lai lenh tren.
+
+### Maven bao `release version 21 not supported`
+
+Mo PowerShell moi va dat lai JDK 21 truoc khi chay backend:
+
+```powershell
+$env:JAVA_HOME="C:\Program Files\Android\openjdk\jdk-21.0.8"
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
 ```

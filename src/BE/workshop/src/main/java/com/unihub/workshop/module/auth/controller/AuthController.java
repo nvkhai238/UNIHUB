@@ -2,6 +2,7 @@ package com.unihub.workshop.module.auth.controller;
 
 import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.auth.dto.AuthResponse;
+import com.unihub.workshop.module.auth.dto.ChangePasswordRequest;
 import com.unihub.workshop.module.auth.dto.LoginRequest;
 import com.unihub.workshop.module.auth.dto.OtpChallengeResponse;
 import com.unihub.workshop.module.auth.dto.RefreshTokenRequest;
@@ -40,6 +41,13 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(ApiResponse.success(authService.refresh(request.getRefreshToken())));
+    }
+
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
     @PostMapping("/register")
