@@ -4,6 +4,7 @@ import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.DuplicateFieldException;
 import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.auth.dto.AuthResponse;
+import com.unihub.workshop.module.auth.dto.ChangePasswordRequest;
 import com.unihub.workshop.module.auth.dto.LoginRequest;
 import com.unihub.workshop.module.auth.dto.RegisterRequest;
 import com.unihub.workshop.module.user.entity.User;
@@ -11,6 +12,7 @@ import com.unihub.workshop.module.user.entity.UserRole;
 import com.unihub.workshop.module.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -206,5 +208,22 @@ public class AuthService {
                         .telegramId(user.getTelegramId())
                         .build())
                 .build();
+    }
+
+    public void changePassword(ChangePasswordRequest request) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new AppException(ErrorCode.WRONG_CURRENT_PASSWORD, "Current password is incorrect");
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "New password must be different from the current password");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 }

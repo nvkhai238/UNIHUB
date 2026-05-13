@@ -48,7 +48,10 @@ public class RegistrationController {
     ) {
         idempotencyService.validateKey(idempotencyKey);
 
-        Optional<RegistrationResponse> cachedResponse = idempotencyService.getCachedRegistrationResponse(idempotencyKey);
+        Optional<RegistrationResponse> cachedResponse = idempotencyService.getCachedRegistrationResponse(
+                idempotencyKey,
+                authentication.getName()
+        );
         if (cachedResponse.isPresent()) {
             return ResponseEntity.ok()
                     .header("X-Idempotent-Replayed", "true")
@@ -73,7 +76,7 @@ public class RegistrationController {
             }
 
             RegistrationResponse response = registrationService.register(request, idempotencyKey);
-            idempotencyService.cacheRegistrationResponse(idempotencyKey, response);
+            idempotencyService.cacheRegistrationResponse(idempotencyKey, authentication.getName(), response);
 
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponse.<RegistrationResponse>builder()
@@ -119,8 +122,24 @@ public class RegistrationController {
     }
 
     @PostMapping("/{id}/payment/retry")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> retryPayment(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.success(registrationService.retryPayment(id)));
+    public ResponseEntity<ApiResponse<RegistrationResponse>> retryPayment(
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        String retryKey = idempotencyService.generatePaymentRetryKey(id, authentication.getName());
+        Optional<RegistrationResponse> cachedResponse = idempotencyService.getCachedRegistrationResponse(
+                retryKey,
+                authentication.getName()
+        );
+        if (cachedResponse.isPresent()) {
+            return ResponseEntity.ok()
+                    .header("X-Idempotent-Replayed", "true")
+                    .body(ApiResponse.success(cachedResponse.get()));
+        }
+
+        RegistrationResponse response = registrationService.retryPayment(id);
+        idempotencyService.cacheRegistrationResponse(retryKey, authentication.getName(), response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @DeleteMapping("/{id}")

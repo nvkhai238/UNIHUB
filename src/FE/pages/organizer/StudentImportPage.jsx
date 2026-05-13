@@ -104,9 +104,11 @@ export default function StudentImportPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Lần chạy</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">File</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Trạng thái</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Thành công</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Lỗi</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Chi tiết</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Bắt đầu</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Hoàn tất</th>
               </tr>
@@ -115,6 +117,7 @@ export default function StudentImportPage() {
               {batches.map((batch) => (
                 <tr key={batch.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{batch.id?.slice(0, 8)}...</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{batch.fileName ?? '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusStyle(batch.status)}`}>
                       {batchStatusLabel(batch.status)}
@@ -123,6 +126,9 @@ export default function StudentImportPage() {
                   <td className="px-4 py-3 font-semibold text-emerald-700">{batch.successRows ?? 0}</td>
                   <td className={`px-4 py-3 font-semibold ${(batch.errorRows ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'}`}>
                     {batch.errorRows ?? 0}
+                  </td>
+                  <td className="max-w-xs px-4 py-3 text-xs text-gray-500">
+                    <span className="line-clamp-3">{batch.errorLog || '—'}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{formatDate(batch.startedAt)}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{formatDate(batch.completedAt)}</td>

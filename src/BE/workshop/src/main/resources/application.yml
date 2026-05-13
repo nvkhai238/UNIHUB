@@ -54,6 +54,7 @@ app:
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:noreply@unihub.edu.vn}
+    admin: ${MAIL_ADMIN:${MAIL_FROM:noreply@unihub.edu.vn}}
   payment:
     pending-timeout-minutes: ${PAYMENT_PENDING_TIMEOUT_MINUTES:15}
     pending-timeout-scan-ms: ${PAYMENT_PENDING_TIMEOUT_SCAN_MS:60000}
@@ -65,9 +66,30 @@ resilience4j:
         limitForPeriod: 5
         limitRefreshPeriod: 10s
         timeoutDuration: 0
+        registerHealthIndicator: true
+      workshop-read:
+        limitForPeriod: 30
+        limitRefreshPeriod: 10s
+        timeoutDuration: 0
+        registerHealthIndicator: true
   circuitbreaker:
     instances:
       payment:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
         slidingWindowSize: 10
         failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 2s
         waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 1
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always

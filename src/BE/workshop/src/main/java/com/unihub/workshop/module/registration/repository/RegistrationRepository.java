@@ -25,6 +25,7 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     // Legacy non-paginated queries used by internal logic
     List<Registration> findByUser(User user);
     List<Registration> findByWorkshop(Workshop workshop);
+    List<Registration> findByWorkshopAndStatusIn(Workshop workshop, List<RegistrationStatus> statuses);
     Optional<Registration> findByQrCode(String qrCode);
     List<Registration> findByStatusAndWorkshop_StartTimeBetween(RegistrationStatus status, ZonedDateTime start, ZonedDateTime end);
 

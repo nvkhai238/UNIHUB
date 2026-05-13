@@ -4,6 +4,7 @@ UniHub Workshop is a full-stack workshop registration and check-in system for a 
 
 - `src/BE/workshop`: Spring Boot backend.
 - `src`: React + Vite web app for students and organizers.
+- `mobile-checkin`: React Native + Expo app for `CHECKIN_STAFF`.
 - `mock-payment`: Node.js mock payment gateway.
 - `data`: sample CSV files for nightly student import.
 - `blueprint`: system design and feature specs.
@@ -33,6 +34,7 @@ SMTP_USER=
 SMTP_PASS=
 MAIL_ENABLED=true
 MAIL_FROM=...
+MAIL_ADMIN=...
 SMTP_PORT=587
 SMTP_AUTH=true
 SMTP_STARTTLS_ENABLE=true
@@ -78,6 +80,16 @@ npm ci
 npm start
 ```
 
+Mobile check-in app:
+
+```bash
+cd mobile-checkin
+npm install
+npx expo start
+```
+
+Set `mobile-checkin/app.json -> expo.extra.apiBaseUrl` to your backend LAN IP, for example `http://192.168.1.23:8080`.
+
 ## Demo Accounts
 
 The backend seeder creates sample users when the database is empty. Typical passwords follow the seeded values in `DataSeederConfig`; imported students use:
@@ -119,6 +131,24 @@ Organizer APIs:
 - Confirmed or pending cancellations release the seat; the first waitlisted student is promoted automatically.
 - Organizers create/publish/cancel workshops, upload PDFs, retry AI summary generation, and view statistics.
 - Check-in staff use the mobile-native check-in contract: preload valid QR data, store scans offline locally, then sync with `POST /api/checkins/sync`.
+
+## Demo Walkthrough
+
+Organizer flow:
+
+1. Log in with an `ORGANIZER` account on the web app.
+2. Create a workshop in draft state, then publish it.
+3. Edit room/time to trigger workshop update notifications.
+4. Upload a PDF and monitor AI summary status or retry when failed.
+5. Open the statistics page and apply workshop/date/status filters.
+
+Check-in flow:
+
+1. Log in on `mobile-checkin` with a `CHECKIN_STAFF` account.
+2. Preload the QR list for today.
+3. Scan QR online for direct sync.
+4. Turn off the network and scan again to queue offline entries.
+5. Restore network or bring the app back to foreground to trigger sync.
 
 ## Verification
 

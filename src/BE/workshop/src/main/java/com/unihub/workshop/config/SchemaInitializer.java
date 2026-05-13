@@ -65,6 +65,13 @@ public class SchemaInitializer {
                 log.info("SchemaInitializer: skipped adding to supabase_realtime (might not be a Supabase DB or already added).");
             }
 
+            try {
+                stmt.execute("ALTER PUBLICATION supabase_realtime ADD TABLE workshops;");
+                log.info("SchemaInitializer: added workshops to supabase_realtime publication.");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: skipped adding workshops to supabase_realtime.");
+            }
+
             log.info("SchemaInitializer: notifications table ready.");
         }
     }

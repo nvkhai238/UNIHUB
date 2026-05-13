@@ -10,21 +10,27 @@ import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import com.unihub.workshop.module.workshop.service.AiSummaryService;
 import com.unihub.workshop.module.workshop.service.SupabaseStorageService;
 import com.unihub.workshop.module.workshop.service.WorkshopService;
+import com.unihub.workshop.module.workshop.service.WorkshopReadSlidingWindowService;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.service.RegistrationService;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.UUID;
 
@@ -38,16 +44,27 @@ public class WorkshopController {
     private final AiSummaryService aiSummaryService;
     private final WorkshopRepository workshopRepository;
     private final RegistrationService registrationService;
+    private final WorkshopReadSlidingWindowService workshopReadSlidingWindowService;
 
     @GetMapping
+    @RateLimiter(name = "workshop-read", fallbackMethod = "workshopReadRateLimitFallback")
     public ResponseEntity<ApiResponse<Page<WorkshopResponse>>> getPublished(
+            HttpServletRequest request,
+            Authentication authentication,
             @PageableDefault(size = 10, sort = "startTime", direction = Sort.Direction.ASC) Pageable pageable
     ) {
+        enforceWorkshopReadWindow(request, authentication);
         return ResponseEntity.ok(ApiResponse.success(workshopService.findPublished(pageable)));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<WorkshopResponse>> getById(@PathVariable UUID id) {
+    @RateLimiter(name = "workshop-read", fallbackMethod = "workshopDetailRateLimitFallback")
+    public ResponseEntity<ApiResponse<WorkshopResponse>> getById(
+            @PathVariable UUID id,
+            HttpServletRequest request,
+            Authentication authentication
+    ) {
+        enforceWorkshopReadWindow(request, authentication);
         return ResponseEntity.ok(ApiResponse.success(workshopService.findById(id)));
     }
 
@@ -62,8 +79,13 @@ public class WorkshopController {
 
     @GetMapping("/statistics")
     @PreAuthorize("hasRole('ORGANIZER')")
-    public ResponseEntity<ApiResponse<WorkshopStatisticsResponse>> getStatistics() {
-        return ResponseEntity.ok(ApiResponse.success(workshopService.getStatistics()));
+    public ResponseEntity<ApiResponse<WorkshopStatisticsResponse>> getStatistics(
+            @RequestParam(required = false) UUID workshopId,
+            @RequestParam(required = false) WorkshopStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) java.time.ZonedDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) java.time.ZonedDateTime to
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(workshopService.getStatistics(workshopId, status, from, to)));
     }
 
     @GetMapping("/{id}/registrations")
@@ -120,10 +142,16 @@ public class WorkshopController {
 
         com.unihub.workshop.module.workshop.entity.Workshop workshop = workshopRepository.findById(id)
                 .orElseThrow(() -> new com.unihub.workshop.common.exception.AppException(com.unihub.workshop.common.exception.ErrorCode.WORKSHOP_NOT_FOUND));
-        if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
+        if (workshop.getStatus() != WorkshopStatus.DRAFT && workshop.getStatus() != WorkshopStatus.PUBLISHED) {
             throw new com.unihub.workshop.common.exception.AppException(
                     com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "Cannot upload PDF for a cancelled workshop"
+                    "Cannot upload PDF for this workshop status"
+            );
+        }
+        if ("PROCESSING".equalsIgnoreCase(workshop.getAiSummaryStatus())) {
+            throw new com.unihub.workshop.common.exception.AppException(
+                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
+                    "AI summary is already processing"
             );
         }
 
@@ -155,6 +183,18 @@ public class WorkshopController {
             throw new com.unihub.workshop.common.exception.AppException(
                     com.unihub.workshop.common.exception.ErrorCode.VALIDATION_FAILED,
                     "Workshop has no PDF to summarize"
+            );
+        }
+        if (workshop.getStatus() != WorkshopStatus.DRAFT && workshop.getStatus() != WorkshopStatus.PUBLISHED) {
+            throw new com.unihub.workshop.common.exception.AppException(
+                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
+                    "Cannot retry AI summary for this workshop status"
+            );
+        }
+        if ("PROCESSING".equalsIgnoreCase(workshop.getAiSummaryStatus())) {
+            throw new com.unihub.workshop.common.exception.AppException(
+                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
+                    "AI summary is already processing"
             );
         }
         if ("DONE".equals(workshop.getAiSummaryStatus())) {
@@ -196,5 +236,51 @@ public class WorkshopController {
                     "Only PDF files are allowed"
             );
         }
+    }
+
+    public ResponseEntity<ApiResponse<Page<WorkshopResponse>>> workshopReadRateLimitFallback(
+            Pageable pageable,
+            RequestNotPermitted ex
+    ) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "10")
+                .body(ApiResponse.error(
+                        429,
+                        "RATE_LIMIT_EXCEEDED",
+                        "Too many workshop requests. Please retry after 10 seconds."
+                ));
+    }
+
+    public ResponseEntity<ApiResponse<WorkshopResponse>> workshopDetailRateLimitFallback(
+            UUID id,
+            RequestNotPermitted ex
+    ) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "10")
+                .body(ApiResponse.error(
+                        429,
+                        "RATE_LIMIT_EXCEEDED",
+                        "Too many workshop requests. Please retry after 10 seconds."
+                ));
+    }
+
+    private void enforceWorkshopReadWindow(HttpServletRequest request, Authentication authentication) {
+        String principalKey = authentication != null && authentication.isAuthenticated()
+                ? authentication.getName()
+                : extractClientIp(request);
+        if (!workshopReadSlidingWindowService.tryAcquire(principalKey)) {
+            throw new com.unihub.workshop.common.exception.AppException(
+                    com.unihub.workshop.common.exception.ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "Too many workshop requests in the current sliding window"
+            );
+        }
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

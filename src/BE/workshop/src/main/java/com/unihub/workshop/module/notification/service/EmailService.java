@@ -46,6 +46,9 @@ public class EmailService {
     @Value("${app.mail.from:noreply@unihub.edu.vn}")
     private String fromAddress;
 
+    @Value("${app.mail.admin:noreply@unihub.edu.vn}")
+    private String adminAddress;
+
     public boolean isEmailSendingAvailable() {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         return mailEnabled && mailSender != null && StringUtils.hasText(fromAddress);
@@ -113,6 +116,34 @@ public class EmailService {
     }
 
     @Async("notificationTaskExecutor")
+    @Transactional(readOnly = true)
+    public void sendWorkshopUpdated(UUID registrationId, String changeSummary) {
+        Registration registration = registrationRepository.findById(registrationId)
+                .orElse(null);
+        if (registration == null) {
+            log.warn("Skip workshop update email because registration {} is missing", registrationId);
+            return;
+        }
+
+        String dedupKey = "email:workshop-updated:" + registrationId + ":" + Integer.toHexString(changeSummary.hashCode());
+        if (!claimEmailSend(dedupKey)) {
+            log.info("Skip duplicate workshop update email for registration {}", registrationId);
+            return;
+        }
+
+        boolean sent = sendWithRetry(
+                registration.getUser().getEmail(),
+                "[UniHub] Workshop cap nhat - " + registration.getWorkshop().getTitle(),
+                helper -> helper.setText(buildWorkshopUpdatedHtml(registration, changeSummary), true),
+                "workshop update"
+        );
+
+        if (!sent) {
+            releaseEmailSend(dedupKey);
+        }
+    }
+
+    @Async("notificationTaskExecutor")
     public void sendRegistrationOtp(String email, String fullName, String otpCode, int expiresInMinutes) {
         boolean sent = sendWithRetry(
                 email,
@@ -127,6 +158,16 @@ public class EmailService {
                     "Không thể gửi mã OTP qua email lúc này."
             );
         }
+    }
+
+    @Async("notificationTaskExecutor")
+    public void sendAdminCsvImportAlert(String subject, String summaryHtml) {
+        sendWithRetry(
+                adminAddress,
+                subject,
+                helper -> helper.setText(summaryHtml, true),
+                "csv import admin alert"
+        );
     }
 
     private boolean sendWithRetry(
@@ -231,6 +272,31 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(recipientName, safeOtp, expiresInMinutes);
+    }
+
+    private String buildWorkshopUpdatedHtml(Registration registration, String changeSummary) {
+        String studentName = escape(registration.getUser().getFullName());
+        String workshopTitle = escape(registration.getWorkshop().getTitle());
+        String startTime = escape(EVENT_TIME_FORMATTER.format(registration.getWorkshop().getStartTime()));
+        String room = escape(registration.getWorkshop().getRoom());
+        String summary = escape(changeSummary);
+
+        return """
+                <!doctype html>
+                <html lang="vi">
+                <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
+                  <h2 style="margin:0 0 12px">Workshop da duoc cap nhat</h2>
+                  <p>Xin chao %s,</p>
+                  <p>Workshop <strong>%s</strong> vua co thay doi quan trong.</p>
+                  <p><strong>Noi dung cap nhat:</strong> %s</p>
+                  <ul>
+                    <li>Thoi gian hien tai: %s</li>
+                    <li>Phong hien tai: %s</li>
+                  </ul>
+                  <p>Vui long kiem tra lai lich tham du cua ban tren UniHub.</p>
+                </body>
+                </html>
+                """.formatted(studentName, workshopTitle, summary, startTime, room);
     }
 
     private boolean claimEmailSend(String key) {

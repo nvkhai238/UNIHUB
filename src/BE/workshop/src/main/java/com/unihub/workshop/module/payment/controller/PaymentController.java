@@ -1,9 +1,11 @@
 package com.unihub.workshop.module.payment.controller;
 
 import com.unihub.workshop.common.response.ApiResponse;
+import com.unihub.workshop.module.payment.dto.CircuitBreakerStatusResponse;
 import com.unihub.workshop.module.payment.dto.PaymentStatusResponse;
 import com.unihub.workshop.module.payment.dto.PaymentStatsResponse;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
+import com.unihub.workshop.module.payment.service.CircuitBreakerStatusService;
 import com.unihub.workshop.module.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -19,6 +21,7 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final CircuitBreakerStatusService circuitBreakerStatusService;
 
     @GetMapping("/api/registrations/{registrationId}/payment-status")
     @PreAuthorize("hasRole('STUDENT')")
@@ -46,6 +49,14 @@ public class PaymentController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 paymentService.getPaymentStats(workshopId, status, from, to)
+        ));
+    }
+
+    @GetMapping("/api/admin/payments/circuit-breaker-status")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<CircuitBreakerStatusResponse>> getCircuitBreakerStatus() {
+        return ResponseEntity.ok(ApiResponse.success(
+                circuitBreakerStatusService.getPaymentCircuitBreakerStatus()
         ));
     }
 }

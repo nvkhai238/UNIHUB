@@ -26,9 +26,9 @@ thống phân quyền (RBAC), API báo cáo/thống kê.
 ## THÀNH VIÊN 3
 Vận hành & Đồng bộ
 (Operations)
-React: Web check-in tích hợp PWA (Offline mode),
-quét mã QR qua camera, lưu trữ LocalStorage/
-IndexedDB.
+Mobile: App check-in native cho CHECKIN_STAFF,
+quét mã QR qua camera, lưu trữ offline cục bộ
+và đồng bộ lại khi có mạng.
 Java: Spring Batch xử lý file CSV sinh viên, API ghi
 nhận tham dự, hệ thống gửi Email thông báo.
 ## •
@@ -40,7 +40,7 @@ nhận tham dự, hệ thống gửi Email thông báo.
 
 ## II. ĐỊNH HƯỚNG KIẾN TRÚC PHẦN MỀM
 - Công nghệ sử dụng
-Frontend: React + Vite. Sử dụng Service Workers để hỗ trợ Offline Check-in.
+Frontend: React + Vite cho student/admin web. Check-in dùng mobile app native riêng.
 Backend: Java Spring Boot (v3.x). Sử dụng Spring Security và Resilience4j
 (cho Circuit Breaker/Rate Limiter).
 Database: Supabase (PostgreSQL). Tận dụng tính năng Real-time cho số chỗ
@@ -50,8 +50,8 @@ Tính nhất quán: Sử dụng Database Locking (Pessimistic/Optimistic) để 
 không bị quá tải số lượng chỗ ngồi.
 Tính sẵn sàng: Circuit Breaker ngăn lỗi từ cổng thanh toán làm sập cả hệ thống
 xem lịch workshop.
-Offline-first: Luồng check-in ưu tiên lưu local và đồng bộ nền (Background Sync)
-khi có mạng.
+Offline-first: Luồng check-in ưu tiên lưu local trên mobile và đồng bộ lại
+khi có mạng hoặc khi app foreground.
 ## III. ĐIỀU KIỆN TIÊN QUYẾT (LÀM CHUNG)
 Để đảm bảo 3 thành viên có thể làm việc song song hiệu quả, nhóm cần hoàn tất các mục
 sau trong tuần đầu tiên:
@@ -59,8 +59,8 @@ Database Schema chung: Thiết kế bảng Users, Workshops, Registrations trên
 Supabase và export file SQL cho cả nhóm.
 Auth & API Standard: Cài đặt xong Supabase Auth + Spring Security JWT. Thống
 nhất Format JSON trả về (Ví dụ: {status, code, data, message}).
-Cấu hình PWA: Thiết lập khung Service Worker ban đầu trên React để hỗ trợ cache
-dữ liệu cơ bản.
+Chuẩn bị app mobile check-in: chốt contract API preload/sync, auth, camera,
+local storage và quy trình test trên emulator/thiet bi that.
 Đồ án UniHub Workshop | Tài liệu lưu hành nội bộ nhóm | 2026
 ## •
 ## •

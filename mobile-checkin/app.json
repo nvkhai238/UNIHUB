@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "UniHub Check-in",
+    "slug": "unihub-checkin-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "android": {
+      "package": "com.unihub.checkinmobile",
+      "permissions": [
+        "CAMERA",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.unihub.checkinmobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ung dung can camera de quet QR check-in workshop."
+      }
+    },
+    "extra": {
+      "apiBaseUrl": "http://192.168.1.23:8080"
+    }
+  }
+}
