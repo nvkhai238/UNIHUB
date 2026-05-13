@@ -38,12 +38,8 @@ export function useWorkshopRealtime({ workshopId, onWorkshopUpdate, onListUpdate
 
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setRealtimeAvailable(false);
-          if (reconnectTimerRef.current) {
-            clearTimeout(reconnectTimerRef.current);
-          }
-          reconnectTimerRef.current = setTimeout(() => {
-            channel.subscribe();
-          }, 2000);
+          // Không gọi lại channel.subscribe() ở đây vì Supabase Realtime 
+          // tự động quản lý việc reconnect. Gọi lại sẽ gây lỗi "tried to join multiple times".
         }
       });
 
