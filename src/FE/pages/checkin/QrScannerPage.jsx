@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import api from '../../api/api';
 import QrCameraScanner from '../../components/QrCameraScanner';
 
@@ -6,6 +6,48 @@ export default function QrScannerPage() {
   const [qrCode, setQrCode] = useState('');
   const [result, setResult] = useState(null);
   const [useCamera, setUseCamera] = useState(true);
+  const [offlineQueue, setOfflineQueue] = useState([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Load existing queue from localStorage
+    const savedQueue = JSON.parse(localStorage.getItem('unihub_checkin_offline_queue') || '[]');
+    setOfflineQueue(savedQueue);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Background sync when coming back online
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      console.log('Online detected, starting background sync...');
+      syncQueue();
+    }
+  }, [isOnline, offlineQueue.length]);
+
+  const syncQueue = async () => {
+    if (offlineQueue.length === 0) return;
+    
+    try {
+      const { data } = await api.post('/api/checkins/sync', offlineQueue);
+      console.log('Sync successful:', data);
+      setOfflineQueue([]);
+      localStorage.setItem('unihub_checkin_offline_queue', '[]');
+      if (data.data?.items?.length > 0) {
+         setResult({ status: 'CREATED', message: `Đã đồng bộ thành công ${data.data.items.length} lượt check-in từ bộ nhớ tạm.` });
+      }
+    } catch (err) {
+      console.error('Sync failed:', err);
+    }
+  };
 
   const processQrString = async (qrString) => {
     if (!qrString.trim()) return;
@@ -48,6 +90,26 @@ export default function QrScannerPage() {
     }
 
     try {
+      if (!isOnline) {
+        // Offline: Add to queue
+        const offlineItem = {
+          qrCode: finalQr,
+          timestamp: new Date().toISOString(),
+          deviceId: getDeviceId(),
+          offline: true,
+        };
+        const newQueue = [...offlineQueue, offlineItem];
+        setOfflineQueue(newQueue);
+        localStorage.setItem('unihub_checkin_offline_queue', JSON.stringify(newQueue));
+        
+        setResult({ 
+          status: 'OFFLINE_SAVED', 
+          message: 'Đang mất mạng. Đã lưu vào bộ nhớ tạm, sẽ đồng bộ khi có kết nối trở lại.',
+          payload: qrPayload 
+        });
+        return;
+      }
+
       const { data } = await api.post('/api/checkins/sync', [{
         qrCode: finalQr,
         timestamp: new Date().toISOString(),
@@ -60,7 +122,13 @@ export default function QrScannerPage() {
         setResult(null);
       }
     } catch (err) {
-      setResult({ status: 'ERROR', message: 'Lỗi kết nối máy chủ.' });
+      if (!navigator.onLine) {
+        // Double check if connection dropped during request
+        setIsOnline(false);
+        processQrString(qrString); // retry with offline logic
+      } else {
+        setResult({ status: 'ERROR', message: 'Lỗi kết nối máy chủ hoặc mã không hợp lệ.' });
+      }
     }
   };
 
@@ -90,6 +158,23 @@ export default function QrScannerPage() {
           {useCamera ? 'Nhập thủ công' : 'Bật Camera'}
         </button>
       </div>
+
+      {offlineQueue.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm flex items-center justify-between">
+          <div className="text-sm text-amber-800">
+            <span className="font-bold">⚠️ Đang có {offlineQueue.length} lượt check-in chờ đồng bộ.</span>
+            {!isOnline && <p className="mt-1 opacity-75">Sẽ tự động đồng bộ khi có mạng.</p>}
+          </div>
+          {isOnline && (
+            <button 
+              onClick={syncQueue}
+              className="rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-700"
+            >
+              Đồng bộ ngay
+            </button>
+          )}
+        </div>
+      )}
 
       {useCamera ? (
         <div className="mb-6">
@@ -161,6 +246,7 @@ function checkinStatusLabel(status) {
     CONFLICT: 'Xung đột',
     INVALID_QR: 'QR không hợp lệ',
     NOT_CONFIRMED: 'Đăng ký chưa được xác nhận',
+    OFFLINE_SAVED: 'Đã lưu (Offline)',
     ERROR: 'Lỗi',
   };
   return labels[status] ?? status;
@@ -173,6 +259,7 @@ function checkinMessage(result) {
     CONFLICT: 'QR đã được check-in trên thiết bị khác',
     INVALID_QR: 'QR không khớp với đăng ký nào',
     NOT_CONFIRMED: 'Đăng ký chưa được xác nhận',
+    OFFLINE_SAVED: 'Đã lưu vào hàng chờ cục bộ do mất mạng.',
     ERROR: result.message,
   };
   return messages[result.status] ?? result.message;

@@ -58,6 +58,8 @@ app:
   payment:
     pending-timeout-minutes: ${PAYMENT_PENDING_TIMEOUT_MINUTES:15}
     pending-timeout-scan-ms: ${PAYMENT_PENDING_TIMEOUT_SCAN_MS:60000}
+    demo-mode: ${PAYMENT_DEMO_MODE:false}
+    demo-latency-ms: ${PAYMENT_DEMO_LATENCY_MS:2000}
 
 resilience4j:
   ratelimiter:

@@ -24,6 +24,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Random;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +39,14 @@ public class PaymentProcessorService {
     private final WorkshopRepository workshopRepository;
     private final NotificationService notificationService;
 
+    @Value("${app.payment.demo-mode:false}")
+    private boolean demoMode;
+
+    @Value("${app.payment.demo-latency-ms:2000}")
+    private long demoLatencyMs;
+
+    private final Random random = new Random();
+
     @Async("notificationTaskExecutor")
     @Transactional
     public void processPendingPayment(UUID paymentId) {
@@ -45,6 +55,15 @@ public class PaymentProcessorService {
         if (payment == null) {
             log.warn("Skip payment processing because payment {} is missing", paymentId);
             return;
+        }
+
+        if (demoMode) {
+            log.info("[DEMO] Simulating payment processing latency: {}ms", demoLatencyMs);
+            try {
+                Thread.sleep(demoLatencyMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         Registration registration = payment.getRegistration();
@@ -84,6 +103,15 @@ public class PaymentProcessorService {
         if (payment.getStatus() == PaymentStatus.SUCCESS || registration.getStatus() == RegistrationStatus.CONFIRMED) {
             log.info("Payment {} is already confirmed", paymentCode);
             return;
+        }
+
+        if (demoMode) {
+            log.info("[DEMO] Webhook received. Processing with demo latency...");
+            try {
+                Thread.sleep(demoLatencyMs / 2); // webhook is usually faster but still adds dramatic effect
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         if (transferAmount.compareTo(payment.getAmount()) >= 0) {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { supabase } from '../../lib/supabaseClient';
+
 
 export default function PaymentStatusPage() {
   const { registrationId } = useParams();
@@ -19,12 +21,30 @@ export default function PaymentStatusPage() {
 
   useEffect(() => {
     loadData();
-    let pollInterval;
-    if (payment?.paymentStatus === 'PENDING') {
-      pollInterval = setInterval(loadData, 3000);
-    }
-    return () => clearInterval(pollInterval);
-  }, [registrationId, payment?.paymentStatus]);
+    
+    // Subscribe to registration changes for real-time updates
+    const channel = supabase
+      .channel(`registration-${registrationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'registrations',
+          filter: `id=eq.${registrationId}`,
+        },
+        (payload) => {
+          console.log('Real-time registration update:', payload);
+          // When registration updates (confirmed or cancelled), reload data
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [registrationId]);
 
   // Countdown timer
   useEffect(() => {

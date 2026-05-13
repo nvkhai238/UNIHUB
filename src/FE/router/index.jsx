@@ -35,6 +35,7 @@ import WorkshopEditPage from '../pages/organizer/WorkshopEditPage';
 import StatisticsPage from '../pages/organizer/StatisticsPage';
 import StudentImportPage from '../pages/organizer/StudentImportPage';
 import AdminWorkshopRegistrationsPage from '../pages/organizer/AdminWorkshopRegistrationsPage';
+import PaymentSimulatorPage from '../pages/organizer/PaymentSimulatorPage';
 
 // ─── Check-in Staff Pages ─────────────────────────────────────────────────────
 import CheckinDashboard from '../pages/checkin/CheckinDashboard';
@@ -167,6 +168,10 @@ const router = createBrowserRouter([
       {
         path: '/admin/student-imports',
         element: <StudentImportPage />,
+      },
+      {
+        path: '/admin/payment-simulator',
+        element: <PaymentSimulatorPage />,
       },
     ],
   },

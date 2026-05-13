@@ -37,6 +37,9 @@ public class CsvImportScheduler {
     private final EmailService emailService;
     private final UserRepository userRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${app.csv.data-dir:/data}")
+    private String dataDir;
+
     private static final List<String> ACCEPTED_HEADERS = List.of(
             "student_id,full_name,email",
             "studentId,fullName,email"
@@ -47,7 +50,7 @@ public class CsvImportScheduler {
     @Scheduled(cron = "0 0 2 * * *")
     public StudentImportBatch runImportJob() {
         String fileName = "students_" + LocalDate.now() + ".csv";
-        String filePath = "/data/" + fileName;
+        String filePath = dataDir + "/" + fileName;
 
         StudentImportBatch batch = StudentImportBatch.builder()
                 .fileName(fileName)
@@ -155,9 +158,9 @@ public class CsvImportScheduler {
                 sanitizedLines.add(studentId + "," + fullName + "," + email);
             }
 
-            Path tempDir = Path.of("/data/.tmp");
-            Files.createDirectories(tempDir);
-            Path sanitizedFile = Files.createTempFile(tempDir, "students_import_", ".csv");
+            Path tempDirPath = Path.of(dataDir, ".tmp");
+            Files.createDirectories(tempDirPath);
+            Path sanitizedFile = Files.createTempFile(tempDirPath, "students_import_", ".csv");
             Files.write(sanitizedFile, sanitizedLines, StandardCharsets.UTF_8);
 
             return new PreprocessResult(
