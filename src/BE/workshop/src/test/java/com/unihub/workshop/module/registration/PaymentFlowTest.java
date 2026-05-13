@@ -3,12 +3,14 @@ package com.unihub.workshop.module.registration;
 import com.unihub.workshop.AbstractIntegrationTest;
 import com.unihub.workshop.module.payment.dto.SepayWebhookRequest;
 import com.unihub.workshop.module.payment.entity.Payment;
+import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.user.entity.User;
+import com.unihub.workshop.module.user.entity.UserRole;
 import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
@@ -77,7 +79,7 @@ public class PaymentFlowTest extends AbstractIntegrationTest {
                 .email(email)
                 .password(passwordEncoder.encode("password"))
                 .fullName("Student " + email)
-                .role(com.unihub.workshop.module.user.entity.Role.STUDENT)
+                .role(UserRole.STUDENT)
                 .build();
         userRepository.save(student);
 
@@ -127,7 +129,7 @@ public class PaymentFlowTest extends AbstractIntegrationTest {
 
         // 3. Simulate SePay Webhook success for Student 1
         SepayWebhookRequest webhook = new SepayWebhookRequest();
-        webhook.setTransferContent(paymentCode);
+        webhook.setContent(paymentCode);
         webhook.setTransferAmount(new BigDecimal("50000"));
         webhook.setGateway("VietQR");
         

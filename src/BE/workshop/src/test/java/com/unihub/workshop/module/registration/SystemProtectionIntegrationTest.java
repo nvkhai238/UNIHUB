@@ -4,6 +4,7 @@ import com.unihub.workshop.AbstractIntegrationTest;
 import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.user.entity.User;
+import com.unihub.workshop.module.user.entity.UserRole;
 import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
@@ -63,7 +64,7 @@ public class SystemProtectionIntegrationTest extends AbstractIntegrationTest {
                 .email("student@test.edu.vn")
                 .password(passwordEncoder.encode("password"))
                 .fullName("Student")
-                .role(com.unihub.workshop.module.user.entity.Role.STUDENT)
+                .role(UserRole.STUDENT)
                 .build();
         userRepository.save(student);
 

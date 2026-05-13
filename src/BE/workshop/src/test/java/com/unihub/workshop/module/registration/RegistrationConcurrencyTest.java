@@ -6,6 +6,7 @@ import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.user.repository.UserRepository;
+import com.unihub.workshop.module.user.entity.UserRole;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
 import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
@@ -20,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -58,7 +60,7 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
         workshop = Workshop.builder()
                 .title("Concurrency Workshop")
                 .description("Test")
-                .speaker("Speaker")
+                .speakerName("Speaker")
                 .room("Room 101")
                 .startTime(ZonedDateTime.now().plusDays(1))
                 .endTime(ZonedDateTime.now().plusDays(1).plusHours(2))
@@ -76,7 +78,7 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
                     .email(email)
                     .password(passwordEncoder.encode("password"))
                     .fullName("Student " + i)
-                    .role(com.unihub.workshop.module.user.entity.Role.STUDENT)
+                    .role(UserRole.STUDENT)
                     .build();
             userRepository.save(student);
 
@@ -127,15 +129,5 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
         assertThat(waitlistedCount).isEqualTo(studentTokens.size() - 1);
         
         executor.shutdown();
-    }
-    
-    // Helper to avoid raw Map types in tests
-    private static class Map extends java.util.HashMap<String, Object> {
-        public static Map of(String k1, Object v1, String k2, Object v2) {
-            Map m = new Map();
-            m.put(k1, v1);
-            m.put(k2, v2);
-            return m;
-        }
     }
 }

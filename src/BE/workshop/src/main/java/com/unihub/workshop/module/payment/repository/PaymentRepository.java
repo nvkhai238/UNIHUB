@@ -15,6 +15,7 @@ import java.util.UUID;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findTopByRegistrationOrderByCreatedAtDesc(Registration registration);
+    List<Payment> findByRegistration(Registration registration);
     Optional<Payment> findByGatewayRef(String gatewayRef);
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, ZonedDateTime cutoff);
 

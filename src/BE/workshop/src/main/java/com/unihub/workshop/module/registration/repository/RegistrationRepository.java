@@ -16,6 +16,8 @@ import java.util.UUID;
 
 public interface RegistrationRepository extends JpaRepository<Registration, UUID> {
     boolean existsByUserAndWorkshopAndStatusNot(User user, Workshop workshop, RegistrationStatus status);
+    
+    long countByWorkshopAndStatus(Workshop workshop, RegistrationStatus status);
     Optional<Registration> findByUserAndWorkshop(User user, Workshop workshop);
     boolean existsByQrCode(String qrCode);
     Page<Registration> findByUserOrderByRegisteredAtDesc(User user, Pageable pageable);
