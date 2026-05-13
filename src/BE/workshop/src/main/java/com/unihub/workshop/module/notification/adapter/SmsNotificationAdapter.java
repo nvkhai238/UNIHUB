@@ -52,15 +52,18 @@ public class SmsNotificationAdapter implements NotificationAdapter {
 
         try {
             String userPhone = PhoneNumberUtils.normalizeToE164(rawUserPhone);
-            Message message = Message.creator(
-                new PhoneNumber(userPhone),
-                new PhoneNumber(fromNumber),
-                notification.getTitle() + ": " + notification.getBody()
-            ).create();
+            String smsContent = notification.getTitle() + ": " + notification.getBody();
 
-            log.info("SMS sent successfully to {}. SID: {}", userPhone, message.getSid());
+            // CHẾ ĐỘ MÔ PHỎNG (SIMULATION MODE)
+            log.info("================================================================");
+            log.info("SIMULATED SMS SENT SUCCESSFULLY");
+            log.info("To: {}", userPhone);
+            log.info("From: {}", fromNumber);
+            log.info("Content: {}", smsContent);
+            log.info("================================================================");
+
         } catch (Exception e) {
-            log.error("Failed to send SMS to {}: {}", rawUserPhone, e.getMessage());
+            log.error("Failed to simulate SMS to {}: {}", rawUserPhone, e.getMessage());
         }
     }
 }
