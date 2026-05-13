@@ -14,6 +14,7 @@ import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
+import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
 import com.unihub.workshop.module.notification.entity.Notification;
@@ -232,6 +233,7 @@ public class WorkshopService {
                 .toList();
 
         long totalWorkshops = filteredWorkshops.size();
+        List<Payment> payments = paymentRepository.findAll();
 
         List<WorkshopStatisticsResponse.WorkshopRegistrationStat> breakdown = filteredWorkshops.stream()
                 .map(workshop -> {
@@ -242,10 +244,7 @@ public class WorkshopService {
                     long cancelled = countByStatus(registrations, RegistrationStatus.CANCELLED);
                     long checkins = checkinRepository.countByRegistration_Workshop(workshop);
                     double checkinRate = confirmed == 0 ? 0 : (double) checkins / confirmed;
-                    BigDecimal revenue = paymentRepository.sumAmountByStatusAndWorkshopId(
-                            PaymentStatus.SUCCESS,
-                            workshop.getId()
-                    );
+                    BigDecimal revenue = sumSuccessfulPayments(payments, workshop);
 
                     return new WorkshopStatisticsResponse.WorkshopRegistrationStat(
                             workshop.getId(),
@@ -271,7 +270,7 @@ public class WorkshopService {
                 .mapToLong(WorkshopStatisticsResponse.WorkshopRegistrationStat::getCheckinCount)
                 .sum();
         long successfulPayments = filteredWorkshops.stream()
-                .mapToLong(workshop -> paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, workshop.getId(), from, to))
+                .mapToLong(workshop -> countSuccessfulPayments(payments, workshop))
                 .sum();
         BigDecimal totalRevenue = breakdown.stream()
                 .map(WorkshopStatisticsResponse.WorkshopRegistrationStat::getRevenue)
@@ -308,6 +307,28 @@ public class WorkshopService {
         return registrations.stream()
                 .filter(registration -> registration.getStatus() == status)
                 .count();
+    }
+
+    private long countSuccessfulPayments(List<Payment> payments, Workshop workshop) {
+        return payments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                .filter(payment -> belongsToWorkshop(payment, workshop))
+                .count();
+    }
+
+    private BigDecimal sumSuccessfulPayments(List<Payment> payments, Workshop workshop) {
+        return payments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                .filter(payment -> belongsToWorkshop(payment, workshop))
+                .map(Payment::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private boolean belongsToWorkshop(Payment payment, Workshop workshop) {
+        Registration registration = payment.getRegistration();
+        Workshop paymentWorkshop = registration != null ? registration.getWorkshop() : null;
+        return paymentWorkshop != null && paymentWorkshop.getId().equals(workshop.getId());
     }
 
     private void scheduleWorkshopCancellationEmails(List<UUID> registrationIds) {

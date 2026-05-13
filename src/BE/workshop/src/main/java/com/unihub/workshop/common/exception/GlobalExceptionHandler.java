@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +59,18 @@ public class GlobalExceptionHandler {
                         .code("VALIDATION_FAILED")
                         .message("Request validation failed")
                         .data(errors)
-                        .build());
+                    .build());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        return ResponseEntity
+                .status(ErrorCode.INVALID_FILE.getHttpStatus())
+                .body(ApiResponse.error(
+                        ErrorCode.INVALID_FILE.getStatus(),
+                        ErrorCode.INVALID_FILE.getCode(),
+                        "PDF file must be 10MB or smaller"
+                ));
     }
 
     @ExceptionHandler(RequestNotPermitted.class)

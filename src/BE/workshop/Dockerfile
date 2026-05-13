@@ -11,7 +11,7 @@ RUN chmod +x ./mvnw || true
 COPY src ./src
 
 # Build
-RUN mvn clean package -DskipTests
+RUN mvn clean package -Dmaven.test.skip=true
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app

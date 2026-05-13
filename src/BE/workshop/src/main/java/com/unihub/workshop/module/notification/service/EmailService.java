@@ -143,7 +143,6 @@ public class EmailService {
         }
     }
 
-    @Async("notificationTaskExecutor")
     public void sendRegistrationOtp(String email, String fullName, String otpCode, int expiresInMinutes) {
         boolean sent = sendWithRetry(
                 email,

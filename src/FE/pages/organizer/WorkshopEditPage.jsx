@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/api';
+
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 export default function WorkshopEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const pdfInputRef = useRef(null);
   const [form, setForm] = useState(null);
   const [workshopStatus, setWorkshopStatus] = useState('');
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadTone, setUploadTone] = useState('info');
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [aiSummary, setAiSummary] = useState('');
   const [aiSummaryStatus, setAiSummaryStatus] = useState('NONE');
@@ -24,6 +28,25 @@ export default function WorkshopEditPage() {
       })
       .catch(() => setError('Không tải được workshop.'));
   }, [id]);
+
+  useEffect(() => {
+    let interval;
+    if (aiSummaryStatus === 'PROCESSING') {
+      interval = setInterval(() => {
+        api.get(`/api/workshops/${id}/ai-summary/status`)
+          .then(({ data }) => {
+            const newStatus = data.data?.aiSummaryStatus ?? 'NONE';
+            if (newStatus !== 'PROCESSING') {
+              setAiSummaryStatus(newStatus);
+              setAiSummary(data.data?.aiSummary ?? '');
+              clearInterval(interval);
+            }
+          })
+          .catch(console.error);
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [id, aiSummaryStatus]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -51,6 +74,21 @@ export default function WorkshopEditPage() {
 
   const uploadPdf = async (file) => {
     if (!file) return;
+
+    if (!isPdfFile(file)) {
+      setUploadTone('error');
+      setUploadMessage('Chỉ được tải file PDF.');
+      resetPdfInput();
+      return;
+    }
+
+    if (file.size > MAX_PDF_BYTES) {
+      setUploadTone('error');
+      setUploadMessage(`PDF tối đa 10MB. File hiện tại khoảng ${formatFileSize(file.size)}.`);
+      resetPdfInput();
+      return;
+    }
+
     setUploadingPdf(true);
     setUploadMessage('');
     try {
@@ -59,14 +97,19 @@ export default function WorkshopEditPage() {
       const { data } = await api.post(`/api/workshops/${id}/pdf`, payload, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      const pdfUrl = data.data?.pdfUrl ?? data.data;
+      const status = data.data?.aiSummaryStatus ?? 'PROCESSING';
+      setUploadTone('success');
       setUploadMessage('PDF đã tải lên, tóm tắt AI đang được xử lý nền.');
-      setForm((prev) => ({ ...prev, pdfUrl: data.data ?? prev.pdfUrl }));
+      setForm((prev) => ({ ...prev, pdfUrl: pdfUrl ?? prev.pdfUrl }));
       setAiSummary('');
-      setAiSummaryStatus('PROCESSING');
-    } catch {
-      setUploadMessage('Không tải được PDF. Vui lòng thử lại.');
+      setAiSummaryStatus(status);
+    } catch (err) {
+      setUploadTone('error');
+      setUploadMessage(err?.response?.data?.message || 'Không tải được PDF. Vui lòng thử lại.');
     } finally {
       setUploadingPdf(false);
+      resetPdfInput();
     }
   };
 
@@ -80,11 +123,12 @@ export default function WorkshopEditPage() {
     setUploadMessage('');
     try {
       await api.post(`/api/workshops/${id}/ai-summary/retry`);
-      setAiSummary('');
       setAiSummaryStatus('PROCESSING');
+      setUploadTone('info');
       setUploadMessage('Đã đưa yêu cầu tạo lại tóm tắt AI vào hàng xử lý.');
-    } catch {
-      setUploadMessage('Không thể tạo lại tóm tắt AI lúc này.');
+    } catch (err) {
+      setUploadTone('error');
+      setUploadMessage(err?.response?.data?.message || 'Không thể tạo lại tóm tắt AI lúc này.');
     }
   };
 
@@ -115,7 +159,7 @@ export default function WorkshopEditPage() {
         )}
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {uploadMessage && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">{uploadMessage}</div>}
+      {uploadMessage && <div className={`mb-4 rounded-lg border p-4 text-sm ${uploadNoticeClass(uploadTone)}`}>{uploadMessage}</div>}
       {actionMsg && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{actionMsg}</div>}
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -157,9 +201,10 @@ export default function WorkshopEditPage() {
         <label className="text-sm font-semibold text-gray-700">
           Tải PDF tài liệu
           <input
+            ref={pdfInputRef}
             type="file"
             accept="application/pdf"
-            disabled={uploadingPdf}
+            disabled={uploadingPdf || workshopStatus === 'CANCELLED'}
             onChange={(e) => uploadPdf(e.target.files?.[0])}
             className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-semibold"
           />
@@ -170,6 +215,7 @@ export default function WorkshopEditPage() {
           <p className={`mt-1 text-sm font-semibold ${
             aiSummaryStatus === 'PROCESSING' ? 'text-blue-600' :
             aiSummaryStatus === 'FAILED' ? 'text-red-600' :
+            aiSummaryStatus === 'DONE' ? 'text-green-600' :
             'text-gray-950'
           }`}>
             {aiSummaryStatusLabel(aiSummaryStatus)}
@@ -219,6 +265,12 @@ export default function WorkshopEditPage() {
       </form>
     </section>
   );
+
+  function resetPdfInput() {
+    if (pdfInputRef.current) {
+      pdfInputRef.current.value = '';
+    }
+  }
 }
 
 function Field({ label, value, onChange, type = 'text', required = false }) {
@@ -296,8 +348,25 @@ function aiSummaryStatusLabel(status) {
   const labels = {
     NONE: 'Chưa có (tải PDF để tạo)',
     PROCESSING: 'Đang xử lý',
-    COMPLETED: 'Hoàn tất',
+    DONE: 'Hoàn tất',
     FAILED: 'Thất bại',
   };
   return labels[status] ?? status;
+}
+
+function isPdfFile(file) {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+function formatFileSize(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function uploadNoticeClass(tone) {
+  const classes = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    error: 'border-red-200 bg-red-50 text-red-700',
+    info: 'border-blue-200 bg-blue-50 text-blue-800',
+  };
+  return classes[tone] ?? classes.info;
 }

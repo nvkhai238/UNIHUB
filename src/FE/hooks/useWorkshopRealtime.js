@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabaseClient';
 
 export function useWorkshopRealtime({ workshopId, onWorkshopUpdate, onListUpdate }) {
   const [realtimeAvailable, setRealtimeAvailable] = useState(false);
-  const reconnectTimerRef = useRef(null);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -33,10 +32,7 @@ export function useWorkshopRealtime({ workshopId, onWorkshopUpdate, onListUpdate
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setRealtimeAvailable(true);
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        } else {
           setRealtimeAvailable(false);
           // Không gọi lại channel.subscribe() ở đây vì Supabase Realtime 
           // tự động quản lý việc reconnect. Gọi lại sẽ gây lỗi "tried to join multiple times".
@@ -44,9 +40,6 @@ export function useWorkshopRealtime({ workshopId, onWorkshopUpdate, onListUpdate
       });
 
     return () => {
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
       supabase.removeChannel(channel);
     };
   }, [workshopId, onListUpdate, onWorkshopUpdate]);

@@ -7,6 +7,6 @@ import lombok.Data;
 @Data
 public class UpdatePhoneRequest {
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^(0[3|5|7|8|9])+([0-9]{8})$", message = "Số điện thoại không hợp lệ")
+    @Pattern(regexp = "^(\\+[1-9]\\d{7,14}|0\\d{9,10}|84\\d{8,13})$", message = "Số điện thoại không hợp lệ")
     private String phone;
 }

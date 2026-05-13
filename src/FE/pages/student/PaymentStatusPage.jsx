@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import { supabase } from '../../lib/supabaseClient';
@@ -16,6 +16,7 @@ export default function PaymentStatusPage() {
   const [message, setMessage] = useState('');
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [countdown, setCountdown] = useState(null); // seconds remaining
+  const previousPaymentStatusRef = useRef(null);
 
   const PAYMENT_TIMEOUT_MINUTES = 15;
 
@@ -46,6 +47,35 @@ export default function PaymentStatusPage() {
     };
   }, [registrationId]);
 
+  useEffect(() => {
+    if (payment?.paymentStatus !== 'PENDING') {
+      return undefined;
+    }
+
+    const poller = setInterval(() => {
+      loadData({ silent: true });
+    }, 3000);
+
+    return () => clearInterval(poller);
+  }, [payment?.paymentStatus, registrationId]);
+
+  useEffect(() => {
+    if (!payment?.paymentStatus) {
+      return;
+    }
+
+    const previousStatus = previousPaymentStatusRef.current;
+    previousPaymentStatusRef.current = payment.paymentStatus;
+
+    if (payment.paymentStatus === 'SUCCESS' && previousStatus && previousStatus !== 'SUCCESS') {
+      setMessage('Thanh toán thành công. Đang chuyển sang mã QR check-in...');
+      const timer = setTimeout(() => {
+        navigate(`/student/registrations/${registrationId}/qr`, { replace: true });
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [payment?.paymentStatus, registrationId, navigate]);
+
   // Countdown timer
   useEffect(() => {
     if (!payment || payment.paymentStatus !== 'PENDING' || !payment.createdAt) {
@@ -67,8 +97,10 @@ export default function PaymentStatusPage() {
     return () => clearInterval(timer);
   }, [payment?.createdAt, payment?.paymentStatus]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError('');
     try {
       const [regRes, payRes, infoRes] = await Promise.all([
@@ -83,7 +115,9 @@ export default function PaymentStatusPage() {
       const msg = err?.response?.data?.message || err?.message || 'Không tải được dữ liệu.';
       setError(msg);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 

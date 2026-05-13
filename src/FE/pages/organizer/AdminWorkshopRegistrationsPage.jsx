@@ -100,7 +100,10 @@ export default function AdminWorkshopRegistrationsPage() {
                 ) : (
                   registrations.map(reg => (
                     <tr key={reg.id} className="hover:bg-gray-50/50">
-                      <td className="px-5 py-4 font-medium text-gray-900">{reg.studentId || 'N/A'}</td>
+                      <td className="px-5 py-4 font-medium text-gray-900">
+                        {reg.studentName || 'Chưa cập nhật'}
+                        {reg.studentCode && <div className="text-sm font-normal text-gray-500">{reg.studentCode}</div>}
+                      </td>
                       <td className="px-5 py-4">
                         <StatusBadge status={reg.status} />
                       </td>

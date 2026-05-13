@@ -20,11 +20,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 @Component
 @EnableScheduling
@@ -46,11 +52,24 @@ public class CsvImportScheduler {
     );
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@(.+)$");
     private static final Pattern STUDENT_ID_PATTERN = Pattern.compile("^[0-9]{8}$");
+    private static final Pattern STUDENT_FILE_PATTERN = Pattern.compile("students_\\d{4}-\\d{2}-\\d{2}\\.csv");
+    private static final String IMPORT_TIME_ZONE = "Asia/Ho_Chi_Minh";
+    private static final ZoneId IMPORT_ZONE_ID = ZoneId.of(IMPORT_TIME_ZONE);
+    private final ReentrantLock importLock = new ReentrantLock();
 
-    @Scheduled(cron = "0 0 2 * * *")
+    @Scheduled(cron = "0 0 2 * * *", zone = IMPORT_TIME_ZONE)
     public StudentImportBatch runImportJob() {
-        String fileName = "students_" + LocalDate.now() + ".csv";
-        String filePath = dataDir + "/" + fileName;
+        return runImport(false);
+    }
+
+    public StudentImportBatch runManualImportJob() {
+        return runImport(true);
+    }
+
+    private StudentImportBatch runImport(boolean allowLatestFileFallback) {
+        CsvFileSelection fileSelection = selectCsvFile(allowLatestFileFallback);
+        String fileName = fileSelection.fileName();
+        String filePath = fileSelection.filePath();
 
         StudentImportBatch batch = StudentImportBatch.builder()
                 .fileName(fileName)
@@ -58,51 +77,75 @@ public class CsvImportScheduler {
                 .build();
         batch = batchRepository.save(batch);
 
-        PreprocessResult preprocessResult = preprocessCsvFile(filePath);
-        if (preprocessResult.validationError() != null) {
+        if (!importLock.tryLock()) {
             batch.setStatus("SKIPPED");
-            batch.setErrorLog(preprocessResult.validationError());
+            batch.setTotalRows(0);
+            batch.setSuccessRows(0);
+            batch.setErrorRows(0);
+            batch.setErrorLog("CSV import is already running.");
             batch.setCompletedAt(ZonedDateTime.now());
-            batch = batchRepository.save(batch);
-            notifyCsvImportIssue(fileName, batch.getStatus(), preprocessResult.validationError());
-            return batch;
+            return batchRepository.save(batch);
         }
 
         try {
-            JobExecution execution = jobLauncher.run(studentImportJob, new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .addString("batchId", batch.getId().toString())
-                    .addString("filePath", preprocessResult.sanitizedFilePath())
-                    .toJobParameters());
-
-            batch.setStatus(execution.getStatus().name());
-            
-            long writeCount = execution.getStepExecutions().stream().mapToLong(se -> se.getWriteCount()).sum();
-            long skipCount = execution.getStepExecutions().stream().mapToLong(se -> se.getSkipCount()).sum();
-
-            int totalRows = preprocessResult.totalRows();
-            int errorRows = preprocessResult.errorRows() + (int) skipCount;
-
-            batch.setTotalRows(totalRows);
-            batch.setSuccessRows((int) writeCount);
-            batch.setErrorRows(errorRows);
-
-            String detailedErrorLog = buildErrorLog(preprocessResult.errorDetails(), (int) skipCount);
-            if (errorRows > 0 && !detailedErrorLog.isBlank()) {
-                batch.setErrorLog(detailedErrorLog);
-                notifyCsvImportIssue(fileName, batch.getStatus(), detailedErrorLog);
+            PreprocessResult preprocessResult = preprocessCsvFile(filePath);
+            if (preprocessResult.validationError() != null) {
+                batch.setStatus("SKIPPED");
+                batch.setTotalRows(0);
+                batch.setSuccessRows(0);
+                batch.setErrorRows(0);
+                batch.setErrorLog(preprocessResult.validationError());
+                batch.setCompletedAt(ZonedDateTime.now());
+                batch = batchRepository.save(batch);
+                notifyCsvImportIssue(fileName, batch.getStatus(), preprocessResult.validationError());
+                return batch;
             }
 
-        } catch (Exception e) {
-            batch.setStatus("FAILED");
-            batch.setErrorLog(e.getMessage());
-            notifyCsvImportIssue(fileName, batch.getStatus(), e.getMessage());
+            try {
+                JobExecution execution = jobLauncher.run(studentImportJob, new JobParametersBuilder()
+                        .addLong("time", System.currentTimeMillis())
+                        .addString("batchId", batch.getId().toString())
+                        .addString("filePath", preprocessResult.sanitizedFilePath())
+                        .toJobParameters());
+
+                batch.setStatus(execution.getStatus().name());
+
+                long writeCount = execution.getStepExecutions().stream().mapToLong(se -> se.getWriteCount()).sum();
+                long skipCount = execution.getStepExecutions().stream().mapToLong(se -> se.getSkipCount()).sum();
+
+                int totalRows = preprocessResult.totalRows();
+                int errorRows = preprocessResult.errorRows() + (int) skipCount;
+
+                batch.setTotalRows(totalRows);
+                batch.setSuccessRows((int) writeCount);
+                batch.setErrorRows(errorRows);
+
+                String detailedErrorLog = buildErrorLog(preprocessResult.errorDetails(), (int) skipCount);
+                if (errorRows > 0 && fileSelection.note() != null && !fileSelection.note().isBlank()) {
+                    detailedErrorLog = detailedErrorLog.isBlank()
+                            ? fileSelection.note()
+                            : fileSelection.note() + "\n" + detailedErrorLog;
+                }
+                if (!detailedErrorLog.isBlank()) {
+                    batch.setErrorLog(detailedErrorLog);
+                }
+                if (errorRows > 0 && !detailedErrorLog.isBlank()) {
+                    notifyCsvImportIssue(fileName, batch.getStatus(), detailedErrorLog);
+                }
+
+            } catch (Exception e) {
+                batch.setStatus("FAILED");
+                batch.setErrorLog(e.getMessage());
+                notifyCsvImportIssue(fileName, batch.getStatus(), e.getMessage());
+            } finally {
+                deleteTempFileQuietly(preprocessResult.sanitizedFilePath());
+                batch.setCompletedAt(ZonedDateTime.now());
+                batch = batchRepository.save(batch);
+            }
+            return batch;
         } finally {
-            deleteTempFileQuietly(preprocessResult.sanitizedFilePath());
-            batch.setCompletedAt(ZonedDateTime.now());
-            batch = batchRepository.save(batch);
+            importLock.unlock();
         }
-        return batch;
     }
 
     private PreprocessResult preprocessCsvFile(String filePath) {
@@ -126,9 +169,8 @@ public class CsvImportScheduler {
                 return PreprocessResult.invalid("CSV header is invalid. Expected student_id,full_name,email but got: " + lines.get(0).trim());
             }
 
-            List<String> sanitizedLines = new ArrayList<>();
+            Map<String, String> latestValidRowsByStudentId = new LinkedHashMap<>();
             List<String> errorDetails = new ArrayList<>();
-            sanitizedLines.add("studentId,fullName,email");
 
             for (int index = 1; index < lines.size(); index++) {
                 String originalLine = lines.get(index);
@@ -155,8 +197,15 @@ public class CsvImportScheduler {
                     continue;
                 }
 
-                sanitizedLines.add(studentId + "," + fullName + "," + email);
+                if (latestValidRowsByStudentId.containsKey(studentId)) {
+                    latestValidRowsByStudentId.remove(studentId);
+                }
+                latestValidRowsByStudentId.put(studentId, studentId + "," + fullName + "," + email);
             }
+
+            List<String> sanitizedLines = new ArrayList<>();
+            sanitizedLines.add("studentId,fullName,email");
+            sanitizedLines.addAll(latestValidRowsByStudentId.values());
 
             Path tempDirPath = Path.of(dataDir, ".tmp");
             Files.createDirectories(tempDirPath);
@@ -234,6 +283,43 @@ public class CsvImportScheduler {
         return String.join("\n", combined);
     }
 
+    private CsvFileSelection selectCsvFile(boolean allowLatestFileFallback) {
+        String expectedFileName = "students_" + LocalDate.now(IMPORT_ZONE_ID) + ".csv";
+        Path expectedPath = Path.of(dataDir, expectedFileName);
+        if (Files.exists(expectedPath) || !allowLatestFileFallback) {
+            return new CsvFileSelection(expectedFileName, expectedPath.toString(), null);
+        }
+
+        Optional<Path> latestCsv = findLatestCsvFile();
+        if (latestCsv.isEmpty()) {
+            return new CsvFileSelection(expectedFileName, expectedPath.toString(), null);
+        }
+
+        Path selectedPath = latestCsv.get();
+        String selectedFileName = selectedPath.getFileName().toString();
+        return new CsvFileSelection(
+                selectedFileName,
+                selectedPath.toString(),
+                "Manual import used latest available CSV because today's file was not found: " + expectedFileName
+        );
+    }
+
+    private Optional<Path> findLatestCsvFile() {
+        Path dir = Path.of(dataDir);
+        if (!Files.isDirectory(dir)) {
+            return Optional.empty();
+        }
+
+        try (Stream<Path> files = Files.list(dir)) {
+            return files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> STUDENT_FILE_PATTERN.matcher(path.getFileName().toString()).matches())
+                    .max(Comparator.comparing(path -> path.getFileName().toString()));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
     private void deleteTempFileQuietly(String filePath) {
         if (filePath == null || filePath.isBlank()) {
             return;
@@ -254,5 +340,8 @@ public class CsvImportScheduler {
         private static PreprocessResult invalid(String validationError) {
             return new PreprocessResult(null, 0, 0, List.of(), validationError);
         }
+    }
+
+    private record CsvFileSelection(String fileName, String filePath, String note) {
     }
 }

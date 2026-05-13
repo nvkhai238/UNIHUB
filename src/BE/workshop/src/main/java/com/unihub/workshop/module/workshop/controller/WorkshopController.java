@@ -1,7 +1,11 @@
 package com.unihub.workshop.module.workshop.controller;
 
+import com.unihub.workshop.common.exception.AppException;
+import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.common.response.ApiResponse;
+import com.unihub.workshop.module.workshop.dto.AiSummaryResponse;
 import com.unihub.workshop.module.workshop.dto.ChangeStatusRequest;
+import com.unihub.workshop.module.workshop.dto.PdfUploadResponse;
 import com.unihub.workshop.module.workshop.dto.WorkshopRequest;
 import com.unihub.workshop.module.workshop.dto.WorkshopResponse;
 import com.unihub.workshop.module.workshop.dto.WorkshopStatisticsResponse;
@@ -32,6 +36,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @RestController
@@ -137,22 +143,19 @@ public class WorkshopController {
 
     @PostMapping(value = "/{id}/pdf", consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('ORGANIZER')")
-    public ResponseEntity<ApiResponse<String>> uploadPdf(@PathVariable UUID id, @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ApiResponse<PdfUploadResponse>> uploadPdf(@PathVariable UUID id, @RequestParam("file") MultipartFile file) {
         validatePdfUpload(file);
 
         com.unihub.workshop.module.workshop.entity.Workshop workshop = workshopRepository.findById(id)
-                .orElseThrow(() -> new com.unihub.workshop.common.exception.AppException(com.unihub.workshop.common.exception.ErrorCode.WORKSHOP_NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+        if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
+            throw new AppException(ErrorCode.WORKSHOP_CANCELLED, "Cannot upload PDF for a cancelled workshop");
+        }
         if (workshop.getStatus() != WorkshopStatus.DRAFT && workshop.getStatus() != WorkshopStatus.PUBLISHED) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "Cannot upload PDF for this workshop status"
-            );
+            throw new AppException(ErrorCode.FORBIDDEN, "Cannot upload PDF for this workshop status");
         }
         if ("PROCESSING".equalsIgnoreCase(workshop.getAiSummaryStatus())) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "AI summary is already processing"
-            );
+            throw new AppException(ErrorCode.SUMMARY_ALREADY_PROCESSING, "AI summary is already processing");
         }
 
         String pdfUrl = supabaseStorageService.uploadPdf(id, file);
@@ -164,77 +167,84 @@ public class WorkshopController {
 
         aiSummaryService.processAsync(id, pdfUrl);
 
-        return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED)
-                .body(ApiResponse.success("File uploaded successfully and AI summary is processing", pdfUrl));
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.<PdfUploadResponse>builder()
+                        .status(202)
+                        .code("SUCCESS")
+                        .message("PDF đang xử lý tóm tắt AI.")
+                        .data(PdfUploadResponse.builder()
+                                .pdfUrl(pdfUrl)
+                                .aiSummaryStatus(workshop.getAiSummaryStatus())
+                                .build())
+                        .build());
     }
 
-    @GetMapping("/{id}/ai-summary/status")
+    @GetMapping({"/{id}/ai-summary", "/{id}/ai-summary/status"})
     @PreAuthorize("hasRole('ORGANIZER')")
-    public ResponseEntity<ApiResponse<WorkshopResponse>> getAiSummaryStatus(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.success(workshopService.findById(id)));
+    public ResponseEntity<ApiResponse<AiSummaryResponse>> getAiSummaryStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(AiSummaryResponse.from(workshopService.findById(id))));
     }
 
     @PostMapping("/{id}/ai-summary/retry")
     @PreAuthorize("hasRole('ORGANIZER')")
-    public ResponseEntity<ApiResponse<WorkshopResponse>> retryAiSummary(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<AiSummaryResponse>> retryAiSummary(@PathVariable UUID id) {
         com.unihub.workshop.module.workshop.entity.Workshop workshop = workshopRepository.findById(id)
-                .orElseThrow(() -> new com.unihub.workshop.common.exception.AppException(com.unihub.workshop.common.exception.ErrorCode.WORKSHOP_NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
         if (!StringUtils.hasText(workshop.getPdfUrl())) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.VALIDATION_FAILED,
-                    "Workshop has no PDF to summarize"
-            );
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Workshop has no PDF to summarize");
+        }
+        if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
+            throw new AppException(ErrorCode.WORKSHOP_CANCELLED, "Cannot retry AI summary for a cancelled workshop");
         }
         if (workshop.getStatus() != WorkshopStatus.DRAFT && workshop.getStatus() != WorkshopStatus.PUBLISHED) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "Cannot retry AI summary for this workshop status"
-            );
+            throw new AppException(ErrorCode.FORBIDDEN, "Cannot retry AI summary for this workshop status");
         }
-        if ("PROCESSING".equalsIgnoreCase(workshop.getAiSummaryStatus())) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "AI summary is already processing"
-            );
+        String currentStatus = normalizeAiSummaryStatus(workshop.getAiSummaryStatus());
+        if ("PROCESSING".equals(currentStatus)) {
+            throw new AppException(ErrorCode.SUMMARY_ALREADY_PROCESSING, "AI summary is already processing");
         }
-        if ("DONE".equals(workshop.getAiSummaryStatus())) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.FORBIDDEN,
-                    "AI summary is already done"
-            );
+        if ("DONE".equals(currentStatus)) {
+            throw new AppException(ErrorCode.SUMMARY_ALREADY_DONE, "AI summary is already done");
+        }
+        if (!"FAILED".equals(currentStatus)) {
+            throw new AppException(ErrorCode.SUMMARY_NOT_FAILED, "AI summary can only be retried after a failed attempt");
         }
 
         workshop.setAiSummaryStatus("PROCESSING");
-        workshop.setAiSummary(null);
         workshopRepository.save(workshop);
         aiSummaryService.processAsync(id, workshop.getPdfUrl());
 
         return ResponseEntity.accepted()
-                .body(ApiResponse.success("AI summary retry started", WorkshopResponse.from(workshop)));
+                .body(ApiResponse.<AiSummaryResponse>builder()
+                        .status(202)
+                        .code("SUCCESS")
+                        .message("AI summary retry started")
+                        .data(AiSummaryResponse.from(workshop))
+                        .build());
     }
 
     private void validatePdfUpload(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.VALIDATION_FAILED,
-                    "PDF file is required"
-            );
+            throw new AppException(ErrorCode.INVALID_FILE, "PDF file is required");
         }
         if (file.getSize() > 10L * 1024L * 1024L) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.VALIDATION_FAILED,
-                    "PDF file must be 10MB or smaller"
-            );
+            throw new AppException(ErrorCode.INVALID_FILE, "PDF file must be 10MB or smaller");
         }
         String contentType = file.getContentType();
         String filename = file.getOriginalFilename();
-        boolean looksLikePdf = "application/pdf".equalsIgnoreCase(contentType)
+        boolean hasPdfMetadata = "application/pdf".equalsIgnoreCase(contentType)
                 || (filename != null && filename.toLowerCase().endsWith(".pdf"));
-        if (!looksLikePdf) {
-            throw new com.unihub.workshop.common.exception.AppException(
-                    com.unihub.workshop.common.exception.ErrorCode.VALIDATION_FAILED,
-                    "Only PDF files are allowed"
-            );
+        if (!hasPdfMetadata || !hasPdfSignature(file)) {
+            throw new AppException(ErrorCode.INVALID_FILE, "Only PDF files are allowed");
+        }
+    }
+
+    private boolean hasPdfSignature(MultipartFile file) {
+        try {
+            byte[] signature = file.getInputStream().readNBytes(5);
+            return "%PDF-".equals(new String(signature, StandardCharsets.US_ASCII));
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -274,6 +284,10 @@ public class WorkshopController {
                     "Too many workshop requests in the current sliding window"
             );
         }
+    }
+
+    private String normalizeAiSummaryStatus(String status) {
+        return StringUtils.hasText(status) ? status.toUpperCase() : "NONE";
     }
 
     private String extractClientIp(HttpServletRequest request) {

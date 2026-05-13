@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unihub.workshop.module.workshop.entity.Workshop;
 import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -12,21 +13,31 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.InputStream;
-import java.net.URL;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiSummaryService {
 
+    private static final int MAX_GEMINI_INPUT_CHARS = 30_000;
+    private static final int MAX_SUMMARY_CHARS = 500;
+    private static final int GEMINI_MAX_ATTEMPTS = 3;
+
     private final WorkshopRepository workshopRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate pdfRestTemplate = createRestTemplate(Duration.ofSeconds(10), Duration.ofSeconds(30));
+    private final RestTemplate geminiRestTemplate = createRestTemplate(Duration.ofSeconds(5), Duration.ofSeconds(10));
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${app.gemini.url}")
@@ -35,50 +46,144 @@ public class AiSummaryService {
     @Value("${app.gemini.api-key}")
     private String geminiApiKey;
 
-    @Async
+    @Async("aiSummaryTaskExecutor")
     public void processAsync(UUID workshopId, String pdfUrl) {
-        Workshop workshop = workshopRepository.findById(workshopId).orElse(null);
-        if (workshop == null) return;
-
         try {
             String extractedText = extractTextFromPdf(pdfUrl);
             String summary = generateSummaryWithGemini(extractedText);
 
-            workshop.setAiSummary(summary);
-            workshop.setAiSummaryStatus("DONE");
+            updateSummaryState(workshopId, pdfUrl, summary, "DONE");
+            log.info("AI summary completed for workshop {}", workshopId);
         } catch (Exception e) {
-            workshop.setAiSummaryStatus("FAILED");
+            log.warn("AI summary failed for workshop {}", workshopId, e);
+            updateSummaryState(workshopId, pdfUrl, null, "FAILED");
         }
-        workshopRepository.save(workshop);
     }
 
     private String extractTextFromPdf(String pdfUrl) throws Exception {
-        try (InputStream in = new URL(pdfUrl).openStream();
-             PDDocument document = Loader.loadPDF(in.readAllBytes())) {
+        byte[] pdfBytes = pdfRestTemplate.getForObject(pdfUrl, byte[].class);
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalStateException("Downloaded PDF is empty");
+        }
+
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
-            return stripper.getText(document);
+            String cleaned = cleanAndLimitText(stripper.getText(document));
+            if (!StringUtils.hasText(cleaned)) {
+                throw new IllegalStateException("No readable text found in PDF");
+            }
+            return cleaned;
         }
     }
 
     private String generateSummaryWithGemini(String text) throws Exception {
+        if (!StringUtils.hasText(geminiUrl) || !StringUtils.hasText(geminiApiKey)) {
+            throw new IllegalStateException("Gemini API is not configured");
+        }
+
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+            try {
+                return requestGeminiSummary(text);
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt == GEMINI_MAX_ATTEMPTS || !isRetryableGeminiError(e)) {
+                    throw e;
+                }
+                sleepBeforeRetry(attempt);
+            }
+        }
+        throw lastException;
+    }
+
+    private String requestGeminiSummary(String text) throws Exception {
         String endpoint = geminiUrl + "?key=" + geminiApiKey;
-        String prompt = "Hãy tóm tắt nội dung workshop sau trong 3-5 câu bằng tiếng Việt...\n\n" + text;
+        String prompt = """
+                Hãy tóm tắt nội dung workshop sau trong 3-5 câu bằng tiếng Việt, tập trung vào kiến thức chính mà người tham dự sẽ học được:
+
+                %s
+                """.formatted(text);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> requestBody = Map.of(
-            "contents", new Object[]{
-                Map.of("parts", new Object[]{
-                    Map.of("text", prompt)
-                })
-            }
+                "contents", List.of(
+                        Map.of("parts", List.of(Map.of("text", prompt)))
+                )
         );
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-        String response = restTemplate.postForObject(endpoint, entity, String.class);
+        String response = geminiRestTemplate.postForObject(endpoint, entity, String.class);
+        if (!StringUtils.hasText(response)) {
+            throw new IllegalStateException("Gemini response is empty");
+        }
 
         JsonNode rootNode = objectMapper.readTree(response);
-        return rootNode.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+        JsonNode textNode = rootNode.at("/candidates/0/content/parts/0/text");
+        if (textNode.isMissingNode() || !StringUtils.hasText(textNode.asText())) {
+            throw new IllegalStateException("Gemini response does not contain summary text");
+        }
+
+        return truncate(textNode.asText().trim(), MAX_SUMMARY_CHARS);
+    }
+
+    private void updateSummaryState(UUID workshopId, String pdfUrl, String summary, String status) {
+        Workshop workshop = workshopRepository.findById(workshopId).orElse(null);
+        if (workshop == null) {
+            return;
+        }
+        if (!pdfUrl.equals(workshop.getPdfUrl())) {
+            log.info("Skip stale AI summary result for workshop {}", workshopId);
+            return;
+        }
+        if (summary != null) {
+            workshop.setAiSummary(summary);
+        }
+        workshop.setAiSummaryStatus(status);
+        workshopRepository.save(workshop);
+    }
+
+    private String cleanAndLimitText(String text) {
+        String cleaned = text == null ? "" : text
+                .replace('\u0000', ' ')
+                .replaceAll("(?m)^\\s*(Trang|Page)?\\s*\\d+\\s*(/\\s*\\d+)?\\s*$", " ")
+                .replaceAll("[\\p{Cntrl}&&[^\\r\\n\\t]]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return truncate(cleaned, MAX_GEMINI_INPUT_CHARS);
+    }
+
+    private String truncate(String value, int maxChars) {
+        if (value.length() <= maxChars) {
+            return value;
+        }
+        return value.substring(0, maxChars).trim();
+    }
+
+    private boolean isRetryableGeminiError(Exception e) {
+        if (e instanceof ResourceAccessException) {
+            return true;
+        }
+        if (e instanceof HttpStatusCodeException httpException) {
+            int status = httpException.getStatusCode().value();
+            return status == 429 || status >= 500;
+        }
+        return false;
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(Duration.ofSeconds(attempt).toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private RestTemplate createRestTemplate(Duration connectTimeout, Duration readTimeout) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
+        return new RestTemplate(requestFactory);
     }
 }

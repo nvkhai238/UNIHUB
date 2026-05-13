@@ -97,11 +97,18 @@ public class NotificationService {
                 .data(data)
                 .build();
         Notification saved = notificationRepository.save(notification);
+        org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NotificationService.class);
+        logger.info("Notification saved (ID: {}). Dispatching to adapters...", saved.getId());
 
         // Dispatch notification qua các adapter (Email, Telegram, SMS)
         for (NotificationAdapter adapter : adapters) {
-            if (adapter.supports(saved.getType())) {
-                adapter.send(saved);
+            try {
+                if (adapter.supports(saved.getType())) {
+                    logger.info("Calling adapter: {}", adapter.getClass().getSimpleName());
+                    adapter.send(saved);
+                }
+            } catch (Exception e) {
+                logger.error("Critical error in adapter {}: {}", adapter.getClass().getSimpleName(), e.getMessage());
             }
         }
     }

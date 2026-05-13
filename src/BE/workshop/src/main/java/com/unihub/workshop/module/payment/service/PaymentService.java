@@ -14,7 +14,6 @@ import com.unihub.workshop.module.registration.repository.RegistrationRepository
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.entity.Workshop;
-import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +25,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +34,6 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final MockPaymentGatewayClient paymentGatewayClient;
     private final RegistrationRepository registrationRepository;
-    private final WorkshopRepository workshopRepository;
     private final UserRepository userRepository;
 
     // ─── Original gateway processing ──────────────────────────────────────────────
@@ -103,26 +102,28 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public PaymentStatsResponse getPaymentStats(UUID workshopId, PaymentStatus statusFilter, ZonedDateTime from, ZonedDateTime to) {
-        // Total payments matching all filters
-        long totalPayments = paymentRepository.countFiltered(statusFilter, workshopId, from, to);
+        List<Payment> filteredPayments = paymentRepository.findAll().stream()
+                .filter(payment -> matchesPaymentFilters(payment, statusFilter, workshopId, from, to))
+                .toList();
 
-        // Breakdown by status (apply workshopId + date filters, iterate each status)
+        long totalPayments = filteredPayments.size();
+        BigDecimal totalAmount = sumPayments(filteredPayments);
+
         Map<String, PaymentStatsResponse.StatusBucket> byStatus = new LinkedHashMap<>();
         for (PaymentStatus s : PaymentStatus.values()) {
-            // If user specified a status filter, only show that one bucket
             if (statusFilter != null && s != statusFilter) continue;
-            BigDecimal sum = paymentRepository.sumAmountFiltered(s, workshopId, from, to);
-            long count = paymentRepository.countByStatusFiltered(s, workshopId, from, to);
+            List<Payment> statusPayments = filteredPayments.stream()
+                    .filter(payment -> payment.getStatus() == s)
+                    .toList();
             byStatus.put(s.name(), PaymentStatsResponse.StatusBucket.builder()
-                    .count(count)
-                    .amount(sum != null ? sum : BigDecimal.ZERO)
+                    .count(statusPayments.size())
+                    .amount(sumPayments(statusPayments))
                     .build());
         }
 
-        // Success metrics (always computed with workshopId + date filters)
-        BigDecimal totalSuccess = paymentRepository.sumAmountFiltered(PaymentStatus.SUCCESS, workshopId, from, to);
-        BigDecimal totalAmount = totalSuccess != null ? totalSuccess : BigDecimal.ZERO;
-        long successCount = paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, workshopId, from, to);
+        long successCount = filteredPayments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                .count();
         String successRate = totalPayments > 0
                 ? BigDecimal.valueOf(successCount)
                         .multiply(BigDecimal.valueOf(100))
@@ -133,7 +134,7 @@ public class PaymentService {
                 ? totalAmount.divide(BigDecimal.valueOf(totalPayments), 0, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        List<PaymentStatsResponse.WorkshopPaymentSummary> topWorkshops = buildTopWorkshops(workshopId, from, to);
+        List<PaymentStatsResponse.WorkshopPaymentSummary> topWorkshops = buildTopWorkshops(filteredPayments);
 
         return PaymentStatsResponse.builder()
                 .totalPayments(totalPayments)
@@ -150,31 +151,63 @@ public class PaymentService {
                 .build();
     }
 
-    private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops(UUID workshopIdFilter, ZonedDateTime from, ZonedDateTime to) {
-        List<Workshop> workshops;
-        if (workshopIdFilter != null) {
-            workshops = workshopRepository.findById(workshopIdFilter).map(List::of).orElse(List.of());
-        } else {
-            workshops = workshopRepository.findAll();
-        }
+    private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops(List<Payment> payments) {
+        return payments.stream()
+                .filter(payment -> payment.getRegistration() != null && payment.getRegistration().getWorkshop() != null)
+                .collect(Collectors.groupingBy(payment -> payment.getRegistration().getWorkshop()))
+                .entrySet()
+                .stream()
+                .map(entry -> {
+                    Workshop workshop = entry.getKey();
+                    List<Payment> workshopPayments = entry.getValue();
+                    long successCount = workshopPayments.stream()
+                            .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                            .count();
+                    BigDecimal revenue = sumPayments(workshopPayments.stream()
+                            .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                            .toList());
+                    return PaymentStatsResponse.WorkshopPaymentSummary.builder()
+                            .workshopId(workshop.getId().toString())
+                            .title(workshop.getTitle())
+                            .totalPayments(workshopPayments.size())
+                            .successCount(successCount)
+                            .revenue(revenue)
+                            .build();
+                })
+                .sorted((a, b) -> b.getRevenue().compareTo(a.getRevenue()))
+                .limit(5)
+                .toList();
+    }
 
-        List<PaymentStatsResponse.WorkshopPaymentSummary> summaries = new ArrayList<>();
-        for (Workshop w : workshops) {
-            BigDecimal successAmount = paymentRepository.sumAmountFiltered(PaymentStatus.SUCCESS, w.getId(), from, to);
-            long successCount = paymentRepository.countByStatusFiltered(PaymentStatus.SUCCESS, w.getId(), from, to);
-            long totalCount = paymentRepository.countFiltered(null, w.getId(), from, to);
-            if (totalCount > 0) {
-                summaries.add(PaymentStatsResponse.WorkshopPaymentSummary.builder()
-                        .workshopId(w.getId().toString())
-                        .title(w.getTitle())
-                        .totalPayments(totalCount)
-                        .successCount(successCount)
-                        .revenue(successAmount != null ? successAmount : BigDecimal.ZERO)
-                        .build());
+    private boolean matchesPaymentFilters(
+            Payment payment,
+            PaymentStatus statusFilter,
+            UUID workshopId,
+            ZonedDateTime from,
+            ZonedDateTime to
+    ) {
+        if (statusFilter != null && payment.getStatus() != statusFilter) {
+            return false;
+        }
+        if (workshopId != null) {
+            Registration registration = payment.getRegistration();
+            Workshop workshop = registration != null ? registration.getWorkshop() : null;
+            if (workshop == null || !workshop.getId().equals(workshopId)) {
+                return false;
             }
         }
-        summaries.sort((a, b) -> b.getRevenue().compareTo(a.getRevenue()));
-        return summaries.stream().limit(5).toList();
+        ZonedDateTime createdAt = payment.getCreatedAt();
+        if (from != null && (createdAt == null || createdAt.isBefore(from))) {
+            return false;
+        }
+        return to == null || (createdAt != null && !createdAt.isAfter(to));
+    }
+
+    private BigDecimal sumPayments(List<Payment> payments) {
+        return payments.stream()
+                .map(Payment::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private User getCurrentUser() {

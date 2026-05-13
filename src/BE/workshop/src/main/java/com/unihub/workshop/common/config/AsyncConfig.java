@@ -21,4 +21,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "aiSummaryTaskExecutor")
+    public Executor aiSummaryTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("ai-summary-");
+        executor.initialize();
+        return executor;
+    }
 }

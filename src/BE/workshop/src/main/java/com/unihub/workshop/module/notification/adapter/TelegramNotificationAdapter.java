@@ -22,17 +22,19 @@ public class TelegramNotificationAdapter implements NotificationAdapter {
 
     @Override
     public boolean supports(Notification.NotificationType type) {
-        return type == Notification.NotificationType.REGISTRATION_CONFIRMED
-            || type == Notification.NotificationType.REGISTRATION_CANCELLED
-            || type == Notification.NotificationType.WORKSHOP_CANCELLED
-            || type == Notification.NotificationType.PAYMENT_SUCCESS;
+        // Cho phép Telegram gửi tất cả các loại thông báo để đảm bảo không bỏ sót
+        return true;
     }
 
     @Override
     public void send(Notification notification) {
         String telegramId = notification.getUser().getTelegramId();
+        String userEmail = notification.getUser().getEmail();
+        
+        log.info("Notification process for user: {}. TelegramID from DB: {}", userEmail, telegramId);
+
         if (telegramId == null || telegramId.isEmpty()) {
-            log.warn("User '{}' does not have a telegramId. Skipping Telegram notification.", notification.getUser().getEmail());
+            log.warn("User '{}' does not have a telegramId. Skipping Telegram notification.", userEmail);
             return;
         }
 
@@ -42,16 +44,30 @@ public class TelegramNotificationAdapter implements NotificationAdapter {
         }
 
         try {
-            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
-            Map<String, String> body = new HashMap<>();
-            body.put("chat_id", telegramId);
-            body.put("text", "*" + notification.getTitle() + "*\n\n" + notification.getBody());
-            body.put("parse_mode", "Markdown");
+            String title = (notification.getTitle() != null && !notification.getTitle().trim().isEmpty()) 
+                           ? notification.getTitle() : "UniHub Notification";
+            String bodyText = (notification.getBody() != null && !notification.getBody().trim().isEmpty()) 
+                              ? notification.getBody() : "Ban co thong bao moi tu he thong.";
+            
+            String url = "https://api.telegram.org/bot" + botToken.trim() + "/sendMessage";
+            
+            Map<String, String> payload = new HashMap<>();
+            payload.put("chat_id", telegramId);
+            payload.put("text", "🔔 *" + title + "*\n\n" + bodyText);
+            payload.put("parse_mode", "Markdown");
 
-            restTemplate.postForObject(url, body, String.class);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            org.springframework.http.HttpEntity<Map<String, String>> entity = new org.springframework.http.HttpEntity<>(payload, headers);
+
+            log.info("Sending JSON to Telegram. URL: {}, Payload: {}", url, payload);
+            restTemplate.postForObject(url, entity, String.class);
             log.info("Telegram notification sent successfully to {}.", telegramId);
         } catch (Exception e) {
             log.error("Failed to send Telegram notification to {}: {}", telegramId, e.getMessage());
+            if (e instanceof org.springframework.web.client.HttpStatusCodeException) {
+                log.error("Telegram API Response: {}", ((org.springframework.web.client.HttpStatusCodeException) e).getResponseBodyAsString());
+            }
         }
     }
 }

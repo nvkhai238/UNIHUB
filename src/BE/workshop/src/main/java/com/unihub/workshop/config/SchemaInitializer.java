@@ -59,6 +59,16 @@ public class SchemaInitializer {
             }
 
             try {
+                stmt.execute("ALTER TABLE workshops ADD COLUMN IF NOT EXISTS pdf_url TEXT");
+                stmt.execute("ALTER TABLE workshops ADD COLUMN IF NOT EXISTS ai_summary TEXT");
+                stmt.execute("ALTER TABLE workshops ADD COLUMN IF NOT EXISTS ai_summary_status VARCHAR(20) DEFAULT 'NONE'");
+                stmt.execute("UPDATE workshops SET ai_summary_status = 'NONE' WHERE ai_summary_status IS NULL");
+                log.info("SchemaInitializer: workshop AI summary columns ready.");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: skipped workshop AI summary columns.");
+            }
+
+            try {
                 stmt.execute("ALTER PUBLICATION supabase_realtime ADD TABLE notifications;");
                 log.info("SchemaInitializer: added notifications to supabase_realtime publication.");
             } catch (Exception e) {

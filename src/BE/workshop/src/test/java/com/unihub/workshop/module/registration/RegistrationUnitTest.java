@@ -1,7 +1,5 @@
 package com.unihub.workshop.module.registration;
 
-import com.unihub.workshop.common.exception.AppException;
-import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.notification.service.NotificationService;
 import com.unihub.workshop.module.payment.entity.Payment;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
@@ -35,7 +33,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 

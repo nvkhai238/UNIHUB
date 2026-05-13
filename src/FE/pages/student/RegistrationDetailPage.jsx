@@ -7,7 +7,8 @@ export default function RegistrationDetailPage() {
   const [registration, setRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const loadRegistration = () => {
     setLoading(true);
@@ -23,26 +24,34 @@ export default function RegistrationDetailPage() {
   }, [registrationId]);
 
   const retryPayment = async () => {
-    setMessage('');
+    setNotice(null);
     try {
       await api.post(`/api/registrations/${registrationId}/payment/retry`, {}, {
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       });
-      setMessage('Đã đưa thanh toán vào hàng xử lý lại.');
+      setNotice({ type: 'success', text: 'Đã đưa thanh toán vào hàng xử lý lại.' });
       loadRegistration();
-    } catch {
-      setMessage('Không thể xử lý lại thanh toán lúc này.');
+    } catch (err) {
+      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể xử lý lại thanh toán lúc này.' });
     }
   };
 
   const cancelRegistration = async () => {
-    setMessage('');
+    if (!canCancelRegistration(registration)) {
+      setNotice({ type: 'error', text: getCancellationReason(registration) });
+      return;
+    }
+
+    setNotice(null);
+    setCancelling(true);
     try {
       await api.delete(`/api/registrations/${registrationId}`);
-      setMessage('Đăng ký đã được hủy.');
+      setNotice({ type: 'success', text: 'Đăng ký đã được hủy.' });
       loadRegistration();
-    } catch {
-      setMessage('Không thể hủy đăng ký lúc này.');
+    } catch (err) {
+      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể hủy đăng ký lúc này.' });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -57,13 +66,25 @@ export default function RegistrationDetailPage() {
 
         {loading && <p className="mt-4 text-sm text-gray-500">Đang tải chi tiết...</p>}
         {error && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-        {message && <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{message}</p>}
+        {notice && (
+          <p className={notice.type === 'error'
+            ? 'mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700'
+            : 'mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800'}
+          >
+            {notice.text}
+          </p>
+        )}
 
-        {!loading && !error && registration && (
-          <>
+        {!loading && !error && registration && (() => {
+          const canCancel = canCancelRegistration(registration);
+          const cancellationReason = getCancellationReason(registration);
+
+          return (
+            <>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
               <Info label="Workshop" value={registration.workshopTitle || registration.workshopId} />
               <Info label="Trạng thái" value={registrationStatusLabel(registration.status)} />
+              <Info label="Workshop bắt đầu" value={formatDate(registration.workshopStartTime) || 'Chưa có lịch'} />
               <Info label="Đăng ký lúc" value={formatDate(registration.registeredAt)} />
               <Info label="Xác nhận lúc" value={formatDate(registration.confirmedAt) || 'Chưa xác nhận'} />
               <Info label="Registration ID" value={registration.id} />
@@ -100,15 +121,23 @@ export default function RegistrationDetailPage() {
               {registration.status !== 'CANCELLED' && (
                 <button
                   type="button"
+                  disabled={!canCancel || cancelling}
+                  title={!canCancel ? cancellationReason : undefined}
                   onClick={cancelRegistration}
-                  className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  className={canCancel
+                    ? 'rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60'
+                    : 'cursor-not-allowed rounded-md border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-500'}
                 >
-                  Hủy đăng ký
+                  {cancelling ? 'Đang hủy...' : canCancel ? 'Hủy đăng ký' : 'Không thể hủy'}
                 </button>
               )}
             </div>
+            {!canCancel && registration.status !== 'CANCELLED' && (
+              <p className="mt-3 text-sm text-gray-500">{cancellationReason}</p>
+            )}
           </>
-        )}
+          );
+        })()}
       </div>
     </section>
   );
@@ -139,4 +168,16 @@ function registrationStatusLabel(status) {
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
+}
+
+function canCancelRegistration(registration) {
+  if (!registration) return false;
+  if (registration.status === 'CANCELLED') return false;
+  return true; // Cho phép hủy bất cứ lúc nào
+}
+
+function getCancellationReason(registration) {
+  if (registration?.cancellationUnavailableReason) return registration.cancellationUnavailableReason;
+  if (registration?.status === 'CANCELLED') return 'Đăng ký đã được hủy.';
+  return '';
 }

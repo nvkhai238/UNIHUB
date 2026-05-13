@@ -6,6 +6,11 @@ spring:
     job:
       enabled: false
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -42,15 +47,25 @@ spring:
 app:
   supabase:
     url: ${SUPABASE_URL:}
-    service-role-key: ${SUPABASE_KEY:}
+    service-role-key: ${SUPABASE_KEY:${SUPABASE_SERVICE_ROLE_KEY:}}
     bucket: workshop-files
   gemini:
-    url: ${GEMINI_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent}
+    url: ${GEMINI_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent}
     api-key: ${GEMINI_API_KEY:}
   jwt:
     secret: ${JWT_SECRET:unihub-super-secret-key-must-be-at-least-256-bits-long-for-hs256}
     access-token-ttl: 86400
     refresh-token-ttl: 604800
+  notification:
+    telegram:
+      enabled: ${TELEGRAM_ENABLED:true}
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+    sms:
+      enabled: ${SMS_ENABLED:true}
+      twilio:
+        account-sid: ${TWILIO_ACCOUNT_SID:}
+        auth-token: ${TWILIO_AUTH_TOKEN:}
+        from-number: ${TWILIO_FROM_NUMBER:}
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:noreply@unihub.edu.vn}

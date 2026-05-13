@@ -1,6 +1,6 @@
 # UniHub Sample Data
 
-`students_2026-05-10.csv` is a sample nightly export from the legacy student system.
+`students_2026-05-12.csv` and `students_2026-05-14.csv` are sample nightly exports from the legacy student system.
 
 Expected CSV header:
 

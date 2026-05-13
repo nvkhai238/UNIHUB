@@ -4,6 +4,7 @@ import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.user.repository.UserRepository;
+import com.unihub.workshop.module.user.util.PhoneNumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,8 +19,12 @@ public class UserService {
     public void updatePhone(String email, String phone) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-                
-        user.setPhone(phone);
+
+        try {
+            user.setPhone(PhoneNumberUtils.normalizeToE164(phone));
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Số điện thoại không hợp lệ");
+        }
         userRepository.save(user);
     }
 

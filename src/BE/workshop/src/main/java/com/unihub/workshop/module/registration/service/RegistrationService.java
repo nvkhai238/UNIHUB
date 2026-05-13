@@ -205,9 +205,6 @@ public class RegistrationService {
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
                 .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
-        if (!workshop.getStartTime().isAfter(ZonedDateTime.now())) {
-            throw new AppException(ErrorCode.WORKSHOP_IN_PROGRESS, "Cannot cancel a registration after the workshop has started");
-        }
 
         RegistrationStatus previousStatus = registration.getStatus();
         registration.setStatus(RegistrationStatus.CANCELLED);

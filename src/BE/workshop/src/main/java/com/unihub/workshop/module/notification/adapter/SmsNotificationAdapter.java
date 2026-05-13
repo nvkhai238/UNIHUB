@@ -4,6 +4,7 @@ import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import com.unihub.workshop.module.notification.entity.Notification;
+import com.unihub.workshop.module.user.util.PhoneNumberUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,18 +38,20 @@ public class SmsNotificationAdapter implements NotificationAdapter {
     public boolean supports(Notification.NotificationType type) {
         // SMS thường tốn phí, nên chỉ dùng cho các thông báo cực kỳ quan trọng
         return type == Notification.NotificationType.REGISTRATION_CONFIRMED
+            || type == Notification.NotificationType.PAYMENT_SUCCESS
             || type == Notification.NotificationType.WORKSHOP_CANCELLED;
     }
 
     @Override
     public void send(Notification notification) {
-        String userPhone = notification.getUser().getPhone();
-        if (userPhone == null || userPhone.isEmpty()) {
+        String rawUserPhone = notification.getUser().getPhone();
+        if (rawUserPhone == null || rawUserPhone.isEmpty()) {
             log.warn("User '{}' does not have a phone number. Skipping SMS.", notification.getUser().getEmail());
             return;
         }
 
         try {
+            String userPhone = PhoneNumberUtils.normalizeToE164(rawUserPhone);
             Message message = Message.creator(
                 new PhoneNumber(userPhone),
                 new PhoneNumber(fromNumber),
@@ -57,7 +60,7 @@ public class SmsNotificationAdapter implements NotificationAdapter {
 
             log.info("SMS sent successfully to {}. SID: {}", userPhone, message.getSid());
         } catch (Exception e) {
-            log.error("Failed to send SMS to {}: {}", userPhone, e.getMessage());
+            log.error("Failed to send SMS to {}: {}", rawUserPhone, e.getMessage());
         }
     }
 }

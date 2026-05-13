@@ -9,6 +9,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequiredArgsConstructor
 public class CsvStatusController {
@@ -17,9 +19,10 @@ public class CsvStatusController {
 
     @GetMapping("/api/csv/status")
     @PreAuthorize("hasRole('ORGANIZER')")
-    public ResponseEntity<ApiResponse<StudentImportBatch>> getLatestImportStatus() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getLatestImportStatus() {
+        StudentImportBatch latestBatch = batchRepository.findFirstByOrderByStartedAtDesc().orElse(null);
         return ResponseEntity.ok(ApiResponse.success(
-                batchRepository.findFirstByOrderByStartedAtDesc().orElse(null)
+                StudentImportController.toStatusPayload(latestBatch)
         ));
     }
 }

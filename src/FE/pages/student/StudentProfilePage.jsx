@@ -28,15 +28,23 @@ export default function StudentProfilePage() {
     pending: registrations.filter((item) => item.status === 'PENDING').length,
   }), [registrations]);
 
-  const [phoneInput, setPhoneInput] = useState(user?.phone || '');
+  const [phonePrefix, setPhonePrefix] = useState('+84');
+  const [phoneNumberStr, setPhoneNumberStr] = useState(() => {
+    if (user?.phone) {
+      if (user.phone.startsWith('+84')) return user.phone.substring(3);
+      if (user.phone.startsWith('+1')) { setPhonePrefix('+1'); return user.phone.substring(2); }
+    }
+    return user?.phone || '';
+  });
   const [telegramInput, setTelegramInput] = useState(user?.telegramId || '');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleUpdatePhone = async () => {
     try {
       setIsUpdating(true);
-      await api.put('/api/users/me/phone', { phone: phoneInput });
-      user.phone = phoneInput; // Cập nhật local role object
+      const finalPhone = phonePrefix + phoneNumberStr;
+      await api.put('/api/users/me/phone', { phone: finalPhone });
+      user.phone = finalPhone; // Cập nhật local role object
       saveUserProfile(user);
       alert('Đã lưu số điện thoại thành công!');
     } catch (error) {
@@ -48,14 +56,17 @@ export default function StudentProfilePage() {
 
   const handleUpdateTelegram = async () => {
     try {
+      if (!telegramInput.trim()) {
+        alert('Vui lòng nhập Telegram Chat ID trước khi lưu.');
+        return;
+      }
       setIsUpdating(true);
-      // Giả lập bot cấp một ID ngẫu nhiên cho Telegram
-      const newTelegramId = telegramInput || 'TG-' + Math.random().toString(36).substring(2, 8);
+      const newTelegramId = telegramInput.trim();
       await api.put('/api/users/me/telegram', { telegramId: newTelegramId });
       user.telegramId = newTelegramId;
       saveUserProfile(user);
       setTelegramInput(newTelegramId);
-      alert('Đã liên kết Telegram thành công!');
+      alert('Đã lưu dữ liệu Telegram thành công!');
     } catch (error) {
       alert(error.response?.data?.message || 'Có lỗi xảy ra khi liên kết Telegram');
     } finally {
@@ -107,17 +118,29 @@ export default function StudentProfilePage() {
               </span>
             </div>
             <div className="flex">
+              <select
+                value={phonePrefix}
+                onChange={(e) => setPhonePrefix(e.target.value)}
+                className="rounded-l-md border border-gray-300 border-r-0 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="+84">🇻🇳 +84</option>
+                <option value="+1">🇺🇸 +1</option>
+              </select>
               <input 
                 type="text" 
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-                placeholder="VD: 0912345678" 
-                className="w-full rounded-l-md border border-gray-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none" 
+                value={phoneNumberStr}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  if (val.startsWith('0')) val = val.substring(1);
+                  setPhoneNumberStr(val);
+                }}
+                placeholder="Nhập số (vd: 912345678)" 
+                className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" 
               />
               <button 
                 type="button"
                 disabled={isUpdating}
-                className="rounded-r-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors disabled:opacity-50"
+                className="rounded-r-md border border-gray-300 border-l-0 bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors disabled:opacity-50"
                 onClick={handleUpdatePhone}
               >
                 Lưu
@@ -128,19 +151,31 @@ export default function StudentProfilePage() {
           {/* Telegram Adapter UI */}
           <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-4">
             <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
-              <p className="text-sm font-semibold text-gray-800">Telegram Bot ID: {user?.telegramId || '...'}</p>
+              <p className="text-sm font-semibold text-gray-800">Telegram Chat ID: {user?.telegramId || '...'}</p>
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs ${user?.telegramId ? 'bg-blue-100 text-blue-800' : 'bg-blue-50 text-blue-600'}`}>
                 {user?.telegramId ? 'Đã liên kết' : 'Chưa liên kết'}
               </span>
             </div>
-            <button 
-              type="button"
-              disabled={isUpdating}
-              className="w-full rounded-md bg-[#0088cc] px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0077b3] transition-colors disabled:opacity-50"
-              onClick={handleUpdateTelegram}
-            >
-              {user?.telegramId ? 'Huỷ liên kết / Kết nối lại @UniHub_Notify_Bot' : 'Kết nối với @UniHub_Notify_Bot'}
-            </button>
+            <div className="flex">
+              <input
+                type="text"
+                className="w-full rounded-l-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Nhập Chat ID thật, ví dụ 123456789"
+                value={telegramInput}
+                onChange={(e) => setTelegramInput(e.target.value)}
+              />
+              <button 
+                type="button"
+                disabled={isUpdating}
+                className="flex-shrink-0 rounded-r-md bg-[#0088cc] px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0077b3] transition-colors disabled:opacity-50"
+                onClick={handleUpdateTelegram}
+              >
+                Kết nối
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              Bạn cần nhắn <span className="font-semibold">/start</span> cho bot Telegram trước, sau đó lấy đúng <span className="font-semibold">chat_id</span> để lưu ở đây.
+            </p>
           </div>
         </div>
       </div>

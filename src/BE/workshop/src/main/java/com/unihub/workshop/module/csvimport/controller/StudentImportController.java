@@ -31,25 +31,31 @@ public class StudentImportController {
 
     @PostMapping("/run")
     public ResponseEntity<ApiResponse<StudentImportBatch>> runImport() {
-        return ResponseEntity.ok(ApiResponse.success("Student CSV import completed", csvImportScheduler.runImportJob()));
+        return ResponseEntity.ok(ApiResponse.success("Student CSV import completed", csvImportScheduler.runManualImportJob()));
     }
 
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getLatestStatus() {
-        StudentImportBatch latestBatch = batchRepository.findAllByOrderByStartedAtDesc().stream().findFirst().orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(toStatusPayload(
+                batchRepository.findFirstByOrderByStartedAtDesc().orElse(null)
+        )));
+    }
+
+    static Map<String, Object> toStatusPayload(StudentImportBatch latestBatch) {
         if (latestBatch == null) {
-            return ResponseEntity.ok(ApiResponse.success(Map.of(
+            return Map.of(
+                    "jobId", "",
                     "status", "NOT_STARTED",
                     "processedRecords", 0,
                     "failedRecords", 0
-            )));
+            );
         }
 
-        return ResponseEntity.ok(ApiResponse.success(Map.of(
+        return Map.of(
                 "jobId", latestBatch.getId(),
                 "status", latestBatch.getStatus(),
                 "processedRecords", latestBatch.getSuccessRows() != null ? latestBatch.getSuccessRows() : 0,
                 "failedRecords", latestBatch.getErrorRows() != null ? latestBatch.getErrorRows() : 0
-        )));
+        );
     }
 }
