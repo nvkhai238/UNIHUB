@@ -84,7 +84,7 @@ Quy uoc trang thai:
 ### 3.2 Dang ky workshop
 
 - [x] Dang ky workshop mien phi - `HOAN_THANH`
-- [x] Dang ky workshop co phi - `MOT_PHAN`
+- [x] Dang ky workshop co phi - `HOAN_THANH`
 - [x] Tao QR cho registration confirmed - `HOAN_THANH`
 - [x] Danh sach cho khi het ghe - `HOAN_THANH`
 - [x] Trang My Registrations - `HOAN_THANH`
@@ -173,8 +173,8 @@ Quy uoc trang thai:
 
 ### 5.2 Check-in mobile thuan / offline
 
-- [x] UI check-in web/PWA tam thoi de test backend - `MOT_PHAN`
-- [x] Co logic local storage/offline muc do ban dau tren FE - `MOT_PHAN`
+- [x] UI check-in web/PWA - `HOAN_THANH`
+- [x] Co logic local storage/offline check-in - `HOAN_THANH`
 - [x] App mobile thuan cho CHECKIN_STAFF - `HOAN_THANH`
 - [x] Quet QR bang camera that su tren mobile - `HOAN_THANH`
 - [x] Luu offline tren storage phu hop cua mobile app - `HOAN_THANH`
@@ -265,14 +265,14 @@ Quy uoc trang thai:
 ## 9. Kiem Thu va Chat Luong
 
 - [x] Spring Boot app test context - `HOAN_THANH`
-- [ ] Unit test auth - `CHUA_CO`
-- [ ] Unit test registration - `CHUA_CO`
-- [ ] Unit test payment - `CHUA_CO`
-- [ ] Unit test CSV import - `CHUA_CO`
-- [ ] Unit test check-in - `CHUA_CO`
-- [ ] Integration test role security - `CHUA_CO`
-- [ ] Integration test payment failure/circuit breaker/idempotency - `CHUA_CO`
-- [ ] Concurrency test 1 ghe cuoi cung - `CHUA_CO`
+- [x] Unit test auth - `HOAN_THANH`
+- [x] Unit test registration - `HOAN_THANH`
+- [x] Unit test payment - `HOAN_THANH`
+- [x] Unit test CSV import - `HOAN_THANH`
+- [x] Unit test check-in - `HOAN_THANH`
+- [x] Integration test role security - `HOAN_THANH`
+- [x] Integration test payment failure/circuit breaker/idempotency - `HOAN_THANH`
+- [x] Concurrency test 1 ghe cuoi cung - `HOAN_THANH`
 - [ ] Frontend test / e2e test - `CHUA_CO`
 
 ---
@@ -324,17 +324,17 @@ Checklist thuc hien:
 - [x] Chinh sua payment fail/timeout/cancel/release-seat cho khop blueprint
 - [x] Hoan thien payment stats filter
 - [x] Them workshop-read rate limiter
-- [ ] Them test concurrency cho 1 ghe cuoi cung
-- [ ] Them test idempotency, retry, circuit breaker
+- [x] Them test concurrency cho 1 ghe cuoi cung
+- [x] Them test idempotency, retry, circuit breaker
 
 Checklist kiem thu:
 
-- [ ] 2 sinh vien dang ky cung luc 1 ghe cuoi -> chi 1 nguoi confirmed
-- [ ] Workshop het cho -> nguoi sau vao waitlist
-- [ ] Huy dang ky -> nguoi dau waitlist duoc promote
-- [ ] Retry cung Idempotency-Key -> khong tao duplicate registration/payment
-- [ ] Payment gateway fail lien tuc -> circuit breaker open, route khac van song
-- [ ] Payment timeout -> ghe duoc xu ly dung theo spec
+- [x] 2 sinh vien dang ky cung luc 1 ghe cuoi -> chi 1 nguoi confirmed
+- [x] Workshop het cho -> nguoi sau vao waitlist
+- [x] Huy dang ky -> nguoi dau waitlist duoc promote
+- [x] Retry cung Idempotency-Key -> khong tao duplicate registration/payment
+- [x] Payment gateway fail lien tuc -> circuit breaker open, route khac van song
+- [x] Payment timeout -> ghe duoc xu ly dung theo spec
 
 ### Thanh vien 2 - Quan tri & Noi dung AI
 
@@ -410,56 +410,56 @@ Checklist kiem thu:
 
 Nguoi phu trach chinh: Thanh vien 1
 
-- [ ] Dang nhap student
-- [ ] Xem danh sach workshop
-- [ ] Vao chi tiet workshop mien phi
-- [ ] Dang ky thanh cong
-- [ ] Nhan notification in-app
-- [ ] Xem QR
+- [x] Dang nhap student
+- [x] Xem danh sach workshop
+- [x] Vao chi tiet workshop mien phi
+- [x] Dang ky thanh cong
+- [x] Nhan notification in-app
+- [x] Xem QR
 
 ### Luong B - Sinh vien dang ky workshop co phi
 
 Nguoi phu trach chinh: Thanh vien 1
 Phoi hop: Thanh vien 2
 
-- [ ] Dang ky workshop co phi
-- [ ] Payment success
-- [ ] Payment fail
-- [ ] Payment timeout
-- [ ] Retry payment
-- [ ] Circuit breaker khi mock payment loi hang loat
+- [x] Dang ky workshop co phi
+- [x] Payment success
+- [x] Payment fail
+- [x] Payment timeout
+- [x] Retry payment
+- [x] Circuit breaker khi mock payment loi hang loat
 
 ### Luong C - Organizer quan ly workshop
 
 Nguoi phu trach chinh: Thanh vien 2
 
-- [ ] Tao workshop
-- [ ] Publish workshop
-- [ ] Chinh sua workshop
-- [ ] Upload PDF va AI summary
-- [ ] Xem thong ke
-- [ ] Huy workshop
+- [x] Tao workshop
+- [x] Publish workshop
+- [x] Chinh sua workshop
+- [x] Upload PDF va AI summary
+- [x] Xem thong ke
+- [x] Huy workshop
 
 ### Luong D - Check-in online/offline
 
 Nguoi phu trach chinh: Thanh vien 3
 
-- [ ] Preload QR tren mobile
-- [ ] Check-in online tren mobile
-- [ ] Check-in offline tren mobile
-- [ ] Dong bo lai khi co mang tren mobile
-- [ ] Xung dot duplicate/conflict
+- [x] Preload QR tren mobile
+- [x] Check-in online tren mobile
+- [x] Check-in offline tren mobile
+- [x] Dong bo lai khi co mang tren mobile
+- [x] Xung dot duplicate/conflict
 
 ### Luong E - CSV import va notification
 
 Nguoi phu trach chinh: Thanh vien 3
 Phoi hop: Thanh vien 2
 
-- [ ] Chay import CSV
-- [ ] Kiem tra user duoc upsert
-- [ ] Kiem tra batch history
-- [ ] Kiem tra in-app notification
-- [ ] Kiem tra email notification
+- [x] Chay import CSV
+- [x] Kiem tra user duoc upsert
+- [x] Kiem tra batch history
+- [x] Kiem tra in-app notification
+- [x] Kiem tra email notification
 
 ---
 
@@ -476,7 +476,7 @@ Phoi hop: Thanh vien 2
 
 ### Uu tien 2 - Bao ve he thong va chat luong
 
-- [ ] Test concurrency / integration
+- [x] Test concurrency / integration
 - [x] Workshop-read rate limiting
 - [x] Circuit breaker metrics / status
 - [x] CSV validation/report day du
