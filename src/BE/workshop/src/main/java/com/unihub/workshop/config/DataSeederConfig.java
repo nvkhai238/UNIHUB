@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,7 @@ public class DataSeederConfig implements CommandLineRunner {
             seedPayments();
             seedCheckins();
         }
+        seedFreeCheckinDemoForMay14();
         seedNotifications();
         log.info("Seed data complete.");
     }
@@ -263,6 +265,65 @@ public class DataSeederConfig implements CommandLineRunner {
     }
 
     private void seedPayments() {}
+
+    private void seedFreeCheckinDemoForMay14() {
+        User organizer = userRepository.findByEmail("organizer@unihub.edu.vn").orElseThrow();
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        String title = "Demo Check-in Free 14/05/2026";
+
+        Workshop workshop = workshopRepository.findByTitle(title).orElseGet(() -> Workshop.builder()
+                .title(title)
+                .description("Workshop free cố định ngày 14/05/2026 để test preload QR và mobile check-in offline.")
+                .speakerName("UniHub Demo")
+                .speakerBio("Dữ liệu mẫu cho luồng check-in.")
+                .room("DEMO-101")
+                .capacity(30)
+                .remainingSeats(30)
+                .price(BigDecimal.ZERO)
+                .status(WorkshopStatus.PUBLISHED)
+                .aiSummaryStatus("NONE")
+                .createdBy(organizer)
+                .build());
+
+        workshop.setStartTime(ZonedDateTime.of(2026, 5, 14, 9, 0, 0, 0, zone));
+        workshop.setEndTime(ZonedDateTime.of(2026, 5, 14, 11, 0, 0, 0, zone));
+        workshop.setPrice(BigDecimal.ZERO);
+        workshop.setStatus(WorkshopStatus.PUBLISHED);
+        workshop.setCapacity(30);
+        workshop = workshopRepository.save(workshop);
+        final Workshop demoWorkshop = workshop;
+
+        List<User> demoStudents = List.of(
+                userRepository.findByEmail("21521001@university.edu.vn").orElseThrow(),
+                userRepository.findByEmail("21521002@university.edu.vn").orElseThrow(),
+                userRepository.findByEmail("21521003@university.edu.vn").orElseThrow()
+        );
+
+        int created = 0;
+        for (User student : demoStudents) {
+            Registration registration = registrationRepository.findByUserAndWorkshop(student, demoWorkshop)
+                    .orElseGet(() -> Registration.builder()
+                            .user(student)
+                            .workshop(demoWorkshop)
+                            .registeredAt(ZonedDateTime.now())
+                            .build());
+            if (registration.getQrCode() == null) {
+                registration.setQrCode(UUID.randomUUID().toString());
+            }
+            registration.setStatus(RegistrationStatus.CONFIRMED);
+            registration.setConfirmedAt(registration.getConfirmedAt() != null ? registration.getConfirmedAt() : ZonedDateTime.now());
+            registration.setCancelledAt(null);
+            registrationRepository.save(registration);
+            created++;
+        }
+
+        long confirmedCount = registrationRepository.findByWorkshop(demoWorkshop).stream()
+                .filter(r -> r.getStatus() == RegistrationStatus.CONFIRMED)
+                .count();
+        demoWorkshop.setRemainingSeats(Math.max(0, demoWorkshop.getCapacity() - (int) confirmedCount));
+        workshopRepository.save(demoWorkshop);
+        log.info("Seeded demo check-in workshop {} with {} confirmed free registrations", title, created);
+    }
 
     private void seedCheckins() {
         Registration confirmedReg = registrationRepository.findAll().stream()

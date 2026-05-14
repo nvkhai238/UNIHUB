@@ -11,4 +11,5 @@ public class PreloadResponse {
     private String qrCode;
     private String fullName;
     private UUID workshopId;
+    private String workshopTitle;
 }

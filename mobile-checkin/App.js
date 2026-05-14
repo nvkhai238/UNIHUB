@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { getApiBaseUrl, login, logout, preloadCheckins, syncCheckins } from './src/api';
+import { getApiBaseUrl, login, logout, lookupCheckinQr, preloadCheckins, syncCheckins } from './src/api';
 import {
   clearOfflineData,
   clearSession,
@@ -23,25 +23,44 @@ import {
   listPendingCheckins,
   markCheckinsSyncResult,
   queueOfflineCheckin,
+  recordSyncedCheckin,
   replaceQrRegistry,
   saveTokens,
 } from './src/storage';
 
-const todayString = () => new Date().toISOString().slice(0, 10);
+function dateString(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('Dang tai ung dung...');
+  const [preloadMessage, setPreloadMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [date, setDate] = useState(todayString());
+  const [date, setDate] = useState(dateString());
   const [stats, setStats] = useState({ registryCount: 0, pendingCount: 0 });
   const [online, setOnline] = useState(true);
   const [lastScan, setLastScan] = useState(null);
   const appState = useRef(AppState.currentState);
+  const sessionRef = useRef(null);
+  const syncingRef = useRef(false);
+  const scanningRef = useRef(false);
+  const recentScanRef = useRef({ qrCode: null, scannedAt: 0 });
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    syncingRef.current = syncing;
+  }, [syncing]);
 
   useEffect(() => {
     bootstrap();
@@ -83,6 +102,7 @@ export default function App() {
 
   async function handleLogin() {
     setLoading(true);
+    setPreloadMessage('');
     try {
       const auth = await login(email.trim(), password);
       if (auth.user?.role !== 'CHECKIN_STAFF') {
@@ -102,13 +122,24 @@ export default function App() {
 
   async function handlePreload() {
     if (!session) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+      setPreloadMessage('Ngay workshop phai dung dinh dang YYYY-MM-DD.');
+      return;
+    }
     setLoading(true);
+    setPreloadMessage('Dang tai danh sach QR...');
     try {
-      const rows = await preloadCheckins(date);
+      const selectedDate = date.trim();
+      const rows = await preloadCheckins(selectedDate);
       await replaceQrRegistry(rows);
       await refreshStats();
-      setMessage(`Da tai ${rows.length} QR hop le cho ngay ${date}.`);
+      const nextMessage = rows.length === 0
+        ? 'Khong co QR confirmed cho ngay bat dau workshop nay. Kiem tra ngay bat dau workshop, trang thai dang ky/thanh toan, hoac quet QR khi online de xem ly do.'
+        : `Da tai ${rows.length} QR hop le cho ngay bat dau workshop.`;
+      setPreloadMessage(nextMessage);
+      setMessage(nextMessage);
     } catch (error) {
+      setPreloadMessage(error.message);
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -125,6 +156,7 @@ export default function App() {
       await clearOfflineData();
       setSession(null);
       setLastScan(null);
+      setPreloadMessage('');
       await refreshStats();
       setMessage('Da dang xuat va xoa du lieu offline cua phien truoc.');
       setLoading(false);
@@ -132,12 +164,20 @@ export default function App() {
   }
 
   async function syncPending(statusMessage) {
-    if (!session || syncing) return;
+    if (!sessionRef.current || syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
+    if (statusMessage) {
+      setPreloadMessage(statusMessage);
+    }
     try {
       const records = await listPendingCheckins();
       if (records.length === 0) {
         await refreshStats();
+        if (statusMessage) {
+          setPreloadMessage('Khong co check-in pending nao can dong bo.');
+          setMessage('Khong co check-in pending nao can dong bo.');
+        }
         return;
       }
       if (statusMessage) {
@@ -152,10 +192,13 @@ export default function App() {
       );
       await markCheckinsSyncResult(response.items || []);
       await refreshStats();
+      setPreloadMessage(`Dong bo xong ${response.created}/${response.total} check-in.`);
       setMessage(`Dong bo xong ${response.created}/${response.total} check-in.`);
     } catch (error) {
+      setPreloadMessage(`Chua the dong bo: ${error.message}`);
       setMessage(`Chua the dong bo: ${error.message}`);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   }
@@ -163,37 +206,75 @@ export default function App() {
   async function handleBarcodeScanned({ data }) {
     if (!session || !data) return;
     const normalizedQr = extractQrCode(data);
+    const now = Date.now();
+    if (scanningRef.current) return;
+    if (recentScanRef.current.qrCode === normalizedQr && now - recentScanRef.current.scannedAt < 3500) {
+      return;
+    }
+
+    scanningRef.current = true;
+    recentScanRef.current = { qrCode: normalizedQr, scannedAt: now };
     const timestamp = new Date().toISOString();
-    const duplicate = await hasLocalDuplicate(normalizedQr);
-    if (duplicate) {
-      setLastScan({ status: 'DUPLICATE', qrCode: normalizedQr, message: 'QR da duoc luu/check-in tren thiet bi nay.' });
-      return;
-    }
-
-    if (online) {
-      try {
-        const response = await syncCheckins([{ qrCode: normalizedQr, timestamp, deviceId: session.deviceId }]);
-        const item = response.items?.[0];
-        setLastScan(item || { status: 'CREATED', qrCode: normalizedQr, message: 'Check-in thanh cong.' });
-        setMessage(item?.message || 'Check-in online thanh cong.');
-      } catch (error) {
-        setMessage(`Khong the check-in online, chuyen sang offline: ${error.message}`);
-        await saveOfflineScan(normalizedQr, timestamp);
+    try {
+      const registryRow = await findQr(normalizedQr);
+      if (!registryRow) {
+        await handleQrMissingFromRegistry(normalizedQr, timestamp);
+        return;
       }
-      return;
-    }
 
-    await saveOfflineScan(normalizedQr, timestamp);
+      const duplicate = await hasLocalDuplicate(normalizedQr);
+      if (duplicate) {
+        setLastScan({
+          status: 'DUPLICATE',
+          qrCode: normalizedQr,
+          message: 'QR da duoc luu/check-in tren thiet bi nay.',
+          fullName: registryRow.fullName,
+          workshopId: registryRow.workshopId,
+          workshopTitle: registryRow.workshopTitle,
+        });
+        return;
+      }
+
+      if (online) {
+        try {
+          const response = await syncCheckins([{ qrCode: normalizedQr, timestamp, deviceId: session.deviceId }]);
+          const item = response.items?.[0];
+          if (item?.status === 'CREATED') {
+            await recordSyncedCheckin({
+              qrCode: normalizedQr,
+              workshopId: registryRow.workshopId,
+              deviceId: session.deviceId,
+              timestamp,
+              serverStatus: item.status,
+              serverMessage: item.message,
+            });
+            await refreshStats();
+          }
+          setLastScan({
+            ...(item || { status: 'CREATED', qrCode: normalizedQr, message: 'Check-in thanh cong.' }),
+            fullName: registryRow.fullName,
+            workshopId: registryRow.workshopId,
+            workshopTitle: registryRow.workshopTitle,
+          });
+          setMessage(item?.message || 'Check-in online thanh cong.');
+        } catch (error) {
+          setMessage(`Khong the check-in online, chuyen sang offline: ${error.message}`);
+          await saveOfflineScan(registryRow, timestamp);
+        }
+        return;
+      }
+
+      await saveOfflineScan(registryRow, timestamp);
+    } finally {
+      setTimeout(() => {
+        scanningRef.current = false;
+      }, 1200);
+    }
   }
 
-  async function saveOfflineScan(qrCode, timestamp) {
-    const registryRow = await findQr(qrCode);
-    if (!registryRow) {
-      setLastScan({ status: 'INVALID_QR', qrCode, message: 'QR khong nam trong danh sach preload cua hom nay.' });
-      return;
-    }
+  async function saveOfflineScan(registryRow, timestamp) {
     await queueOfflineCheckin({
-      qrCode,
+      qrCode: registryRow.qrCode,
       workshopId: registryRow.workshopId,
       deviceId: session.deviceId,
       timestamp,
@@ -201,12 +282,63 @@ export default function App() {
     await refreshStats();
     setLastScan({
       status: 'PENDING',
-      qrCode,
+      qrCode: registryRow.qrCode,
       message: 'Da luu offline. He thong se dong bo lai khi co mang.',
       fullName: registryRow.fullName,
       workshopId: registryRow.workshopId,
+      workshopTitle: registryRow.workshopTitle,
     });
     setMessage('Check-in duoc luu offline.');
+  }
+
+  async function handleQrMissingFromRegistry(qrCode, timestamp) {
+    if (!online) {
+      setLastScan({ status: 'INVALID_QR', qrCode, message: 'QR khong nam trong danh sach preload cua ngay da chon.' });
+      setMessage('Dang offline nen chi check-in duoc QR da preload.');
+      return;
+    }
+
+    try {
+      const lookup = await lookupCheckinQr(qrCode, date.trim());
+      const lookupResult = {
+        status: lookup.status || 'LOOKUP',
+        qrCode,
+        message: lookup.message || 'QR khong nam trong danh sach preload.',
+        fullName: lookup.fullName,
+        workshopId: lookup.workshopId,
+        workshopTitle: lookup.workshopTitle,
+      };
+
+      if (!lookup.eligible) {
+        setLastScan(lookupResult);
+        setMessage(lookupResult.message);
+        return;
+      }
+
+      const response = await syncCheckins([{ qrCode, timestamp, deviceId: session.deviceId }]);
+      const item = response.items?.[0];
+      if (item?.status === 'CREATED') {
+        await recordSyncedCheckin({
+          qrCode,
+          workshopId: lookup.workshopId,
+          deviceId: session.deviceId,
+          timestamp,
+          serverStatus: item.status,
+          serverMessage: item.message,
+        });
+        await refreshStats();
+      }
+      setLastScan({
+        ...(item || { status: 'CREATED', qrCode, message: 'Check-in thanh cong.' }),
+        fullName: lookup.fullName,
+        workshopId: lookup.workshopId,
+        workshopTitle: lookup.workshopTitle,
+      });
+      setMessage(item?.message || 'Check-in online thanh cong.');
+    } catch (error) {
+      setLastScan({ status: 'LOOKUP_FAILED', qrCode, message: error.message });
+      setMessage(`Khong kiem tra duoc QR tren server: ${error.message}`);
+    }
   }
 
   const statusChip = useMemo(() => (online ? 'Online' : 'Offline'), [online]);
@@ -249,14 +381,16 @@ export default function App() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Preload du lieu</Text>
+          <Text style={styles.muted}>Ngay bat dau workshop</Text>
           <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
           <Pressable style={styles.primaryButton} onPress={handlePreload}>
-            <Text style={styles.primaryButtonText}>Tai danh sach QR hom nay</Text>
+            <Text style={styles.primaryButtonText}>Tai QR theo ngay workshop</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={() => syncPending('Dang dong bo thu cong...')}>
             <Text style={styles.secondaryButtonText}>{syncing ? 'Dang dong bo...' : 'Dong bo pending ngay'}</Text>
           </Pressable>
           <Text style={styles.muted}>Registry: {stats.registryCount} QR | Pending: {stats.pendingCount}</Text>
+          {preloadMessage ? <Text style={styles.preloadFeedback}>{preloadMessage}</Text> : null}
         </View>
 
         <View style={styles.card}>
@@ -269,7 +403,10 @@ export default function App() {
             <CameraView
               style={styles.camera}
               facing="back"
+              autofocus="on"
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onCameraReady={() => setMessage('Camera san sang quet QR.')}
+              onMountError={(error) => setMessage(`Camera loi: ${error.message || 'khong khoi dong duoc camera'}`)}
               onBarcodeScanned={handleBarcodeScanned}
             />
           )}
@@ -280,6 +417,9 @@ export default function App() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Ket qua gan nhat</Text>
             <Text style={styles.resultStatus}>{lastScan.status}</Text>
+            {lastScan.fullName ? <Text style={styles.attendeeName}>{lastScan.fullName}</Text> : null}
+            {lastScan.workshopTitle ? <Text style={styles.feedback}>{lastScan.workshopTitle}</Text> : null}
+            {lastScan.workshopId ? <Text style={styles.muted}>Workshop ID: {lastScan.workshopId}</Text> : null}
             <Text style={styles.feedback}>{lastScan.message}</Text>
             <Text style={styles.muted}>QR: {lastScan.qrCode}</Text>
           </View>
@@ -350,6 +490,12 @@ const styles = StyleSheet.create({
   feedback: {
     color: '#1e293b',
     fontSize: 14,
+    lineHeight: 20,
+  },
+  preloadFeedback: {
+    color: '#047857',
+    fontSize: 14,
+    fontWeight: '700',
     lineHeight: 20,
   },
   row: {
@@ -429,5 +575,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#0f172a',
+  },
+  attendeeName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#047857',
   },
 });

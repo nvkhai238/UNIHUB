@@ -28,6 +28,8 @@ services:
       # SMTP
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
       SMTP_USERNAME: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASS}
       SMTP_AUTH: ${SMTP_AUTH}
@@ -48,6 +50,12 @@ services:
         condition: service_healthy
       mock-payment:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
     volumes:
       - csv-data:/data   # Spring Batch đọc CSV từ đây
     restart: on-failure
@@ -101,7 +109,8 @@ services:
       VITE_SUPABASE_URL: ${SUPABASE_URL}
       VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - unihub-net
 

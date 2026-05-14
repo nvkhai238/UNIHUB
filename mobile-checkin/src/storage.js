@@ -7,6 +7,14 @@ const DEVICE_ID_KEY = 'unihub_device_id';
 
 let dbPromise;
 
+async function ensureColumn(db, tableName, columnName, definition) {
+  const columns = await db.getAllAsync(`PRAGMA table_info(${tableName})`);
+  const hasColumn = columns.some((column) => column.name === columnName);
+  if (!hasColumn) {
+    await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition};`);
+  }
+}
+
 export async function getDb() {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync('unihub-checkin.db');
@@ -16,6 +24,7 @@ export async function getDb() {
         qr_code TEXT PRIMARY KEY NOT NULL,
         full_name TEXT,
         workshop_id TEXT NOT NULL,
+        workshop_title TEXT,
         checked_in_local INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
@@ -30,6 +39,16 @@ export async function getDb() {
         server_message TEXT
       );
     `);
+    await ensureColumn(db, 'qr_registry', 'full_name', 'TEXT');
+    await ensureColumn(db, 'qr_registry', 'workshop_id', 'TEXT');
+    await ensureColumn(db, 'qr_registry', 'workshop_title', 'TEXT');
+    await ensureColumn(db, 'qr_registry', 'checked_in_local', 'INTEGER NOT NULL DEFAULT 0');
+    await ensureColumn(db, 'qr_registry', 'updated_at', 'TEXT');
+    await ensureColumn(db, 'pending_checkins', 'workshop_id', 'TEXT');
+    await ensureColumn(db, 'pending_checkins', 'device_id', 'TEXT');
+    await ensureColumn(db, 'pending_checkins', 'sync_status', "TEXT NOT NULL DEFAULT 'PENDING'");
+    await ensureColumn(db, 'pending_checkins', 'server_status', 'TEXT');
+    await ensureColumn(db, 'pending_checkins', 'server_message', 'TEXT');
   }
   return dbPromise;
 }
@@ -77,9 +96,9 @@ export async function replaceQrRegistry(items) {
     await db.execAsync('DELETE FROM qr_registry;');
     for (const item of items) {
       await db.runAsync(
-        `INSERT INTO qr_registry (qr_code, full_name, workshop_id, checked_in_local, updated_at)
-         VALUES (?, ?, ?, 0, ?)`,
-        [item.qrCode, item.fullName || '', item.workshopId, new Date().toISOString()]
+        `INSERT INTO qr_registry (qr_code, full_name, workshop_id, workshop_title, checked_in_local, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?)`,
+        [item.qrCode, item.fullName || '', item.workshopId, item.workshopTitle || '', new Date().toISOString()]
       );
     }
   });
@@ -88,7 +107,14 @@ export async function replaceQrRegistry(items) {
 export async function findQr(qrCode) {
   const db = await getDb();
   return db.getFirstAsync(
-    'SELECT qr_code AS qrCode, full_name AS fullName, workshop_id AS workshopId, checked_in_local AS checkedInLocal FROM qr_registry WHERE qr_code = ?',
+    `SELECT
+       qr_code AS qrCode,
+       full_name AS fullName,
+       workshop_id AS workshopId,
+       workshop_title AS workshopTitle,
+       checked_in_local AS checkedInLocal
+     FROM qr_registry
+     WHERE qr_code = ?`,
     [qrCode]
   );
 }
@@ -100,6 +126,21 @@ export async function queueOfflineCheckin({ qrCode, workshopId, deviceId, timest
       `INSERT INTO pending_checkins (qr_code, workshop_id, device_id, timestamp, sync_status)
        VALUES (?, ?, ?, ?, 'PENDING')`,
       [qrCode, workshopId || null, deviceId, timestamp]
+    );
+    await db.runAsync(
+      'UPDATE qr_registry SET checked_in_local = 1, updated_at = ? WHERE qr_code = ?',
+      [new Date().toISOString(), qrCode]
+    );
+  });
+}
+
+export async function recordSyncedCheckin({ qrCode, workshopId, deviceId, timestamp, serverStatus, serverMessage }) {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO pending_checkins (qr_code, workshop_id, device_id, timestamp, sync_status, server_status, server_message)
+       VALUES (?, ?, ?, ?, 'SYNCED', ?, ?)`,
+      [qrCode, workshopId || null, deviceId, timestamp, serverStatus || 'CREATED', serverMessage || 'Check-in recorded']
     );
     await db.runAsync(
       'UPDATE qr_registry SET checked_in_local = 1, updated_at = ? WHERE qr_code = ?',

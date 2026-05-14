@@ -35,8 +35,8 @@ spring:
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
-    username: ${SMTP_USER:}
-    password: ${SMTP_PASS:}
+    username: ${SMTP_USER:${SMTP_USERNAME:}}
+    password: ${SMTP_PASS:${SMTP_PASSWORD:}}
     properties:
       mail.smtp.auth: ${SMTP_AUTH:true}
       mail.smtp.starttls.enable: ${SMTP_STARTTLS_ENABLE:true}
@@ -103,6 +103,9 @@ resilience4j:
         automaticTransitionFromOpenToHalfOpenEnabled: true
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:

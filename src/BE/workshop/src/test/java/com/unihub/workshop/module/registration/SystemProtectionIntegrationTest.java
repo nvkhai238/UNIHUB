@@ -46,17 +46,27 @@ public class SystemProtectionIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        registrationRepository.deleteAll();
-        workshopRepository.deleteAll();
-        userRepository.deleteAll();
+        resetDatabase();
+
+        User organizer = User.builder()
+                .email("organizer@test.edu.vn")
+                .password(passwordEncoder.encode("password"))
+                .fullName("Organizer")
+                .role(UserRole.ORGANIZER)
+                .isActive(true)
+                .build();
+        organizer = userRepository.save(organizer);
 
         workshop = Workshop.builder()
                 .title("Protection Workshop")
+                .room("Room 101")
                 .capacity(100)
                 .remainingSeats(100)
                 .price(BigDecimal.ZERO)
                 .status(WorkshopStatus.PUBLISHED)
                 .startTime(ZonedDateTime.now().plusDays(1))
+                .endTime(ZonedDateTime.now().plusDays(1).plusHours(2))
+                .createdBy(organizer)
                 .build();
         workshop = workshopRepository.save(workshop);
 
@@ -65,6 +75,7 @@ public class SystemProtectionIntegrationTest extends AbstractIntegrationTest {
                 .password(passwordEncoder.encode("password"))
                 .fullName("Student")
                 .role(UserRole.STUDENT)
+                .isActive(true)
                 .build();
         userRepository.save(student);
 

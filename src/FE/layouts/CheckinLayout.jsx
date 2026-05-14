@@ -1,24 +1,19 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import UserDropdown from '../components/UserDropdown';
-import { clearQrRegistry } from '../lib/checkin-db';
 
 /**
- * CheckinLayout - layout danh rieng cho role CHECKIN_STAFF.
+ * CheckinLayout - debug web surface for role CHECKIN_STAFF.
  *
  * Hien thi sau khi AuthGuard + RoleGuard xac thuc thanh cong.
- * Day la PWA offline-first - giu layout toi gian de tai nhanh.
+ * Luong check-in chinh la mobile native app trong /mobile-checkin.
+ * Web route nay chi dung de debug nhanh API preload/sync.
  *
  * Quyen han (blueprint Section 5):
  *   - Quet QR check-in           POST /api/checkins/**
  *   - Preload danh sach QR       GET /api/checkins/preload
- *   - Sync check-in offline      POST /api/checkins/sync
+ *   - Sync check-in debug        POST /api/checkins/sync
  *   - Khong dang ky workshop
  *   - Khong quan ly workshop
- *
- * Luu y offline (blueprint Section 3 - Luong Check-in Offline):
- *   - Truoc su kien: app preload QR list -> luu vao IndexedDB
- *   - Mat mang: lookup IndexedDB local -> ghi pending queue
- *   - Co mang tro lai: Background Sync -> POST /checkins/sync
  */
 export default function CheckinLayout() {
   return (
@@ -32,7 +27,7 @@ export default function CheckinLayout() {
               <CheckinNavLink to="/checkin/scan">Quét QR</CheckinNavLink>
             </nav>
             <div className="ml-2">
-              <UserDropdown onLoggedOut={clearQrRegistry} />
+              <UserDropdown onLoggedOut={clearDebugCheckinCache} />
             </div>
           </div>
         </div>
@@ -42,6 +37,12 @@ export default function CheckinLayout() {
       </main>
     </div>
   );
+}
+
+function clearDebugCheckinCache() {
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith('checkin_preload_') || key === 'unihub_checkin_offline_queue' || key === 'unihub_checkin_device_id')
+    .forEach((key) => localStorage.removeItem(key));
 }
 
 function CheckinNavLink({ to, children }) {

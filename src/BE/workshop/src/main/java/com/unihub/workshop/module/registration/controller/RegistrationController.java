@@ -8,10 +8,9 @@ import com.unihub.workshop.module.registration.dto.RegistrationRequest;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
 import com.unihub.workshop.module.registration.service.IdempotencyService;
 import com.unihub.workshop.module.registration.service.RegistrationService;
+import com.unihub.workshop.module.registration.service.RegistrationSlidingWindowService;
 import com.unihub.workshop.module.registration.service.StudentRegistrationLockService;
 import com.unihub.workshop.module.registration.service.WorkshopSeatLockService;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,11 +35,11 @@ public class RegistrationController {
 
     private final RegistrationService registrationService;
     private final IdempotencyService idempotencyService;
+    private final RegistrationSlidingWindowService registrationSlidingWindowService;
     private final StudentRegistrationLockService lockService;
     private final WorkshopSeatLockService workshopSeatLockService;
 
     @PostMapping
-    @RateLimiter(name = "registration", fallbackMethod = "registrationRateLimitFallback")
     public ResponseEntity<ApiResponse<RegistrationResponse>> register(
             @Valid @RequestBody RegistrationRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -56,6 +55,18 @@ public class RegistrationController {
             return ResponseEntity.ok()
                     .header("X-Idempotent-Replayed", "true")
                     .body(ApiResponse.success(cachedResponse.get()));
+        }
+
+        if (!registrationSlidingWindowService.tryAcquire(authentication.getName())) {
+            long retryAfter = registrationSlidingWindowService.retryAfterSeconds();
+            return ResponseEntity
+                    .status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header("Retry-After", String.valueOf(retryAfter))
+                    .body(ApiResponse.error(
+                            429,
+                            "RATE_LIMIT_EXCEEDED",
+                            "Quá nhiều yêu cầu. Vui lòng thử lại sau " + retryAfter + " giây."
+                    ));
         }
 
         try (StudentRegistrationLockService.RegistrationLock lock =
@@ -86,22 +97,6 @@ public class RegistrationController {
                             .data(response)
                             .build());
         }
-    }
-
-    public ResponseEntity<ApiResponse<RegistrationResponse>> registrationRateLimitFallback(
-            RegistrationRequest request,
-            String idempotencyKey,
-            Authentication authentication,
-            RequestNotPermitted ex
-    ) {
-        return ResponseEntity
-                .status(HttpStatus.TOO_MANY_REQUESTS)
-                .header("Retry-After", "10")
-                .body(ApiResponse.error(
-                        429,
-                        "RATE_LIMIT_EXCEEDED",
-                        "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 giây."
-                ));
     }
 
     @GetMapping("/my")

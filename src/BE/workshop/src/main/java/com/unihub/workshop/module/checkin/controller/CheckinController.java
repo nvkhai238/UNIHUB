@@ -1,6 +1,7 @@
 package com.unihub.workshop.module.checkin.controller;
 
 import com.unihub.workshop.common.response.ApiResponse;
+import com.unihub.workshop.module.checkin.dto.CheckinLookupResponse;
 import com.unihub.workshop.module.checkin.dto.CheckinResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
@@ -30,6 +31,15 @@ public class CheckinController {
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return ResponseEntity.ok(ApiResponse.success(checkinService.preloadCheckins(date)));
+    }
+
+    @GetMapping("/lookup")
+    @PreAuthorize("hasRole('CHECKIN_STAFF')")
+    public ResponseEntity<ApiResponse<CheckinLookupResponse>> lookup(
+            @RequestParam("qrCode") String qrCode,
+            @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(checkinService.lookupQr(qrCode, date)));
     }
 
     @PostMapping("/sync")

@@ -52,9 +52,16 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        registrationRepository.deleteAll();
-        workshopRepository.deleteAll();
-        userRepository.deleteAll();
+        resetDatabase();
+
+        User organizer = User.builder()
+                .email("organizer@test.edu.vn")
+                .password(passwordEncoder.encode("password"))
+                .fullName("Organizer")
+                .role(UserRole.ORGANIZER)
+                .isActive(true)
+                .build();
+        organizer = userRepository.save(organizer);
 
         // Create a workshop with only 1 seat
         workshop = Workshop.builder()
@@ -68,6 +75,7 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
                 .remainingSeats(1) // Only 1 seat left!
                 .price(BigDecimal.ZERO) // Free to simplify
                 .status(WorkshopStatus.PUBLISHED)
+                .createdBy(organizer)
                 .build();
         workshop = workshopRepository.save(workshop);
 
@@ -79,6 +87,7 @@ public class RegistrationConcurrencyTest extends AbstractIntegrationTest {
                     .password(passwordEncoder.encode("password"))
                     .fullName("Student " + i)
                     .role(UserRole.STUDENT)
+                    .isActive(true)
                     .build();
             userRepository.save(student);
 

@@ -18,8 +18,6 @@ import com.unihub.workshop.module.workshop.service.WorkshopReadSlidingWindowServ
 import com.unihub.workshop.module.registration.entity.RegistrationStatus;
 import com.unihub.workshop.module.registration.service.RegistrationService;
 import com.unihub.workshop.module.registration.dto.RegistrationResponse;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -53,7 +51,6 @@ public class WorkshopController {
     private final WorkshopReadSlidingWindowService workshopReadSlidingWindowService;
 
     @GetMapping
-    @RateLimiter(name = "workshop-read", fallbackMethod = "workshopReadRateLimitFallback")
     public ResponseEntity<ApiResponse<Page<WorkshopResponse>>> getPublished(
             HttpServletRequest request,
             Authentication authentication,
@@ -64,7 +61,6 @@ public class WorkshopController {
     }
 
     @GetMapping("/{id}")
-    @RateLimiter(name = "workshop-read", fallbackMethod = "workshopDetailRateLimitFallback")
     public ResponseEntity<ApiResponse<WorkshopResponse>> getById(
             @PathVariable UUID id,
             HttpServletRequest request,
@@ -246,32 +242,6 @@ public class WorkshopController {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    public ResponseEntity<ApiResponse<Page<WorkshopResponse>>> workshopReadRateLimitFallback(
-            Pageable pageable,
-            RequestNotPermitted ex
-    ) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header("Retry-After", "10")
-                .body(ApiResponse.error(
-                        429,
-                        "RATE_LIMIT_EXCEEDED",
-                        "Too many workshop requests. Please retry after 10 seconds."
-                ));
-    }
-
-    public ResponseEntity<ApiResponse<WorkshopResponse>> workshopDetailRateLimitFallback(
-            UUID id,
-            RequestNotPermitted ex
-    ) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header("Retry-After", "10")
-                .body(ApiResponse.error(
-                        429,
-                        "RATE_LIMIT_EXCEEDED",
-                        "Too many workshop requests. Please retry after 10 seconds."
-                ));
     }
 
     private void enforceWorkshopReadWindow(HttpServletRequest request, Authentication authentication) {

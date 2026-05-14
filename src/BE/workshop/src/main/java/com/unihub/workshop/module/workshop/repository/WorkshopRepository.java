@@ -15,6 +15,7 @@ import java.util.UUID;
 public interface WorkshopRepository extends JpaRepository<Workshop, UUID> {
     Page<Workshop> findByStatus(WorkshopStatus status, Pageable pageable);
     Page<Workshop> findAllByStatusIn(java.util.List<WorkshopStatus> statuses, Pageable pageable);
+    Optional<Workshop> findByTitle(String title);
 
     @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM Workshop w WHERE w.id = :id")

@@ -93,6 +93,15 @@ export async function preloadCheckins(date) {
   return payload.data || [];
 }
 
+export async function lookupCheckinQr(qrCode, date) {
+  const query = new URLSearchParams({ qrCode });
+  if (date) {
+    query.set('date', date);
+  }
+  const payload = await request(`/api/checkins/lookup?${query.toString()}`);
+  return payload.data;
+}
+
 export async function syncCheckins(records) {
   const payload = await request('/api/checkins/sync', {
     method: 'POST',

@@ -29,6 +29,7 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     List<Registration> findByWorkshop(Workshop workshop);
     List<Registration> findByWorkshopAndStatusIn(Workshop workshop, List<RegistrationStatus> statuses);
     Optional<Registration> findByQrCode(String qrCode);
+    List<Registration> findByStatusAndQrCodeIsNotNull(RegistrationStatus status);
     List<Registration> findByStatusAndWorkshop_StartTimeBetween(RegistrationStatus status, ZonedDateTime start, ZonedDateTime end);
 
     @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

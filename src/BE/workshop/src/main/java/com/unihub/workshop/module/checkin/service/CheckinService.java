@@ -3,6 +3,7 @@ package com.unihub.workshop.module.checkin.service;
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
 import com.unihub.workshop.module.checkin.dto.CheckinResponse;
+import com.unihub.workshop.module.checkin.dto.CheckinLookupResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
 import com.unihub.workshop.module.checkin.dto.SyncResponse;
@@ -36,19 +37,73 @@ public class CheckinService {
 
     @Transactional(readOnly = true)
     public List<PreloadResponse> preloadCheckins(LocalDate date) {
-        ZonedDateTime startOfDay = date.atStartOfDay(ZoneId.systemDefault());
-        ZonedDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
-
-        List<Registration> registrations = registrationRepository.findByStatusAndWorkshop_StartTimeBetween(
-                RegistrationStatus.CONFIRMED, startOfDay, endOfDay);
+        ZoneId localZone = ZoneId.systemDefault();
+        List<Registration> registrations = registrationRepository.findByStatusAndQrCodeIsNotNull(RegistrationStatus.CONFIRMED)
+                .stream()
+                .filter(r -> r.getWorkshop().getStartTime()
+                        .withZoneSameInstant(localZone)
+                        .toLocalDate()
+                        .equals(date))
+                .toList();
 
         return registrations.stream()
                 .map(r -> PreloadResponse.builder()
                         .qrCode(r.getQrCode())
                         .fullName(r.getUser().getFullName())
                         .workshopId(r.getWorkshop().getId())
+                        .workshopTitle(r.getWorkshop().getTitle())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public CheckinLookupResponse lookupQr(String qrCode, LocalDate selectedDate) {
+        Optional<Registration> registrationOpt = registrationRepository.findByQrCode(qrCode);
+        if (registrationOpt.isEmpty()) {
+            return CheckinLookupResponse.builder()
+                    .found(false)
+                    .eligible(false)
+                    .qrCode(qrCode)
+                    .status("INVALID_QR")
+                    .message("QR code does not match any registration")
+                    .build();
+        }
+
+        Registration registration = registrationOpt.get();
+        LocalDate workshopDate = registration.getWorkshop().getStartTime()
+                .withZoneSameInstant(ZoneId.systemDefault())
+                .toLocalDate();
+        boolean confirmed = registration.getStatus() == RegistrationStatus.CONFIRMED;
+        boolean sameDate = selectedDate == null || workshopDate.equals(selectedDate);
+        boolean eligible = confirmed && sameDate;
+        String status;
+        String message;
+
+        if (!confirmed) {
+            status = "NOT_CONFIRMED";
+            message = "Registration is not confirmed";
+        } else if (!sameDate) {
+            status = "WRONG_DATE";
+            message = "QR belongs to workshop date " + workshopDate;
+        } else {
+            status = "ELIGIBLE";
+            message = "QR is eligible for check-in";
+        }
+
+        return CheckinLookupResponse.builder()
+                .found(true)
+                .eligible(eligible)
+                .qrCode(qrCode)
+                .registrationId(registration.getId())
+                .registrationStatus(registration.getStatus())
+                .fullName(registration.getUser().getFullName())
+                .studentId(registration.getUser().getStudentId())
+                .workshopId(registration.getWorkshop().getId())
+                .workshopTitle(registration.getWorkshop().getTitle())
+                .workshopStartTime(registration.getWorkshop().getStartTime())
+                .status(status)
+                .message(message)
+                .build();
     }
 
     @Transactional
