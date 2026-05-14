@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function TicketPage() {
   const [searchParams] = useSearchParams();
@@ -59,13 +60,5 @@ export default function TicketPage() {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  try {
-    return new Intl.DateTimeFormat('vi-VN', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  } catch(e) {
-    return value;
-  }
+  return formatDateTime(value);
 }

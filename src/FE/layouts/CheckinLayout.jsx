@@ -5,7 +5,7 @@ import UserDropdown from '../components/UserDropdown';
  * CheckinLayout - debug web surface for role CHECKIN_STAFF.
  *
  * Hien thi sau khi AuthGuard + RoleGuard xac thuc thanh cong.
- * Luong check-in chinh la mobile native app trong /mobile-checkin.
+ * Luong check-in chinh la mobile native app trong /src/mobile-checkin.
  * Web route nay chi dung de debug nhanh API preload/sync.
  *
  * Quyen han (blueprint Section 5):

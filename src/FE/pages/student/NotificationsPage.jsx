@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/api';
 import { useNotificationContext } from '../../components/NotificationProvider';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState([]);
@@ -288,5 +289,5 @@ function formatRelativeTime(value) {
   if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
   if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return formatDateTime(date);
 }

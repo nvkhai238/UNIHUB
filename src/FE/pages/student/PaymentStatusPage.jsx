@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import { supabase } from '../../lib/supabaseClient';
+import { formatDateTime } from '../../utils/dateTime';
 
 
 export default function PaymentStatusPage() {
@@ -330,6 +331,5 @@ function formatMoney(amount) {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }

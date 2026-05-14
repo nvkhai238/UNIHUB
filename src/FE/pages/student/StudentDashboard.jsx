@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function StudentDashboard() {
   const [registrations, setRegistrations] = useState([]);
@@ -108,6 +109,5 @@ function registrationStatusLabel(status) {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }

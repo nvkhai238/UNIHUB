@@ -17,7 +17,7 @@ Ung dung mobile native cho `CHECKIN_STAFF`, duoc scaffold bang React Native + Ex
 ## Cai dat
 
 ```bash
-cd mobile-checkin
+cd src/mobile-checkin
 npm install
 npx expo start
 ```
@@ -32,7 +32,7 @@ Co the chay Expo voi bien moi truong:
 EXPO_PUBLIC_API_BASE_URL=http://YOUR_LAN_IP:8080 npx expo start
 ```
 
-Hoac sua `mobile-checkin/app.json`:
+Hoac sua `src/mobile-checkin/app.json`:
 
 ```json
 {

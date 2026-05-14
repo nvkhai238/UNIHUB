@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function RegistrationDetailPage() {
   const { registrationId } = useParams();
@@ -153,11 +154,7 @@ function Info({ label, value }) {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 function registrationStatusLabel(status) {

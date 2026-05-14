@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function MyRegistrationsPage() {
   const navigate = useNavigate();
@@ -216,6 +217,5 @@ function getCancellationReason(registration) {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }
