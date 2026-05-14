@@ -96,7 +96,7 @@ docker compose down -v
 Thu muc lam viec:
 
 ```powershell
-cd src
+cd src\FE
 ```
 
 Cai dependencies:
@@ -238,7 +238,7 @@ cd src
 docker compose up --build
 
 # Frontend
-cd src
+cd src\FE
 npm.cmd run dev
 
 # Backend

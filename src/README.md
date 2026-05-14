@@ -22,3 +22,11 @@ docker compose up --build
 Tao `src/.env` tu `src/.env.example`, sau do dien Supabase, database, SMTP va cac key can thiet.
 
 Tai lieu chay chi tiet nam o `../README.md` va `../RUN_REPO.md`.
+
+Neu chay frontend local ngoai Docker, dung thu muc `src/FE`:
+
+```powershell
+cd src\FE
+npm.cmd install
+npm.cmd run dev
+```

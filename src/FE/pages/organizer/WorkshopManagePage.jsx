@@ -53,13 +53,13 @@ export default function WorkshopManagePage() {
 
   const publish = async (id) => {
     await api.patch(`/api/workshops/${id}/status`, { status: 'PUBLISHED' });
-    setMessage('Workshop da duoc xuat ban.');
+    setMessage('Workshop đã được xuất bản.');
     load();
   };
 
   const cancel = async (id) => {
     await api.post(`/api/workshops/${id}/cancel`);
-    setMessage('Workshop da huy. Cac giao dich lien quan se duoc xu ly hoan tien va gui thong bao bat dong bo.');
+    setMessage('Workshop đã hủy. Các giao dịch liên quan sẽ được xử lý hoàn tiền và gửi thông báo bất đồng bộ.');
     load();
   };
 
@@ -81,11 +81,11 @@ export default function WorkshopManagePage() {
     setSubmitting(true);
     try {
       await api.post('/api/workshops', toPayload(form));
-      setMessage('Tao workshop thanh cong. Workshop moi dang o trang thai nhap.');
+      setMessage('Tạo workshop thành công. Workshop mới đang ở trạng thái nháp.');
       navigate('/admin/workshops', { replace: true });
       load();
     } catch {
-      setFormError('Khong tao duoc workshop. Kiem tra lai du lieu nhap.');
+      setFormError('Không tạo được workshop. Kiểm tra lại dữ liệu nhập.');
     } finally {
       setSubmitting(false);
     }
@@ -95,9 +95,9 @@ export default function WorkshopManagePage() {
     <section className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Quan ly Workshop</h1>
+          <h1 className="text-3xl font-bold tracking-normal">Quản lý workshop</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Theo doi trang thai, ghe con lai va thao tac xuat ban hoac huy.
+            Theo dõi trạng thái, ghế còn lại và thao tác xuất bản hoặc hủy.
           </p>
         </div>
         <button
@@ -105,7 +105,7 @@ export default function WorkshopManagePage() {
           onClick={openCreateModal}
           className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
         >
-          Tao workshop
+          Tạo workshop
         </button>
       </div>
 
@@ -117,7 +117,7 @@ export default function WorkshopManagePage() {
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         {loading ? (
-          <p className="p-5 text-sm text-gray-500">Dang tai...</p>
+          <p className="p-5 text-sm text-gray-500">Đang tải...</p>
         ) : (
           <div className="divide-y divide-gray-100">
             {workshops.map((workshop) => (
@@ -131,7 +131,7 @@ export default function WorkshopManagePage() {
                     {formatDate(workshop.startTime)} · {workshop.room}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
-                    Ghe con lai {workshop.remainingSeats}/{workshop.capacity}
+                    Ghế còn lại {workshop.remainingSeats}/{workshop.capacity}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -153,7 +153,7 @@ export default function WorkshopManagePage() {
                       onClick={() => publish(workshop.id)}
                       className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                     >
-                      Xuat ban
+                      Xuất bản
                     </button>
                   )}
                   {workshop.status !== 'CANCELLED' && (
@@ -162,7 +162,7 @@ export default function WorkshopManagePage() {
                       onClick={() => cancel(workshop.id)}
                       className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
                     >
-                      Huy
+                      Hủy
                     </button>
                   )}
                 </div>
@@ -183,9 +183,9 @@ export default function WorkshopManagePage() {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold tracking-normal text-gray-950">Tao workshop moi</h2>
+                <h2 className="text-2xl font-bold tracking-normal text-gray-950">Tạo workshop mới</h2>
                 <p className="mt-2 text-sm text-gray-600">
-                  Workshop moi se o trang thai nhap de ban to chuc kiem tra truoc khi xuat ban.
+                  Workshop mới sẽ ở trạng thái nháp để ban tổ chức kiểm tra trước khi xuất bản.
                 </p>
               </div>
               <button
@@ -193,7 +193,7 @@ export default function WorkshopManagePage() {
                 onClick={closeModal}
                 className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
               >
-                Dong
+                Đóng
               </button>
             </div>
 
@@ -204,19 +204,19 @@ export default function WorkshopManagePage() {
             )}
 
             <form onSubmit={submitCreate} className="mt-6 grid gap-4">
-              <Field label="Tieu de" value={form.title} onChange={(value) => update('title', value)} required />
-              <Field label="Dien gia" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
-              <Field label="Phong" value={form.room} onChange={(value) => update('room', value)} required />
+              <Field label="Tiêu đề" value={form.title} onChange={(value) => update('title', value)} required />
+              <Field label="Diễn giả" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
+              <Field label="Phòng" value={form.room} onChange={(value) => update('room', value)} required />
               <div className="grid gap-4 md:grid-cols-2">
                 <Field
-                  label="Bat dau"
+                  label="Bắt đầu"
                   type="datetime-local"
                   value={form.startTime}
                   onChange={(value) => update('startTime', value)}
                   required
                 />
                 <Field
-                  label="Ket thuc"
+                  label="Kết thúc"
                   type="datetime-local"
                   value={form.endTime}
                   onChange={(value) => update('endTime', value)}
@@ -225,29 +225,29 @@ export default function WorkshopManagePage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field
-                  label="Suc chua"
+                  label="Sức chứa"
                   type="number"
                   value={form.capacity}
                   onChange={(value) => update('capacity', Number(value))}
                   required
                 />
                 <Field
-                  label="Gia ve"
+                  label="Giá vé"
                   type="number"
                   value={form.price}
                   onChange={(value) => update('price', Number(value))}
                   required
                 />
               </div>
-              <Textarea label="Mo ta" value={form.description} onChange={(value) => update('description', value)} />
-              <Textarea label="Bio dien gia" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
+              <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
+              <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
               <Field
-                label="URL so do phong"
+                label="URL sơ đồ phòng"
                 value={form.roomLayoutUrl}
                 onChange={(value) => update('roomLayoutUrl', value)}
               />
               <Field
-                label="URL tai lieu PDF"
+                label="URL tài liệu PDF"
                 value={form.pdfUrl}
                 onChange={(value) => update('pdfUrl', value)}
               />
@@ -258,14 +258,14 @@ export default function WorkshopManagePage() {
                   onClick={closeModal}
                   className="rounded-md border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                 >
-                  Huy
+                  Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
                   className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {submitting ? 'Dang tao...' : 'Tao workshop'}
+                  {submitting ? 'Đang tạo...' : 'Tạo workshop'}
                 </button>
               </div>
             </form>
@@ -321,9 +321,9 @@ function StatusBadge({ status }) {
 
 function workshopStatusLabel(status) {
   const labels = {
-    DRAFT: 'Nhap',
-    PUBLISHED: 'Da xuat ban',
-    CANCELLED: 'Da huy',
+    DRAFT: 'Nháp',
+    PUBLISHED: 'Đã xuất bản',
+    CANCELLED: 'Đã hủy',
   };
 
   return labels[status] ?? status;

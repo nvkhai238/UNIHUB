@@ -92,7 +92,7 @@ cd src\BE\workshop
 Frontend:
 
 ```powershell
-cd src
+cd src\FE
 npm install
 npm run dev
 ```
@@ -159,7 +159,7 @@ cd src\BE\workshop
 Frontend build:
 
 ```powershell
-cd src
+cd src\FE
 npm run build
 ```
 
