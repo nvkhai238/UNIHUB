@@ -5,20 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "plugins": [
-      "expo-secure-store",
-      "expo-sqlite"
-    ],
+    "assetBundlePatterns": ["**/*"],
+    "plugins": ["expo-secure-store", "expo-sqlite"],
     "android": {
       "package": "com.unihub.checkinmobile",
-      "permissions": [
-        "CAMERA",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE"
-      ]
+      "permissions": ["CAMERA", "INTERNET", "ACCESS_NETWORK_STATE"]
     },
     "ios": {
       "bundleIdentifier": "com.unihub.checkinmobile",
@@ -27,7 +18,7 @@
       }
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.31.123:8080"
+      "apiBaseUrl": "http://192.168.100.246:8080"
     }
   }
 }
