@@ -51,22 +51,22 @@ export default function WorkshopListPage() {
     <section className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal text-gray-950">Lich workshop</h1>
+          <h1 className="text-3xl font-bold tracking-normal text-gray-950">Lịch workshop</h1>
           <p className="mt-2 max-w-2xl text-sm text-gray-600">
-            Chon workshop, xem so ghe con lai theo thoi gian thuc va dang ky bang tai khoan sinh vien.
+            Chọn workshop, xem số ghế còn lại theo thời gian thực và đăng ký bằng tài khoản sinh viên.
           </p>
           <p className="mt-2 text-xs text-gray-400">
             {realtimeAvailable
-              ? 'Realtime seats dang ket noi.'
-              : 'Realtime tam thoi gian doan. He thong dang fallback sang polling 10s.'}
+              ? 'Realtime seats đang kết nối.'
+              : 'Realtime tạm thời gián đoạn. Hệ thống đang fallback sang polling 10s.'}
           </p>
         </div>
         <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
-          Dang ky cua toi
+          Đăng ký của tôi
         </Link>
       </div>
 
-      {loading && <StateBox text="Dang tai workshop..." />}
+      {loading && <StateBox text="Đang tải workshop..." />}
       {error && <StateBox text={error} tone="error" onRetry={loadWorkshops} />}
 
       {!loading && !error && (
@@ -84,9 +84,9 @@ export default function WorkshopListPage() {
                 </span>
               </div>
               <div className="space-y-2 text-sm text-gray-600">
-                <p><strong>Thoi gian:</strong> {formatDate(workshop.startTime)}</p>
-                <p><strong>Phong:</strong> {workshop.room}</p>
-                <p><strong>Dien gia:</strong> {workshop.speakerName || 'Dang cap nhat'}</p>
+                <p><strong>Thời gian:</strong> {formatDate(workshop.startTime)}</p>
+                <p><strong>Phòng:</strong> {workshop.room}</p>
+                <p><strong>Diễn giả:</strong> {workshop.speakerName || 'Đang cập nhật'}</p>
                 <p className="mt-1 font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
               </div>
             </Link>
@@ -107,7 +107,7 @@ function StateBox({ text, tone = 'default', onRetry }) {
           onClick={onRetry}
           className="mt-3 rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
         >
-          Thu lai
+          Thử lại
         </button>
       )}
     </div>
@@ -115,17 +115,17 @@ function StateBox({ text, tone = 'default', onRetry }) {
 }
 
 function formatDate(value) {
-  return formatDateTime(value, 'Chua co lich');
+  return formatDateTime(value, 'Chưa có lịch');
 }
 
 function formatPrice(value) {
   const amount = Number(value ?? 0);
-  return amount === 0 ? 'Mien phi' : `${amount.toLocaleString('vi-VN')}d`;
+  return amount === 0 ? 'Miễn phí' : `${amount.toLocaleString('vi-VN')}đ`;
 }
 
 function resolveErrorMessage(err) {
   const serverMessage = err?.response?.data?.message;
-  if (serverMessage) return `Khong tai duoc danh sach workshop: ${serverMessage}`;
-  if (err?.code === 'ECONNABORTED') return 'Khong tai duoc danh sach workshop: qua thoi gian cho ket noi BE.';
-  return 'Khong tai duoc danh sach workshop. Kiem tra BE da chay va dung cau hinh CORS/base URL.';
+  if (serverMessage) return `Không tải được danh sách workshop: ${serverMessage}`;
+  if (err?.code === 'ECONNABORTED') return 'Không tải được danh sách workshop: quá thời gian chờ kết nối BE.';
+  return 'Không tải được danh sách workshop. Kiểm tra BE đã chạy và đúng cấu hình CORS/base URL.';
 }

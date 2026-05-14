@@ -63,7 +63,7 @@ export default function WorkshopDetailPage() {
         setAlreadyRegistered(!!existing);
         setExistingRegistration(existing || null);
       })
-      .catch(() => mounted && setError('Khong tai duoc chi tiet workshop.'))
+      .catch(() => mounted && setError('Không tải được chi tiết workshop.'))
       .finally(() => mounted && setLoading(false));
 
     const poll = () => {
@@ -84,9 +84,9 @@ export default function WorkshopDetailPage() {
     };
   }, [currentUser?.role, id, refreshRegistrationState]);
 
-  if (loading) return <Shell><StateBox text="Dang tai chi tiet..." /></Shell>;
+  if (loading) return <Shell><StateBox text="Đang tải chi tiết..." /></Shell>;
   if (error) return <Shell><StateBox text={error} tone="error" /></Shell>;
-  if (!workshop) return <Shell><StateBox text="Khong tim thay workshop." tone="error" /></Shell>;
+  if (!workshop) return <Shell><StateBox text="Không tìm thấy workshop." tone="error" /></Shell>;
 
   return (
     <Shell>
@@ -96,22 +96,22 @@ export default function WorkshopDetailPage() {
             <span className="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{workshopStatusLabel(workshop.status)}</span>
             <span className="text-gray-500">{formatDate(workshop.startTime)}</span>
             <span className="text-xs text-gray-400">
-              {realtimeAvailable ? 'Realtime dang ket noi' : 'Dang fallback polling 5s'}
+              {realtimeAvailable ? 'Realtime đang kết nối' : 'Đang fallback polling 5s'}
             </span>
           </div>
           <h1 className="text-3xl font-bold tracking-normal text-gray-950">{workshop.title}</h1>
-          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">{workshop.description || 'Chua co mo ta.'}</p>
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">{workshop.description || 'Chưa có mô tả.'}</p>
 
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-            <Info label="Dien gia" value={workshop.speakerName || 'Dang cap nhat'} />
-            <Info label="Phong" value={workshop.room} />
-            <Info label="Thoi gian bat dau" value={formatDate(workshop.startTime)} />
-            <Info label="Thoi gian ket thuc" value={formatDate(workshop.endTime)} />
+            <Info label="Diễn giả" value={workshop.speakerName || 'Đang cập nhật'} />
+            <Info label="Phòng" value={workshop.room} />
+            <Info label="Thời gian bắt đầu" value={formatDate(workshop.startTime)} />
+            <Info label="Thời gian kết thúc" value={formatDate(workshop.endTime)} />
           </dl>
 
           {workshop.speakerBio && (
             <div className="mt-6 border-t border-gray-100 pt-6">
-              <h3 className="mb-2 text-sm font-semibold uppercase text-gray-500">Tieu su dien gia</h3>
+              <h3 className="mb-2 text-sm font-semibold uppercase text-gray-500">Tiểu sử diễn giả</h3>
               <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">{workshop.speakerBio}</p>
             </div>
           )}
@@ -125,7 +125,7 @@ export default function WorkshopDetailPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Xem so do phong
+                  Xem sơ đồ phòng
                 </a>
               )}
               {workshop.pdfUrl && (
@@ -135,7 +135,7 @@ export default function WorkshopDetailPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Xem tai lieu PDF cua workshop
+                  Xem tài liệu PDF của workshop
                 </a>
               )}
               {workshop.aiSummary && (
@@ -147,7 +147,7 @@ export default function WorkshopDetailPage() {
 
         <aside className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-5">
-            <p className="text-sm text-gray-500">So ghe con lai</p>
+            <p className="text-sm text-gray-500">Số ghế còn lại</p>
             <p className="mt-1 text-3xl font-bold text-gray-950">{workshop.remainingSeats}/{workshop.capacity}</p>
             <p className="mt-2 text-sm font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
           </div>
@@ -168,14 +168,14 @@ export default function WorkshopDetailPage() {
 
           {alreadyRegistered && !result && existingRegistration && (
             <div className="mt-4 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-              <p className="font-semibold">Ban da dang ky workshop nay.</p>
+              <p className="font-semibold">Bạn đã đăng ký workshop này.</p>
 
               {existingRegistration.status === 'PENDING' && (
                 <button
                   onClick={() => navigate(`/student/registrations/${existingRegistration.registrationId || existingRegistration.id}/payment`)}
                   className="w-full rounded-md bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700"
                 >
-                  Tiep tuc thanh toan
+                  Tiếp tục thanh toán
                 </button>
               )}
 
@@ -184,12 +184,12 @@ export default function WorkshopDetailPage() {
                   onClick={() => navigate(`/student/registrations/${existingRegistration.registrationId || existingRegistration.id}/qr`)}
                   className="w-full rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
                 >
-                  Xem ma QR check-in
+                  Xem mã QR check-in
                 </button>
               )}
 
               <Link className="block text-center font-semibold text-emerald-700 underline" to="/student/registrations">
-                Quan ly dang ky cua toi
+                Quản lý đăng ký của tôi
               </Link>
             </div>
           )}
@@ -199,12 +199,12 @@ export default function WorkshopDetailPage() {
               <p className="font-semibold">{statusMessage(result.status)}</p>
               {result.status === 'CONFIRMED' && (
                 <Link className="mt-2 inline-block font-semibold underline" to={`/student/registrations/${result.registrationId || result.id}/qr`}>
-                  Xem ma QR
+                  Xem mã QR
                 </Link>
               )}
               {result.status === 'PENDING' && (
                 <Link className="mt-2 inline-block font-semibold underline" to="/student/registrations">
-                  Theo doi thanh toan
+                  Theo dõi thanh toán
                 </Link>
               )}
             </div>
@@ -237,26 +237,26 @@ function StateBox({ text, tone = 'default' }) {
 }
 
 function statusMessage(status) {
-  if (status === 'CONFIRMED') return 'Dang ky thanh cong. Ma QR da san sang.';
-  if (status === 'WAITLISTED') return 'Workshop da het cho. Ban da vao danh sach cho.';
-  if (status === 'PENDING') return 'Dang ky da giu cho. Thanh toan dang duoc xu ly.';
-  return 'Yeu cau da duoc ghi nhan.';
+  if (status === 'CONFIRMED') return 'Đăng ký thành công. Mã QR đã sẵn sàng.';
+  if (status === 'WAITLISTED') return 'Workshop đã hết chỗ. Bạn đã vào danh sách chờ.';
+  if (status === 'PENDING') return 'Đăng ký đã giữ chỗ. Thanh toán đang được xử lý.';
+  return 'Yêu cầu đã được ghi nhận.';
 }
 
 function workshopStatusLabel(status) {
   const labels = {
-    DRAFT: 'Nhap',
-    PUBLISHED: 'Da xuat ban',
-    CANCELLED: 'Da huy',
+    DRAFT: 'Nháp',
+    PUBLISHED: 'Đã xuất bản',
+    CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
 }
 
 function formatDate(value) {
-  return formatDateTime(value, 'Chua co lich');
+  return formatDateTime(value, 'Chưa có lịch');
 }
 
 function formatPrice(value) {
   const amount = Number(value ?? 0);
-  return amount === 0 ? 'Mien phi' : `${amount.toLocaleString('vi-VN')}d`;
+  return amount === 0 ? 'Miễn phí' : `${amount.toLocaleString('vi-VN')}đ`;
 }
