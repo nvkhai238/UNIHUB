@@ -1,7 +1,36 @@
 import Constants from 'expo-constants';
 import { getTokens, saveTokens } from './storage';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:8080';
+const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const REQUEST_TIMEOUT_MS = 15000;
+
+function normalizeBaseUrl(value) {
+  return String(value || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+}
+
+export function getApiBaseUrl() {
+  const envUrl = typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_API_BASE_URL : undefined;
+  const extraUrl = Constants.expoConfig?.extra?.apiBaseUrl || Constants.manifest2?.extra?.expoClient?.extra?.apiBaseUrl;
+  return normalizeBaseUrl(envUrl || extraUrl);
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const reason = error.name === 'AbortError' ? 'timeout' : 'network';
+    throw new Error(
+      `Khong ket noi duoc API (${reason}) tai ${getApiBaseUrl()}. Hay dam bao backend dang chay, dien thoai cung Wi-Fi voi may tinh, va apiBaseUrl/EXPO_PUBLIC_API_BASE_URL la IP LAN cua may backend.`
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function request(path, options = {}, allowRefresh = true) {
   const tokens = await getTokens();
@@ -13,7 +42,7 @@ async function request(path, options = {}, allowRefresh = true) {
     headers.Authorization = `Bearer ${tokens.accessToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, {
     ...options,
     headers,
   });
@@ -43,7 +72,7 @@ export async function login(email, password) {
 
 async function refreshToken(refreshTokenValue) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: refreshTokenValue }),

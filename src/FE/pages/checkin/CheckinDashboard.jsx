@@ -53,7 +53,7 @@ export default function CheckinDashboard() {
           <h2 className="text-lg font-semibold">Tải trước QR</h2>
           <div className="mt-4 flex gap-2">
             <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
-            <button type="button" onClick={loadPreload} className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+            <button type="button" onClick={loadPreload} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
               Tải
             </button>
           </div>

@@ -19,7 +19,7 @@ export default function OrganizerDashboard() {
 
 function ActionCard({ title, text, to }) {
   return (
-    <Link to={to} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-rose-300 hover:shadow-md">
+    <Link to={to} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md">
       <h2 className="text-lg font-semibold text-gray-950">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-gray-600">{text}</p>
     </Link>

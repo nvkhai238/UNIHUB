@@ -168,7 +168,7 @@ export default function QrScannerPage() {
           {isOnline && (
             <button 
               onClick={syncQueue}
-              className="rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-700"
+              className="rounded bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700"
             >
               Đồng bộ ngay
             </button>
@@ -191,7 +191,7 @@ export default function QrScannerPage() {
             className="mt-2 w-full rounded-md border border-gray-300 px-3 py-3 text-sm"
             placeholder="Dán chuỗi QR..."
           />
-          <button type="submit" className="mt-4 w-full rounded-md bg-amber-600 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-700">
+          <button type="submit" className="mt-4 w-full rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700">
             Ghi nhận check-in
           </button>
         </form>

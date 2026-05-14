@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { login, logout, preloadCheckins, syncCheckins } from './src/api';
+import { getApiBaseUrl, login, logout, preloadCheckins, syncCheckins } from './src/api';
 import {
   clearOfflineData,
   clearSession,
@@ -73,7 +73,7 @@ export default function App() {
     const deviceId = await getOrCreateDeviceId();
     setSession(tokens.accessToken ? { deviceId, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : null);
     await refreshStats();
-    setMessage(tokens.accessToken ? 'San sang check-in.' : 'Dang nhap bang tai khoan CHECKIN_STAFF.');
+    setMessage(tokens.accessToken ? 'San sang check-in.' : `Dang nhap bang tai khoan CHECKIN_STAFF. API: ${getApiBaseUrl()}`);
     setLoading(false);
   }
 
@@ -324,13 +324,13 @@ function extractQrCode(value) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f4efe7',
+    backgroundColor: '#ecfdf5',
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f4efe7',
+    backgroundColor: '#ecfdf5',
     padding: 24,
   },
   content: {
@@ -373,12 +373,12 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   card: {
-    backgroundColor: '#fffdf8',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#e2d7c6',
+    borderColor: '#a7f3d0',
   },
   cardTitle: {
     fontSize: 18,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   primaryButton: {
-    backgroundColor: '#c2410c',
+    backgroundColor: '#059669',
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',

@@ -59,7 +59,7 @@ function StudentNavLink({ to, end = false, children }) {
           navLinkBase,
           isActive
             ? 'border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm'
-            : 'text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
+            : 'text-gray-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700',
         ].join(' ')
       }
     >
@@ -81,7 +81,7 @@ function NotificationNavLink() {
           'relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-200',
           isActive
             ? 'border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm'
-            : 'text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
+            : 'text-gray-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700',
         ].join(' ')
       }
     >

@@ -66,7 +66,7 @@ export default function StudentImportPage() {
           <button
             onClick={runImport}
             disabled={running}
-            className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {running ? 'Đang chạy...' : 'Chạy import ngay'}
           </button>

@@ -102,7 +102,7 @@ export default function WorkshopManagePage() {
         <button
           type="button"
           onClick={openCreateModal}
-          className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
         >
           Tao workshop
         </button>
@@ -262,7 +262,7 @@ export default function WorkshopManagePage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? 'Dang tao...' : 'Tao workshop'}
                 </button>

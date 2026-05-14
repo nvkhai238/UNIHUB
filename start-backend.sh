@@ -2,7 +2,10 @@
 set -e
 
 cd /Volumes/Thang/UNIHUB
-source .env
+while IFS= read -r line || [ -n "$line" ]; do
+  [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+  export "$line"
+done < .env
 
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
 export PATH="$JAVA_HOME/bin:$PATH"

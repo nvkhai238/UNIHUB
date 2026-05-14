@@ -61,7 +61,7 @@ function WorkshopForm({ form, setForm, submit, submitText }) {
       <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(v) => update('speakerBio', v)} />
       <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(v) => update('roomLayoutUrl', v)} />
       <Field label="URL tài liệu PDF" value={form.pdfUrl} onChange={(v) => update('pdfUrl', v)} />
-      <button type="submit" className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700">
+      <button type="submit" className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700">
         {submitText}
       </button>
     </form>

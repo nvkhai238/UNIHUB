@@ -9,7 +9,8 @@
       "**/*"
     ],
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sqlite"
     ],
     "android": {
       "package": "com.unihub.checkinmobile",
@@ -26,7 +27,7 @@
       }
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.1.23:8080"
+      "apiBaseUrl": "http://192.168.31.123:8080"
     }
   }
 }

@@ -24,7 +24,15 @@ npx expo start
 
 ## Cau hinh API
 
-Sua `mobile-checkin/app.json`:
+Mobile app khong dung duoc `localhost` de goi backend tren laptop. Hay dung IP LAN cua may dang chay backend, va dam bao dien thoai/emulator cung truy cap duoc IP do.
+
+Co the chay Expo voi bien moi truong:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://YOUR_LAN_IP:8080 npx expo start
+```
+
+Hoac sua `mobile-checkin/app.json`:
 
 ```json
 {
@@ -36,7 +44,7 @@ Sua `mobile-checkin/app.json`:
 }
 ```
 
-Dien thoai va may tinh phai cung Wi-Fi. `YOUR_LAN_IP` la IP LAN cua may dang chay backend.
+Dien thoai va may tinh phai cung Wi-Fi. `YOUR_LAN_IP` la IP LAN cua may dang chay backend. Neu doi IP/Wi-Fi, restart Expo de app nap lai cau hinh.
 
 ## Luong test nhanh
 

@@ -250,7 +250,7 @@ export default function WorkshopEditPage() {
           <button
             type="submit"
             disabled={workshopStatus === 'CANCELLED'}
-            className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Lưu thay đổi
           </button>
