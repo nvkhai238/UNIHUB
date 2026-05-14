@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function AdminWorkshopRegistrationsPage() {
   const { id } = useParams();
@@ -171,6 +172,5 @@ function registrationStatusLabel(status) {
 }
 
 function formatDate(value) {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value, '-');
 }

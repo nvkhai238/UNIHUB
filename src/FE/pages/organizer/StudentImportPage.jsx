@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function StudentImportPage() {
   const [batches, setBatches] = useState([]);
@@ -189,8 +190,7 @@ function batchStatusLabel(status) {
 }
 
 function formatDate(value) {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value, '—');
 }
 
 function formatJobId(value) {

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '../../api/api';
 import QrCameraScanner from '../../components/QrCameraScanner';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function QrScannerPage() {
   const [qrCode, setQrCode] = useState('');
@@ -223,11 +224,7 @@ export default function QrScannerPage() {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 function getDeviceId() {

@@ -4,6 +4,7 @@ import RegistrationButton from '../../components/RegistrationButton';
 import api from '../../api/api';
 import { getCurrentUser } from '../../router/jwtUtils';
 import { useWorkshopRealtime } from '../../hooks/useWorkshopRealtime';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function WorkshopDetailPage() {
   const { id } = useParams();
@@ -252,11 +253,7 @@ function workshopStatusLabel(status) {
 }
 
 function formatDate(value) {
-  if (!value) return 'Chua co lich';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatDateTime(value, 'Chua co lich');
 }
 
 function formatPrice(value) {

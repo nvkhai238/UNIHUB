@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { formatDateTime } from '../../utils/dateTime';
 
 const initialForm = {
   title: '',
@@ -329,8 +330,7 @@ function workshopStatusLabel(status) {
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 function toPayload(form) {

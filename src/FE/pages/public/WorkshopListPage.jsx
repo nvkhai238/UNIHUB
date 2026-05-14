@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../../api/api';
 import { useWorkshopRealtime } from '../../hooks/useWorkshopRealtime';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function WorkshopListPage() {
   const [workshops, setWorkshops] = useState([]);
@@ -114,11 +115,7 @@ function StateBox({ text, tone = 'default', onRetry }) {
 }
 
 function formatDate(value) {
-  if (!value) return 'Chua co lich';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatDateTime(value, 'Chua co lich');
 }
 
 function formatPrice(value) {
