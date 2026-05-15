@@ -9,9 +9,10 @@ export default function OrganizerLayout() {
           <div className="font-bold text-emerald-700">UniHub Organizer</div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <nav className="flex flex-wrap gap-2 text-sm font-medium">
-              <OrganizerNavLink to="/admin" end>Tổng quan</OrganizerNavLink>
+              <OrganizerNavLink to="/admin" end>Tong quan</OrganizerNavLink>
               <OrganizerNavLink to="/admin/workshops" end>Workshop</OrganizerNavLink>
-              <OrganizerNavLink to="/admin/statistics">Thống kê</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/refunds">Refund</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/statistics">Thong ke</OrganizerNavLink>
               <OrganizerNavLink to="/admin/student-imports">Import SV</OrganizerNavLink>
             </nav>
             <div className="ml-2">

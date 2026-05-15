@@ -75,6 +75,8 @@ app:
     pending-timeout-scan-ms: ${PAYMENT_PENDING_TIMEOUT_SCAN_MS:60000}
     demo-mode: ${PAYMENT_DEMO_MODE:false}
     demo-latency-ms: ${PAYMENT_DEMO_LATENCY_MS:2000}
+  refund:
+    form-url: ${REFUND_FORM_URL:}
   csv:
     data-dir: ${CSV_DATA_DIR:../../../data}
 

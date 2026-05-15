@@ -23,6 +23,7 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     Page<Registration> findByUserOrderByRegisteredAtDesc(User user, Pageable pageable);
     Page<Registration> findByWorkshopOrderByRegisteredAtDesc(Workshop workshop, Pageable pageable);
     Page<Registration> findByWorkshopAndStatusOrderByRegisteredAtDesc(Workshop workshop, RegistrationStatus status, Pageable pageable);
+    Optional<Registration> findTopByUserAndWorkshopAndStatusNotOrderByRegisteredAtDesc(User user, Workshop workshop, RegistrationStatus status);
     
     // Legacy non-paginated queries used by internal logic
     List<Registration> findByUser(User user);

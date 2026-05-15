@@ -2,6 +2,8 @@
 
 Ung dung mobile native cho `CHECKIN_STAFF`, duoc scaffold bang React Native + Expo de thay the luong PWA cu.
 
+Tai lieu cai dat chi tiet cho dien thoai Android: [ANDROID_INSTALL.md](/d:/UNIHUB/src/mobile-checkin/ANDROID_INSTALL.md)
+
 ## Chuc nang da co
 
 - Dang nhap bang tai khoan `CHECKIN_STAFF`

@@ -2,6 +2,7 @@ package com.unihub.workshop.module.payment.service;
 
 import com.unihub.workshop.common.exception.AppException;
 import com.unihub.workshop.common.exception.ErrorCode;
+import com.unihub.workshop.module.payment.dto.RefundItemResponse;
 import com.unihub.workshop.module.payment.client.MockPaymentGatewayClient;
 import com.unihub.workshop.module.payment.dto.PaymentStatsResponse;
 import com.unihub.workshop.module.payment.dto.PaymentStatusResponse;
@@ -14,9 +15,12 @@ import com.unihub.workshop.module.registration.repository.RegistrationRepository
 import com.unihub.workshop.module.user.entity.User;
 import com.unihub.workshop.module.user.repository.UserRepository;
 import com.unihub.workshop.module.workshop.entity.Workshop;
+import com.unihub.workshop.module.workshop.entity.WorkshopStatus;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -149,6 +153,16 @@ public class PaymentService {
                         .to(to != null ? to : ZonedDateTime.now())
                         .build())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RefundItemResponse> getRefundQueue(UUID workshopId, Pageable pageable) {
+        return paymentRepository.findRefundQueue(
+                PaymentStatus.REFUNDED,
+                WorkshopStatus.CANCELLED,
+                workshopId,
+                pageable
+        ).map(RefundItemResponse::from);
     }
 
     private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops(List<Payment> payments) {

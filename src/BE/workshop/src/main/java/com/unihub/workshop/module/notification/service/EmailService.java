@@ -3,6 +3,8 @@ package com.unihub.workshop.module.notification.service;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.registration.service.QrCodeService;
+import com.unihub.workshop.module.payment.entity.PaymentStatus;
+import com.unihub.workshop.module.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,7 @@ public class EmailService {
 
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final RegistrationRepository registrationRepository;
+    private final PaymentRepository paymentRepository;
     private final QrCodeService qrCodeService;
     private final StringRedisTemplate redisTemplate;
 
@@ -48,6 +51,9 @@ public class EmailService {
 
     @Value("${app.mail.admin:noreply@unihub.edu.vn}")
     private String adminAddress;
+
+    @Value("${app.refund.form-url:}")
+    private String refundFormUrl;
 
     public boolean isEmailSendingAvailable() {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
@@ -240,6 +246,22 @@ public class EmailService {
     private String buildWorkshopCancellationHtml(Registration registration) {
         String studentName = escape(registration.getUser().getFullName());
         String workshopTitle = escape(registration.getWorkshop().getTitle());
+        boolean refundNeeded = paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
+                .map(payment -> payment.getStatus() == PaymentStatus.REFUNDED)
+                .orElse(false);
+        String refundSection = "";
+
+        if (refundNeeded && StringUtils.hasText(refundFormUrl)) {
+            String safeRefundUrl = escape(refundFormUrl);
+            refundSection = """
+                  <p>Workshop nay co thu phi. De BTC xu ly hoan tien, vui long dien Google Form sau va gui kem thong tin ngan hang cung minh chung thanh toan:</p>
+                  <p><a href="%s">%s</a></p>
+                """.formatted(safeRefundUrl, safeRefundUrl);
+        } else if (refundNeeded) {
+            refundSection = """
+                  <p>Workshop nay co thu phi. BTC se lien he huong dan quy trinh hoan tien thu cong trong thoi gian som nhat.</p>
+                """;
+        }
 
         return """
                 <!doctype html>
@@ -247,11 +269,12 @@ public class EmailService {
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
                   <h2 style="margin:0 0 12px">Thong bao huy workshop</h2>
                   <p>Xin chao %s,</p>
-                  <p>Workshop <strong>%s</strong> da bi huy. Neu workshop co thu phi, he thong se ghi nhan hoan tien theo quy trinh cua ban to chuc.</p>
+                  <p>Workshop <strong>%s</strong> da bi huy.</p>
+                  %s
                   <p>Cam on ban da theo doi UniHub.</p>
                 </body>
                 </html>
-                """.formatted(studentName, workshopTitle);
+                """.formatted(studentName, workshopTitle, refundSection);
     }
 
     private String buildRegistrationOtpHtml(String fullName, String otpCode, int expiresInMinutes) {

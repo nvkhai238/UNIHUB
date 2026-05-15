@@ -2,9 +2,13 @@ package com.unihub.workshop.module.csvimport.controller;
 
 import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.csvimport.scheduler.CsvImportScheduler;
+import com.unihub.workshop.module.payment.dto.PagedResponse;
 import com.unihub.workshop.module.studentimport.entity.StudentImportBatch;
 import com.unihub.workshop.module.studentimport.repository.StudentImportBatchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,7 +16,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -25,8 +28,12 @@ public class StudentImportController {
     private final StudentImportBatchRepository batchRepository;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<StudentImportBatch>>> listBatches() {
-        return ResponseEntity.ok(ApiResponse.success(batchRepository.findAllByOrderByStartedAtDesc()));
+    public ResponseEntity<ApiResponse<PagedResponse<StudentImportBatch>>> listBatches(
+            @PageableDefault(size = 10, sort = "startedAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                PagedResponse.from(batchRepository.findAllByOrderByStartedAtDesc(pageable))
+        ));
     }
 
     @PostMapping("/run")

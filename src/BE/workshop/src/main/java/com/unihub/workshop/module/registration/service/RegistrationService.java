@@ -123,6 +123,18 @@ public class RegistrationService {
         return registrationRepository.findByUserOrderByRegisteredAtDesc(user, pageable)
                 .map(RegistrationResponse::from);
     }
+
+    @Transactional(readOnly = true)
+    public RegistrationResponse getMyRegistrationForWorkshop(UUID workshopId) {
+        User user = getCurrentUser();
+        Workshop workshop = workshopRepository.findById(workshopId)
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+
+        return registrationRepository
+                .findTopByUserAndWorkshopAndStatusNotOrderByRegisteredAtDesc(user, workshop, RegistrationStatus.CANCELLED)
+                .map(RegistrationResponse::from)
+                .orElse(null);
+    }
     
     @Transactional(readOnly = true)
     public Page<RegistrationResponse> getRegistrationsByWorkshop(UUID workshopId, RegistrationStatus status, Pageable pageable) {
@@ -201,6 +213,13 @@ public class RegistrationService {
         }
         if (registration.getStatus() == RegistrationStatus.CANCELLED) {
             throw new AppException(ErrorCode.REGISTRATION_ALREADY_CANCELLED, "Registration is already cancelled");
+        }
+        if (registration.getWorkshop().getPrice() != null
+                && registration.getWorkshop().getPrice().compareTo(BigDecimal.ZERO) > 0) {
+            throw new AppException(
+                    ErrorCode.FORBIDDEN,
+                    "Workshop co thu phi khong ho tro sinh vien tu huy. Vui long lien he BTC neu can ho tro."
+            );
         }
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
