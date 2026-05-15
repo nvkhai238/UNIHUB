@@ -29,7 +29,7 @@ export default function StudentImportPage() {
         setLatestStatus(statusRes.value.data.data ?? null);
       }
       if (batchRes.status === 'rejected' || statusRes.status === 'rejected') {
-        setMessage('Khong tai du du lieu import CSV.');
+        setMessage('Không tải đủ dữ liệu import CSV.');
         setMessageType('error');
       }
     } finally {
@@ -49,12 +49,12 @@ export default function StudentImportPage() {
         headers: { 'Idempotency-Key': `import-${Date.now()}` },
       });
       const batch = data.data ?? {};
-      setMessage(`Import CSV ${batchStatusLabel(batch.status).toLowerCase()}: ${batch.successRows ?? 0} dong hop le, ${batch.errorRows ?? 0} dong loi.`);
+      setMessage(`Import CSV ${batchStatusLabel(batch.status).toLowerCase()}: ${batch.successRows ?? 0} dòng hợp lệ, ${batch.errorRows ?? 0} dòng lỗi.`);
       setMessageType(batch.status === 'COMPLETED' ? 'success' : 'warning');
       setPage(0);
       await loadData(0);
     } catch (err) {
-      setMessage(err?.response?.data?.message || 'Import that bai. Vui long kiem tra batch log.');
+      setMessage(err?.response?.data?.message || 'Import thất bại. Vui lòng kiểm tra batch log.');
       setMessageType('error');
     } finally {
       setRunning(false);
@@ -65,10 +65,10 @@ export default function StudentImportPage() {
     <section className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Nhap CSV sinh vien</h1>
+          <h1 className="text-3xl font-bold tracking-normal">Nhập CSV sinh viên</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Job tu dong chay luc 02:00 hang ngay voi file <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/data/students_YYYY-MM-DD.csv</code>.
-            File mau dung dinh dang <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">student_id,full_name,email</code>.
+            Job tự động chạy lúc 02:00 hằng ngày với file <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/data/students_YYYY-MM-DD.csv</code>.
+            File mẫu dùng định dạng <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">student_id,full_name,email</code>.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -77,14 +77,14 @@ export default function StudentImportPage() {
             disabled={running}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {running ? 'Dang chay...' : 'Chay import ngay'}
+            {running ? 'Đang chạy...' : 'Chạy import ngay'}
           </button>
           <button
             onClick={() => loadData(page)}
             disabled={loading}
             className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Lam moi
+            Làm mới
           </button>
         </div>
       </div>
@@ -96,17 +96,17 @@ export default function StudentImportPage() {
       )}
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
-        <StatusMetric label="Trang thai moi nhat" value={batchStatusLabel(latestStatus?.status ?? 'NOT_STARTED')} />
-        <StatusMetric label="Da xu ly" value={latestStatus?.processedRecords ?? 0} />
-        <StatusMetric label="Dong loi" value={latestStatus?.failedRecords ?? 0} />
+        <StatusMetric label="Trạng thái mới nhất" value={batchStatusLabel(latestStatus?.status ?? 'NOT_STARTED')} />
+        <StatusMetric label="Đã xử lý" value={latestStatus?.processedRecords ?? 0} />
+        <StatusMetric label="Dòng lỗi" value={latestStatus?.failedRecords ?? 0} />
         <StatusMetric label="Batch ID" value={formatJobId(latestStatus?.jobId)} />
       </div>
 
       {loading ? (
-        <p className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-500">Dang tai lich su import...</p>
+        <p className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-500">Đang tải lịch sử import...</p>
       ) : batches.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white py-12 text-center">
-          <p className="text-sm text-gray-500">Chua co lan import nao duoc ghi nhan.</p>
+          <p className="text-sm text-gray-500">Chưa có lần import nào được ghi nhận.</p>
         </div>
       ) : (
         <>
@@ -114,14 +114,14 @@ export default function StudentImportPage() {
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lan chay</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lần chạy</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">File</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Trang thai</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Tong dong</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Hop le</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Loi</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Thoi gian</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Chi tiet loi</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Trạng thái</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Tổng dòng</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Hợp lệ</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lỗi</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Thời gian</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Chi tiết lỗi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -192,11 +192,11 @@ function batchStatusStyle(status) {
 
 function batchStatusLabel(status) {
   const labels = {
-    COMPLETED: 'Hoan tat',
-    FAILED: 'That bai',
-    RUNNING: 'Dang chay',
-    SKIPPED: 'Da bo qua',
-    NOT_STARTED: 'Chua chay',
+    COMPLETED: 'Hoàn tất',
+    FAILED: 'Thất bại',
+    RUNNING: 'Đang chạy',
+    SKIPPED: 'Đã bỏ qua',
+    NOT_STARTED: 'Chưa chạy',
   };
   return labels[status] ?? status;
 }

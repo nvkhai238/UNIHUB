@@ -77,7 +77,7 @@ export default function NotificationsPage() {
   };
 
   const deleteAllNotifications = async () => {
-    if (!window.confirm('Ban co chac chan muon xoa tat ca thong bao?')) {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa tất cả thông báo?')) {
       return;
     }
     await api.delete('/api/notifications', { data: { action: 'delete_all' } });
@@ -95,9 +95,9 @@ export default function NotificationsPage() {
     <section className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Thong bao</h1>
+          <h1 className="text-3xl font-bold tracking-normal">Thông báo</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {unreadCount > 0 ? `${unreadCount} thong bao chua doc` : 'Tat ca da duoc doc'}
+            {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Tất cả đã được đọc'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +111,7 @@ export default function NotificationsPage() {
                   filter === item ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                {item === 'all' ? 'Tat ca' : 'Chua doc'}
+                {item === 'all' ? 'Tất cả' : 'Chưa đọc'}
               </button>
             ))}
           </div>
@@ -121,7 +121,7 @@ export default function NotificationsPage() {
               onClick={markAllRead}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
-              Danh dau tat ca da doc
+              Đánh dấu tất cả đã đọc
             </button>
           )}
           {notifications.length > 0 && (
@@ -130,7 +130,7 @@ export default function NotificationsPage() {
               onClick={deleteAllNotifications}
               className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
             >
-              Xoa tat ca
+              Xóa tất cả
             </button>
           )}
         </div>
@@ -139,15 +139,15 @@ export default function NotificationsPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
-          <p className="mt-3 text-sm text-gray-500">Dang tai thong bao...</p>
+          <p className="mt-3 text-sm text-gray-500">Đang tải thông báo...</p>
         </div>
       ) : notifications.length === 0 ? (
         <div className="rounded-2xl border border-gray-100 bg-white py-16 text-center shadow-sm">
           <div className="mb-3 text-5xl">🔔</div>
           <p className="font-medium text-gray-600">
-            {filter === 'unread' ? 'Khong co thong bao chua doc' : 'Chua co thong bao nao'}
+            {filter === 'unread' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo nào'}
           </p>
-          <p className="mt-1 text-sm text-gray-400">Cac thong bao moi se xuat hien tai day.</p>
+          <p className="mt-1 text-sm text-gray-400">Các thông báo mới sẽ xuất hiện tại đây.</p>
         </div>
       ) : (
         <>
@@ -193,7 +193,7 @@ export default function NotificationsPage() {
                             type="button"
                             onClick={() => markRead(notification.id)}
                             className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-50"
-                            title="Danh dau da doc"
+                            title="Đánh dấu đã đọc"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -204,7 +204,7 @@ export default function NotificationsPage() {
                           type="button"
                           onClick={() => deleteNotification(notification.id)}
                           className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                          title="Xoa thong bao"
+                          title="Xóa thông báo"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -228,67 +228,67 @@ export default function NotificationsPage() {
 function typeConfig(type) {
   const map = {
     REGISTRATION_CONFIRMED: {
-      label: 'Dang ky thanh cong',
+      label: 'Đăng ký thành công',
       icon: '✅',
       badgeCls: 'bg-emerald-100 text-emerald-700',
       iconBg: 'bg-emerald-100',
     },
     REGISTRATION_PENDING: {
-      label: 'Cho xac nhan',
+      label: 'Chờ xác nhận',
       icon: '⏳',
       badgeCls: 'bg-amber-100 text-amber-700',
       iconBg: 'bg-amber-100',
     },
     REGISTRATION_CANCELLED: {
-      label: 'Da huy dang ky',
+      label: 'Đã hủy đăng ký',
       icon: '🚫',
       badgeCls: 'bg-gray-100 text-gray-600',
       iconBg: 'bg-gray-100',
     },
     WORKSHOP_CANCELLED: {
-      label: 'Workshop bi huy',
+      label: 'Workshop bị hủy',
       icon: '❌',
       badgeCls: 'bg-red-100 text-red-700',
       iconBg: 'bg-red-100',
     },
     WORKSHOP_UPDATED: {
-      label: 'Cap nhat workshop',
+      label: 'Cập nhật workshop',
       icon: '📝',
       badgeCls: 'bg-blue-100 text-blue-700',
       iconBg: 'bg-blue-100',
     },
     PAYMENT_SUCCESS: {
-      label: 'Thanh toan thanh cong',
+      label: 'Thanh toán thành công',
       icon: '💳',
       badgeCls: 'bg-emerald-100 text-emerald-700',
       iconBg: 'bg-emerald-100',
     },
     PAYMENT_FAILED: {
-      label: 'Thanh toan that bai',
+      label: 'Thanh toán thất bại',
       icon: '💳',
       badgeCls: 'bg-red-100 text-red-700',
       iconBg: 'bg-red-100',
     },
     PAYMENT_PENDING: {
-      label: 'Cho thanh toan',
+      label: 'Chờ thanh toán',
       icon: '💳',
       badgeCls: 'bg-amber-100 text-amber-700',
       iconBg: 'bg-amber-100',
     },
     CHECKIN_SUCCESS: {
-      label: 'Check-in thanh cong',
+      label: 'Check-in thành công',
       icon: '📍',
       badgeCls: 'bg-purple-100 text-purple-700',
       iconBg: 'bg-purple-100',
     },
     REMINDER: {
-      label: 'Nhac nho',
+      label: 'Nhắc nhở',
       icon: '🔔',
       badgeCls: 'bg-sky-100 text-sky-700',
       iconBg: 'bg-sky-100',
     },
     WAITLIST_PROMOTED: {
-      label: 'Da duoc xac nhan',
+      label: 'Đã được xác nhận',
       icon: '🎉',
       badgeCls: 'bg-emerald-100 text-emerald-700',
       iconBg: 'bg-emerald-100',
@@ -296,7 +296,7 @@ function typeConfig(type) {
   };
 
   return map[type] ?? {
-    label: type?.replace(/_/g, ' ') ?? 'Thong bao',
+    label: type?.replace(/_/g, ' ') ?? 'Thông báo',
     icon: '🔔',
     badgeCls: 'bg-gray-100 text-gray-600',
     iconBg: 'bg-gray-100',
@@ -307,9 +307,9 @@ function formatRelativeTime(value) {
   if (!value) return '';
   const diff = Math.floor((Date.now() - new Date(value).getTime()) / 1000);
 
-  if (diff < 60) return 'Vua xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phut truoc`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} gio truoc`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} ngay truoc`;
+  if (diff < 60) return 'Vừa xong';
+  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
   return formatDateTime(value);
 }

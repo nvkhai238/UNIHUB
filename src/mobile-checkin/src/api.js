@@ -25,7 +25,7 @@ async function fetchWithTimeout(url, options = {}) {
   } catch (error) {
     const reason = error.name === 'AbortError' ? 'timeout' : 'network';
     throw new Error(
-      `Khong ket noi duoc API (${reason}) tai ${getApiBaseUrl()}. Hay dam bao backend dang chay, dien thoai cung Wi-Fi voi may tinh, va apiBaseUrl/EXPO_PUBLIC_API_BASE_URL la IP LAN cua may backend.`
+      `Không kết nối được API (${reason}) tại ${getApiBaseUrl()}. Hãy đảm bảo backend đang chạy, điện thoại cùng Wi-Fi với máy tính, và apiBaseUrl/EXPO_PUBLIC_API_BASE_URL là IP LAN của máy backend.`
     );
   } finally {
     clearTimeout(timeout);

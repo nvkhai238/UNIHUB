@@ -29,34 +29,34 @@ export default function StudentDashboard() {
     <section className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Tong quan sinh vien</h1>
-          <p className="mt-2 text-sm text-gray-600">Theo doi dang ky, thanh toan pending va ma QR check-in.</p>
+          <h1 className="text-3xl font-bold tracking-normal">Tổng quan sinh viên</h1>
+          <p className="mt-2 text-sm text-gray-600">Theo dõi đăng ký, thanh toán chờ xử lý và mã QR check-in.</p>
         </div>
         <Link
           to="/student/workshops"
           className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
         >
-          Xem lich workshop
+          Xem lịch workshop
         </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Metric label="Da xac nhan" value={summary.confirmed} />
-        <Metric label="Dang thanh toan" value={summary.pending} />
-        <Metric label="Danh sach cho" value={summary.waitlisted} />
+        <Metric label="Đã xác nhận" value={summary.confirmed} />
+        <Metric label="Đang thanh toán" value={summary.pending} />
+        <Metric label="Danh sách chờ" value={summary.waitlisted} />
       </div>
 
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Dang ky gan day</h2>
+          <h2 className="text-lg font-semibold">Đăng ký gần đây</h2>
           <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700">
-            Xem tat ca
+            Xem tất cả
           </Link>
         </div>
         {loading ? (
-          <p className="text-sm text-gray-500">Dang tai...</p>
+          <p className="text-sm text-gray-500">Đang tải...</p>
         ) : registrations.length === 0 ? (
-          <p className="text-sm text-gray-500">Ban chua dang ky workshop nao.</p>
+          <p className="text-sm text-gray-500">Bạn chưa đăng ký workshop nào.</p>
         ) : (
           <div className="divide-y divide-gray-100">
             {registrations.map((registration) => (
@@ -71,7 +71,7 @@ export default function StudentDashboard() {
                     className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
                     to={`/student/registrations/${registration.id}`}
                   >
-                    Chi tiet
+                    Chi tiết
                   </Link>
                 </div>
               </div>
@@ -109,10 +109,10 @@ function StatusBadge({ status }) {
 
 function registrationStatusLabel(status) {
   const labels = {
-    CONFIRMED: 'Da xac nhan',
-    PENDING: 'Dang xu ly',
-    WAITLISTED: 'Danh sach cho',
-    CANCELLED: 'Da huy',
+    CONFIRMED: 'Đã xác nhận',
+    PENDING: 'Đang xử lý',
+    WAITLISTED: 'Danh sách chờ',
+    CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
 }

@@ -45,14 +45,14 @@ export default function AdminWorkshopRegistrationsPage() {
         <div>
           <div className="mb-2 flex items-center gap-2">
             <Link to="/admin/workshops" className="text-sm font-semibold text-emerald-600 hover:text-emerald-700">
-              ← Quay lai
+              ← Quay lại
             </Link>
           </div>
           <h1 className="text-3xl font-bold tracking-normal">
-            Danh sach ve {workshop ? `- ${workshop.title}` : ''}
+            Danh sách vé {workshop ? `- ${workshop.title}` : ''}
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Xem danh sach sinh vien da dang ky va loc theo trang thai.
+            Xem danh sách sinh viên đã đăng ký và lọc theo trạng thái.
           </p>
         </div>
 
@@ -65,42 +65,42 @@ export default function AdminWorkshopRegistrationsPage() {
             }}
             className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
-            <option value="">Tat ca trang thai</option>
-            <option value="CONFIRMED">Da xac nhan</option>
-            <option value="PENDING">Dang cho</option>
-            <option value="WAITLISTED">Danh sach cho</option>
-            <option value="CANCELLED">Da huy</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="CONFIRMED">Đã xác nhận</option>
+            <option value="PENDING">Đang chờ</option>
+            <option value="WAITLISTED">Danh sách chờ</option>
+            <option value="CANCELLED">Đã hủy</option>
           </select>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         {loading && registrations.length === 0 ? (
-          <p className="p-5 text-sm text-gray-500">Dang tai du lieu...</p>
+          <p className="p-5 text-sm text-gray-500">Đang tải dữ liệu...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-600">
               <thead className="border-b border-gray-200 bg-gray-50 text-gray-900">
                 <tr>
-                  <th className="px-5 py-3 font-semibold">Sinh vien</th>
-                  <th className="px-5 py-3 font-semibold">Trang thai</th>
-                  <th className="px-5 py-3 font-semibold">Ma ve (QR Code)</th>
-                  <th className="px-5 py-3 font-semibold">Thoi gian DK</th>
-                  <th className="px-5 py-3 font-semibold">Thoi gian XN</th>
+                  <th className="px-5 py-3 font-semibold">Sinh viên</th>
+                  <th className="px-5 py-3 font-semibold">Trạng thái</th>
+                  <th className="px-5 py-3 font-semibold">Mã vé (QR Code)</th>
+                  <th className="px-5 py-3 font-semibold">Thời gian đăng ký</th>
+                  <th className="px-5 py-3 font-semibold">Thời gian xác nhận</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {registrations.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-5 py-8 text-center text-gray-500">
-                      Khong co ve nao phu hop voi bo loc hien tai.
+                      Không có vé nào phù hợp với bộ lọc hiện tại.
                     </td>
                   </tr>
                 ) : (
                   registrations.map((registration) => (
                     <tr key={registration.id} className="hover:bg-gray-50/50">
                       <td className="px-5 py-4 font-medium text-gray-900">
-                        {registration.studentName || 'Chua cap nhat'}
+                        {registration.studentName || 'Chưa cập nhật'}
                         {registration.studentCode && <div className="text-sm font-normal text-gray-500">{registration.studentCode}</div>}
                       </td>
                       <td className="px-5 py-4">
@@ -140,10 +140,10 @@ function StatusBadge({ status }) {
 
 function registrationStatusLabel(status) {
   const labels = {
-    CONFIRMED: 'Da xac nhan',
-    PENDING: 'Dang xu ly',
-    WAITLISTED: 'Cho',
-    CANCELLED: 'Da huy',
+    CONFIRMED: 'Đã xác nhận',
+    PENDING: 'Đang xử lý',
+    WAITLISTED: 'Chờ',
+    CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
 }

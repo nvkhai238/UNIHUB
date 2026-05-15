@@ -26,7 +26,7 @@ export default function WorkshopEditPage() {
         setAiSummary(data.data?.aiSummary ?? '');
         setAiSummaryStatus(data.data?.aiSummaryStatus ?? 'NONE');
       })
-      .catch(() => setError('Khong tai duoc workshop.'));
+      .catch(() => setError('Không tải được workshop.'));
   }, [id]);
 
   useEffect(() => {
@@ -61,9 +61,9 @@ export default function WorkshopEditPage() {
 
     try {
       await api.put(`/api/workshops/${id}`, toPayload(form));
-      setActionMsg('Luu thay doi thanh cong.');
+      setActionMsg('Lưu thay đổi thành công.');
     } catch (err) {
-      setError(err?.response?.data?.message || 'Khong cap nhat duoc workshop.');
+      setError(err?.response?.data?.message || 'Không cập nhật được workshop.');
     }
   };
 
@@ -73,9 +73,9 @@ export default function WorkshopEditPage() {
     try {
       await api.patch(`/api/workshops/${id}/status`, { status: targetStatus });
       setWorkshopStatus(targetStatus);
-      setActionMsg(`Trang thai da chuyen sang ${workshopStatusLabel(targetStatus)}.`);
+      setActionMsg(`Trạng thái đã chuyển sang ${workshopStatusLabel(targetStatus)}.`);
     } catch (err) {
-      setError(err?.response?.data?.message || `Khong doi duoc trang thai thanh ${workshopStatusLabel(targetStatus)}.`);
+      setError(err?.response?.data?.message || `Không đổi được trạng thái thành ${workshopStatusLabel(targetStatus)}.`);
     }
   };
 
@@ -84,14 +84,14 @@ export default function WorkshopEditPage() {
 
     if (!isPdfFile(file)) {
       setUploadTone('error');
-      setUploadMessage('Chi duoc tai file PDF.');
+      setUploadMessage('Chỉ được tải file PDF.');
       resetPdfInput();
       return;
     }
 
     if (file.size > MAX_PDF_BYTES) {
       setUploadTone('error');
-      setUploadMessage(`PDF toi da 10MB. File hien tai khoang ${formatFileSize(file.size)}.`);
+      setUploadMessage(`PDF tối đa 10MB. File hiện tại khoảng ${formatFileSize(file.size)}.`);
       resetPdfInput();
       return;
     }
@@ -107,13 +107,13 @@ export default function WorkshopEditPage() {
       const pdfUrl = data.data?.pdfUrl ?? data.data;
       const status = data.data?.aiSummaryStatus ?? 'PROCESSING';
       setUploadTone('success');
-      setUploadMessage('PDF da tai len, tom tat AI dang duoc xu ly nen.');
+      setUploadMessage('PDF đã tải lên, tóm tắt AI đang được xử lý nền.');
       setForm((prev) => ({ ...prev, pdfUrl: pdfUrl ?? prev.pdfUrl }));
       setAiSummary('');
       setAiSummaryStatus(status);
     } catch (err) {
       setUploadTone('error');
-      setUploadMessage(err?.response?.data?.message || 'Khong tai duoc PDF. Vui long thu lai.');
+      setUploadMessage(err?.response?.data?.message || 'Không tải được PDF. Vui lòng thử lại.');
     } finally {
       setUploadingPdf(false);
       resetPdfInput();
@@ -132,10 +132,10 @@ export default function WorkshopEditPage() {
       await api.post(`/api/workshops/${id}/ai-summary/retry`);
       setAiSummaryStatus('PROCESSING');
       setUploadTone('info');
-      setUploadMessage('Da dua yeu cau tao lai tom tat AI vao hang xu ly.');
+      setUploadMessage('Đã đưa yêu cầu tạo lại tóm tắt AI vào hàng xử lý.');
     } catch (err) {
       setUploadTone('error');
-      setUploadMessage(err?.response?.data?.message || 'Khong the tao lai tom tat AI luc nay.');
+      setUploadMessage(err?.response?.data?.message || 'Không thể tạo lại tóm tắt AI lúc này.');
     }
   };
 
@@ -143,7 +143,7 @@ export default function WorkshopEditPage() {
     return (
       <section className="mx-auto max-w-4xl px-4 py-8">
         <p className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-500">
-          {error || 'Dang tai workshop...'}
+          {error || 'Đang tải workshop...'}
         </p>
       </section>
     );
@@ -152,7 +152,7 @@ export default function WorkshopEditPage() {
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-normal">Chinh sua workshop</h1>
+        <h1 className="text-3xl font-bold tracking-normal">Chỉnh sửa workshop</h1>
         {workshopStatus && (
           <span className={`rounded-md border px-3 py-1 text-sm font-semibold ${statusStyle(workshopStatus)}`}>
             {workshopStatusLabel(workshopStatus)}
@@ -170,7 +170,7 @@ export default function WorkshopEditPage() {
             onClick={() => changeStatus('PUBLISHED')}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
           >
-            Xuat ban workshop
+            Xuất bản workshop
           </button>
         )}
         {workshopStatus === 'PUBLISHED' && (
@@ -179,18 +179,18 @@ export default function WorkshopEditPage() {
             onClick={() => changeStatus('CANCELLED')}
             className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
           >
-            Huy workshop
+            Hủy workshop
           </button>
         )}
       </div>
 
       <form onSubmit={submit} className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <Field label="Tieu de" value={form.title} onChange={(value) => update('title', value)} required />
-        <Field label="Dien gia" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
-        <Field label="Phong" value={form.room} onChange={(value) => update('room', value)} required />
+        <Field label="Tiêu đề" value={form.title} onChange={(value) => update('title', value)} required />
+        <Field label="Diễn giả" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
+        <Field label="Phòng" value={form.room} onChange={(value) => update('room', value)} required />
         <div className="grid gap-4 md:grid-cols-2">
           <Field
-            label="Bat dau"
+            label="Bắt đầu"
             type="datetime-local"
             value={form.startTime}
             min={getDateTimeMin()}
@@ -198,7 +198,7 @@ export default function WorkshopEditPage() {
             required
           />
           <Field
-            label="Ket thuc"
+            label="Kết thúc"
             type="datetime-local"
             value={form.endTime}
             min={form.startTime || getDateTimeMin()}
@@ -207,14 +207,14 @@ export default function WorkshopEditPage() {
           />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <NumericField label="Suc chua" value={form.capacity} onChange={(value) => update('capacity', value)} />
-          <NumericField label="Gia ve (VND)" value={form.price} onChange={(value) => update('price', value)} />
+          <NumericField label="Sức chứa" value={form.capacity} onChange={(value) => update('capacity', value)} />
+          <NumericField label="Giá vé (VND)" value={form.price} onChange={(value) => update('price', value)} />
         </div>
-        <Textarea label="Mo ta" value={form.description} onChange={(value) => update('description', value)} />
-        <Textarea label="Bio dien gia" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
-        <Field label="URL so do phong" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
+        <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
+        <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
+        <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
         <label className="text-sm font-semibold text-gray-700">
-          Tai PDF tai lieu
+          Tải PDF tài liệu
           <input
             ref={pdfInputRef}
             type="file"
@@ -226,7 +226,7 @@ export default function WorkshopEditPage() {
         </label>
 
         <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-500">Tom tat AI</p>
+          <p className="text-xs font-semibold uppercase text-gray-500">Tóm tắt AI</p>
           <p className={`mt-1 text-sm font-semibold ${
             aiSummaryStatus === 'PROCESSING' ? 'text-blue-600'
               : aiSummaryStatus === 'FAILED' ? 'text-red-600'
@@ -240,7 +240,7 @@ export default function WorkshopEditPage() {
             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{aiSummary}</p>
           )}
           {aiSummaryStatus === 'PROCESSING' && (
-            <p className="mt-2 text-sm text-blue-600">AI dang xu ly PDF, tom tat se hien thi sau vai phut.</p>
+            <p className="mt-2 text-sm text-blue-600">AI đang xử lý PDF, tóm tắt sẽ hiển thị sau vài phút.</p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -248,7 +248,7 @@ export default function WorkshopEditPage() {
               onClick={refreshAiSummary}
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
-              Cap nhat trang thai
+              Cập nhật trạng thái
             </button>
             {aiSummaryStatus === 'FAILED' && (
               <button
@@ -256,7 +256,7 @@ export default function WorkshopEditPage() {
                 onClick={retryAiSummary}
                 className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
               >
-                Tao lai tom tat AI
+                Tạo lại tóm tắt AI
               </button>
             )}
           </div>
@@ -268,14 +268,14 @@ export default function WorkshopEditPage() {
             disabled={workshopStatus === 'CANCELLED'}
             className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Luu thay doi
+            Lưu thay đổi
           </button>
           <button
             type="button"
             onClick={() => navigate('/admin/workshops')}
             className="rounded-md border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
           >
-            Quay lai
+            Quay lại
           </button>
         </div>
       </form>
@@ -385,7 +385,7 @@ function normalizeNumericValue(value) {
 
 function getWorkshopFormError(form) {
   if (!form?.title?.trim() || !form?.room?.trim() || !form?.startTime || !form?.endTime) {
-    return 'Vui long dien day du cac truong bat buoc.';
+    return 'Vui lòng điền đầy đủ các trường bắt buộc.';
   }
 
   const startTime = new Date(form.startTime);
@@ -393,16 +393,16 @@ function getWorkshopFormError(form) {
   const now = new Date();
 
   if (!(startTime > now)) {
-    return 'Thoi gian bat dau phai tre hon thoi diem hien tai.';
+    return 'Thời gian bắt đầu phải trễ hơn thời điểm hiện tại.';
   }
   if (!(endTime > startTime)) {
-    return 'Thoi gian ket thuc phai sau thoi gian bat dau.';
+    return 'Thời gian kết thúc phải sau thời gian bắt đầu.';
   }
   if (Number(form.capacity) <= 0) {
-    return 'Suc chua phai lon hon 0.';
+    return 'Sức chứa phải lớn hơn 0.';
   }
   if (Number(form.price) < 0) {
-    return 'Gia ve khong duoc am.';
+    return 'Giá vé không được âm.';
   }
 
   return '';
@@ -419,19 +419,19 @@ function statusStyle(status) {
 
 function workshopStatusLabel(status) {
   const labels = {
-    DRAFT: 'Nhap',
-    PUBLISHED: 'Da xuat ban',
-    CANCELLED: 'Da huy',
+    DRAFT: 'Nháp',
+    PUBLISHED: 'Đã xuất bản',
+    CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
 }
 
 function aiSummaryStatusLabel(status) {
   const labels = {
-    NONE: 'Chua co (tai PDF de tao)',
-    PROCESSING: 'Dang xu ly',
-    DONE: 'Hoan tat',
-    FAILED: 'That bai',
+    NONE: 'Chưa có (tải PDF để tạo)',
+    PROCESSING: 'Đang xử lý',
+    DONE: 'Hoàn tất',
+    FAILED: 'Thất bại',
   };
   return labels[status] ?? status;
 }

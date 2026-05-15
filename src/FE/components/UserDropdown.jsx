@@ -57,7 +57,7 @@ export default function UserDropdown({ onLoggedOut }) {
               onClick={() => setIsOpen(false)}
               className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
             >
-              Ho so sinh vien
+              Hồ sơ sinh viên
             </Link>
           )}
 
@@ -68,7 +68,7 @@ export default function UserDropdown({ onLoggedOut }) {
             }}
             className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
           >
-            Doi mat khau
+            Đổi mật khẩu
           </button>
 
           {user.role !== 'STUDENT' && (
@@ -76,7 +76,7 @@ export default function UserDropdown({ onLoggedOut }) {
               onClick={handleLogout}
               className="block w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
             >
-              Dang xuat
+              Đăng xuất
             </button>
           )}
         </div>

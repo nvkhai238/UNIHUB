@@ -33,9 +33,9 @@ export default function OrganizerRefundsPage() {
     <section className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Danh sach refund</h1>
+          <h1 className="text-3xl font-bold tracking-normal">Danh sách hoàn tiền</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Theo doi cac giao dich can BTC hoan tien khi workshop bi huy.
+            Theo dõi các giao dịch cần BTC hoàn tiền khi workshop bị hủy.
           </p>
         </div>
         <select
@@ -46,7 +46,7 @@ export default function OrganizerRefundsPage() {
           }}
           className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700"
         >
-          <option value="">Tat ca workshop</option>
+          <option value="">Tất cả workshop</option>
           {workshops.map((workshop) => (
             <option key={workshop.id} value={workshop.id}>{workshop.title}</option>
           ))}
@@ -55,20 +55,20 @@ export default function OrganizerRefundsPage() {
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         {loading ? (
-          <p className="p-5 text-sm text-gray-500">Dang tai danh sach refund...</p>
+          <p className="p-5 text-sm text-gray-500">Đang tải danh sách hoàn tiền...</p>
         ) : refunds.length === 0 ? (
-          <p className="p-5 text-sm text-gray-500">Khong co giao dich refund nao phu hop.</p>
+          <p className="p-5 text-sm text-gray-500">Không có giao dịch hoàn tiền nào phù hợp.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Workshop</th>
-                  <th className="px-4 py-3">Sinh vien</th>
-                  <th className="px-4 py-3">Lien he</th>
-                  <th className="px-4 py-3">So tien</th>
-                  <th className="px-4 py-3">Ma thanh toan</th>
-                  <th className="px-4 py-3">Refund luc</th>
+                  <th className="px-4 py-3">Sinh viên</th>
+                  <th className="px-4 py-3">Liên hệ</th>
+                  <th className="px-4 py-3">Số tiền</th>
+                  <th className="px-4 py-3">Mã thanh toán</th>
+                  <th className="px-4 py-3">Hoàn tiền lúc</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
