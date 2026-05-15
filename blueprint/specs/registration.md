@@ -25,7 +25,7 @@ POST /api/registrations
   │
   ├── [1] Validate Idempotency-Key (UUID v4 format)
   ├── [2] Rate limit check (Resilience4j)
-  ├── [3] Redis GET idem:{key} → nếu có → return cached response
+  ├── [3] Redis GET idem:{principal}:{key} → nếu có → return cached response
   │
   ├── [4] BEGIN TRANSACTION
   │       ├── SELECT * FROM workshops WHERE id = ? FOR UPDATE (Pessimistic Lock)
@@ -38,7 +38,7 @@ POST /api/registrations
   │       ├── UPDATE workshops SET remaining_seats = remaining_seats - 1
   │       └── COMMIT
   │
-  ├── [5] Redis SET idem:{key} {response} EX 86400
+  ├── [5] Redis SET idem:{principal}:{key} {response} EX 86400
   ├── [6] Async: EmailService.sendRegistrationConfirmation(userId, workshopId, qrCode)
   └── Return 201 {registrationId, status: CONFIRMED, qrCode, confirmedAt}
 ```
@@ -58,27 +58,21 @@ POST /api/registrations
   │       │   - Nếu = 0: INSERT registrations (WAITLISTED) → COMMIT → 201 WAITLISTED
   │       ├── INSERT registrations (status=PENDING, qr_code=null)
   │       ├── UPDATE workshops SET remaining_seats = remaining_seats - 1
-  │       ├── INSERT payments (status=PENDING, idempotency_key=?, amount=?)
+  │       ├── INSERT payments (status=PENDING, gateway_ref="UHxxxxxx", amount=?)
   │       └── COMMIT
   │
-  ├── [5] Call Payment Gateway (Circuit Breaker + Retry)
-  │       ├── SUCCESS:
-  │       │   ├── UPDATE payments SET status=SUCCESS, gateway_ref=?
+  ├── [5] Redis SET idem:{principal}:{key} {response} EX 86400
+  ├── [6] Sinh viên mở trang payment-info để lấy mã UHxxxxxx, số tiền và tài khoản nhận
+  ├── [7] SePay webhook POST /api/webhooks/sepay khi nhận chuyển khoản
+  │       ├── Extract gateway_ref UHxxxxxx từ nội dung chuyển khoản
+  │       ├── Nếu amount >= payment.amount:
+  │       │   ├── UPDATE payments SET status=SUCCESS
   │       │   ├── UPDATE registrations SET status=CONFIRMED, qr_code=UUID.new()
-  │       │   ├── Redis SET idem:{key} {response}
-  │       │   ├── Async: EmailService.sendConfirmation()
-  │       │   └── Return 201 {qrCode, status: CONFIRMED}
-  │       │
-  │       ├── TIMEOUT / FAILED:
-  │       │   ├── UPDATE payments SET status=FAILED
-  │       │   ├── UPDATE registrations SET status=CANCELLED
-  │       │   ├── UPDATE workshops SET remaining_seats = remaining_seats + 1 (hoàn ghế)
-  │       │   └── Return 504 PAYMENT_TIMEOUT
-  │       │
-  │       └── CB OPEN (fallback ngay):
-  │           ├── UPDATE registrations SET status=CANCELLED
-  │           ├── UPDATE workshops SET remaining_seats = remaining_seats + 1 (hoàn ghế)
-  │           └── Return 503 PAYMENT_UNAVAILABLE
+  │       │   └── Async: in-app/email payment success
+  │       └── Nếu amount thiếu: giữ PENDING để đối soát/retry
+  ├── [8] PaymentTimeoutScheduler quét mỗi 60s
+  │       └── Nếu PENDING quá 15 phút: payment=FAILED, registration=CANCELLED, hoàn ghế/promote waitlist
+  └── Return 201 {registrationId, status: PENDING, qrCode: null}
 ```
 
 ### Luồng C: Hủy đăng ký
@@ -87,8 +81,8 @@ POST /api/registrations
 DELETE /api/registrations/{registrationId}
   ├── Header: Authorization
   ├── [1] Xác thực: registrationId thuộc về user đang đăng nhập
-  ├── [2] Kiểm tra workshop chưa bắt đầu (startTime > now)
-  ├── [3] Kiểm tra registration status = CONFIRMED (không hủy WAITLISTED)
+  ├── [2] Xác thực registration thuộc về user đang đăng nhập
+  ├── [3] Với workshop có phí: chỉ cho sinh viên tự hủy khi registration còn PENDING
   ├── [4] BEGIN TRANSACTION
   │       ├── UPDATE registrations SET status=CANCELLED, cancelled_at=now()
   │       ├── UPDATE workshops SET remaining_seats = remaining_seats + 1
@@ -111,8 +105,8 @@ DELETE /api/registrations/{registrationId}
 | **Vượt rate limit (>5 req/10s)** | 429 | `RATE_LIMIT_EXCEEDED` | Trả Retry-After: 10 |
 | **Đã đăng ký workshop này trước đó** | 409 | `ALREADY_REGISTERED` | Báo lỗi, không xử lý lại |
 | **Workshop hết chỗ** | 201 | (success) | Thêm vào waitlisted, status=WAITLISTED |
-| **Thanh toán timeout (> 5s)** | 504 | `PAYMENT_TIMEOUT` | Hoàn ghế, yêu cầu retry |
-| **Circuit Breaker OPEN** | 503 | `PAYMENT_UNAVAILABLE` | Hoàn ghế, graceful degradation |
+| **Thanh toán quá hạn (> 15 phút)** | Async | `PENDING_PAYMENT_TIMEOUT` | Scheduler chuyển payment=`FAILED`, registration=`CANCELLED`, hoàn ghế/promote waitlist |
+| **SePay webhook thiếu tiền** | 200 | (webhook accepted) | Giữ payment=`PENDING`, không confirm registration |
 | **Workshop không tồn tại** | 404 | `WORKSHOP_NOT_FOUND` | Báo lỗi |
 | **Hủy khi workshop đang diễn ra** | 409 | `WORKSHOP_IN_PROGRESS` | Không cho phép hủy |
 | **Hủy danh sách chờ** | 200 | (success) | Cho phép hủy WAITLISTED, không hoàn ghế |
@@ -127,10 +121,11 @@ DELETE /api/registrations/{registrationId}
 | **Concurrency** | Pessimistic Lock `SELECT FOR UPDATE` đảm bảo tuyệt đối không có 2 SV nhận cùng chỗ cuối |
 | **Race condition** | Mọi INSERT/UPDATE trong một transaction atomic, không có dirty reads |
 | **Consistency** | Số lượng confirmed + waitlisted ≤ capacity; confirmed ≥ 0; waitlisted ≥ 0 |
+| **Unique registration** | DB phải có `UNIQUE (user_id, workshop_id)` để chặn duplicate và cho phép reuse record `CANCELLED` |
 | **Idempotency** | Retry với cùng key không gây duplicate charge hoặc duplicate registration |
 | **QR uniqueness** | Mỗi registration CONFIRMED có 1 QR code duy nhất |
 | **Rate limit** | 5 requests / 10 giây per user trên POST /registrations |
-| **Timeout** | Nếu transaction > 2s → timeout và rollback, hoàn ghế |
+| **Payment timeout** | Payment `PENDING` quá 15 phút sẽ bị scheduler hủy và hoàn ghế |
 | **Waitlist FIFO** | Khi có ghế trống, promote waitlisted theo thứ tự registered_at cũ nhất |
 
 ---
@@ -138,7 +133,7 @@ DELETE /api/registrations/{registrationId}
 ## Tiêu chí chấp nhận
 
 - ✅ Đăng ký miễn phí nhận QR code ngay (status=CONFIRMED)
-- ✅ Đăng ký có phí: nếu payment success → CONFIRMED + QR; nếu fail → CANCELLED + hoàn ghế
+- ✅ Đăng ký có phí: tạo registration/payment `PENDING`, nhận webhook đủ tiền → CONFIRMED + QR; quá hạn → CANCELLED + hoàn ghế
 - ✅ Hết chỗ: sinh viên mới vào WAITLISTED, không nhận QR
 - ✅ Khi ai đó hủy, sinh viên đầu tiên trong waitlist được promote → CONFIRMED + nhận QR + email
 - ✅ Retry với cùng Idempotency-Key trả về kết quả cũ (header: X-Idempotent-Replayed: true)
@@ -157,17 +152,29 @@ Sinh viên đăng ký workshop. Áp dụng cho cả workshop miễn phí và wor
 
 Sinh viên xem danh sách đăng ký của chính mình.
 
+#### `GET /api/registrations/my/workshops/{workshopId}`
+
+Sinh viên xem registration hiện tại của mình cho một workshop cụ thể.
+
+#### `GET /api/registrations/{registrationId}`
+
+Sinh viên xem chi tiết một registration thuộc về chính mình.
+
+#### `GET /api/registrations/{registrationId}/qr`
+
+Sinh viên lấy QR data URI khi registration đã `CONFIRMED`.
+
+#### `POST /api/registrations/{registrationId}/payment/retry`
+
+Sinh viên reset payment `PENDING` với mã `UHxxxxxx` mới cho registration `PENDING` hoặc `CANCELLED` còn có thể giữ chỗ lại. Idempotency retry được sinh từ `registrationId + user`, không yêu cầu header riêng.
+
 #### `DELETE /api/registrations/{registrationId}`
 
 Sinh viên hủy đăng ký trước khi workshop bắt đầu.
 
-#### `GET /api/admin/registrations`
+#### `GET /api/workshops/{workshopId}/registrations`
 
 Ban tổ chức xem danh sách đăng ký theo workshop, trạng thái và phân trang.
-
-#### `GET /api/registrations` — Danh sách đăng ký
-
-Cho phép STUDENT xem đăng ký của mình và ORGANIZER xem danh sách đăng ký theo workshop.
 
 **Query Params:**
 - `?workshopId=abc123` — Lọc theo workshop ID (chỉ ORGANIZER).

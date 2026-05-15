@@ -20,6 +20,7 @@ Quy uoc trang thai:
 - [x] C4 Level 2 - Container Diagram - `HOAN_THANH`
 - [x] High-Level Architecture Diagram - `HOAN_THANH`
 - [x] Thiet ke co so du lieu - `HOAN_THANH`
+- [x] Checklist bo sung constraint/index Supabase can co - `HOAN_THANH`
 - [x] Thiet ke kiem soat truy cap / RBAC - `HOAN_THANH`
 - [x] Thiet ke cac co che bao ve he thong - Rate Limiting / Circuit Breaker / Idempotency - `HOAN_THANH`
 
@@ -65,7 +66,7 @@ Quy uoc trang thai:
 - [x] Route guard frontend theo role - `HOAN_THANH`
 - [x] Dang ky tai khoan voi OTP qua email - `HOAN_THANH`
 - [x] Change password endpoint dung theo spec - `HOAN_THANH`
-- [ ] Test day du cho auth va phan quyen - `CHUA_CO`
+- [x] Test cho auth va phan quyen - `HOAN_THANH`
 
 ---
 
@@ -97,8 +98,9 @@ Quy uoc trang thai:
 
 ### 3.3 Thanh toan va giao dich
 
-- [x] Mock payment integration - `HOAN_THANH` (SePay webhook + QR code)
+- [x] Payment integration - `HOAN_THANH` (SePay webhook + QR code; mock gateway chi con dung cho demo circuit breaker noi bo)
 - [x] Payment status endpoint - `HOAN_THANH`
+- [x] Payment info endpoint cho QR SePay - `HOAN_THANH`
 - [x] Payment retry UI/API co ban - `HOAN_THANH` (retry reset payment PENDING, navigate to payment page, wait SePay webhook)
 - [x] Idempotency key cho registration button - `HOAN_THANH` (Redis lock + header key + clear on success)
 - [x] Circuit breaker co cau hinh co ban - `HOAN_THANH` (Resilience4j @CircuitBreaker + @Retry on processPayment)
@@ -107,6 +109,7 @@ Quy uoc trang thai:
 - [x] Xu ly timeout/fail/cancel/hoan ghe dung 100% theo spec - `HOAN_THANH` (timeout->FAIL+cancel+release seat, cancel->REFUNDED/FAILED+release+promote, re-register reuse cancelled row)
 - [x] Payment stats co filter chinh xac theo workshop/status/date - `HOAN_THANH` (countFiltered + sumAmountFiltered ap dung workshopId, status, from, to)
 - [x] Refund flow ro rang khi workshop bi huy - `HOAN_THANH` (settlePaymentOnCancellation: SUCCESS->REFUNDED, PENDING->FAILED)
+- [ ] Payment simulator organizer goi dung webhook backend - `CHUA_CO` (FE dang goi `/api/payments/sepay`, BE expose `/api/webhooks/sepay`)
 
 ### 3.4 Thong bao cho sinh vien
 
@@ -173,7 +176,7 @@ Quy uoc trang thai:
 
 ### 5.2 Check-in mobile thuan / offline
 
-- [x] UI check-in web/PWA - `HOAN_THANH`
+- [x] UI check-in web debug - `HOAN_THANH`
 - [x] Co logic local storage/offline check-in - `HOAN_THANH`
 - [x] App mobile thuan cho CHECKIN_STAFF - `HOAN_THANH`
 - [x] Quet QR bang camera that su tren mobile - `HOAN_THANH`
@@ -191,6 +194,7 @@ Quy uoc trang thai:
 
 - [x] Scheduler chay luc 2:00 AM - `HOAN_THANH`
 - [x] Batch reader/processor/writer co ban - `HOAN_THANH`
+- [ ] Xac nhan sequence Spring Batch metadata tren Supabase - `CHUA_CO`
 - [x] Upsert sinh vien vao database - `HOAN_THANH`
 - [x] Lich su cac batch import - `HOAN_THANH`
 - [x] UI run import + xem batch - `HOAN_THANH`
@@ -216,7 +220,9 @@ Quy uoc trang thai:
 
 - [x] DB lock `findByIdForUpdate` khi dang ky - `HOAN_THANH`
 - [x] Redis lock bo sung cho registration/workshop seat - `HOAN_THANH`
-- [ ] Test concurrency xac nhan khong overbooking - `CHUA_CO`
+- [ ] Xac nhan Supabase co unique `registrations(user_id, workshop_id)` - `CHUA_CO`
+- [ ] Xac nhan Supabase co check `remaining_seats <= capacity` - `CHUA_CO`
+- [x] Test concurrency xac nhan khong overbooking - `HOAN_THANH`
 
 ### 7.3 Circuit breaker
 
@@ -232,6 +238,7 @@ Quy uoc trang thai:
 - [x] Frontend sinh va gui idempotency key - `HOAN_THANH`
 - [x] Bind idempotency key voi user nhu design mo ta - `HOAN_THANH`
 - [x] Idempotency cho retry payment day du - `HOAN_THANH`
+- [ ] Xac nhan Supabase co unique index `payments.gateway_ref` khi khac null - `CHUA_CO`
 
 ---
 
@@ -289,16 +296,17 @@ Quy uoc trang thai:
 - Notification list va email co ban
 - CSV import co ban
 - Thong ke tong hop co ban
+- Mobile check-in Expo offline co SQLite/SecureStore
 
 ### Dang do / can hoan thien gap
 
-- Payment flow dung spec
-- README + sample data + test
+- Dong bo endpoint PaymentSimulatorPage voi backend SePay webhook
+- Kiem thu mobile check-in tren thiet bi that/emulator
 
 ### Chua co hoac thieu ro
 
-- Per-user workshop-read rate limit dung blueprint
-- Test concurrency va integration
+- Frontend/e2e test tu dong
+- Evidence test thiet bi that cho mobile check-in
 
 ---
 
@@ -473,6 +481,7 @@ Phoi hop: Thanh vien 2
 - [x] Check-in offline that su tren mobile
 - [x] Retry AI summary
 - [x] README.md + sample data
+- [ ] Sua PaymentSimulatorPage goi dung `/api/webhooks/sepay`
 
 ### Uu tien 2 - Bao ve he thong va chat luong
 
@@ -486,3 +495,4 @@ Phoi hop: Thanh vien 2
 - [x] Realtime seats
 - [x] Realtime notifications
 - [ ] Dashboard/reporting chi tiet hon
+- [ ] Frontend/e2e tests cho student/organizer/check-in web

@@ -76,10 +76,10 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 
 | Hạng mục                                      | Lý do loại trừ                                                                                                          |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Cổng thanh toán thực tế (VNPay, Momo)         | Dùng Mock Payment Gateway giả lập để kiểm thử Circuit Breaker và Idempotency Key mà không cần tài khoản merchant thật   |
+| Cổng thanh toán thực tế (VNPay, Momo)         | Dùng luồng SePay webhook/mã chuyển khoản `UHxxxxxx` và payment demo để kiểm thử timeout, Circuit Breaker, Idempotency mà không cần tài khoản merchant thật |
 | Triển khai production (AWS, GCP, domain, SSL) | Đóng gói bằng Docker Compose để chạy local — đủ để chấm điểm, không cần hạ tầng cloud thật                              |
 | Đăng nhập qua SSO/tài khoản trường            | Hệ thống trường không có API auth; sinh viên đăng nhập bằng email được xác thực qua dữ liệu CSV đồng bộ hàng đêm        |
-| Ứng dụng mobile native (iOS/Android)          | Check-in được thực hiện bằng mobile app native riêng cho CHECKIN_STAFF |
+| App mobile đầy đủ cho sinh viên/organizer (iOS/Android) | Phạm vi mobile hiện tại chỉ gồm app check-in Expo/React Native cho CHECKIN_STAFF; sinh viên và organizer dùng web React. |
 | Thanh toán hoàn tiền tự động (refund)         | Admin xử lý hoàn tiền thủ công; hệ thống chỉ ghi nhận trạng thái `REFUNDED`                                             |
 
 ---
@@ -94,8 +94,8 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 **Tải trọng đột biến (Burst Traffic):** 12.000 sinh viên, 60% dồn trong 3 phút đầu ≈ ~40 requests/giây chỉ cho endpoint đăng ký. Nếu không kiểm soát, backend sẽ sụp.
 → _Giải pháp: Rate Limiting bằng Resilience4j kết hợp Redis, chặn sớm tại tầng filter trước khi vào business logic._
 
-**Cổng thanh toán không ổn định:** Mock Payment Gateway được lập trình ngẫu nhiên sinh ra các kịch bản success/fail/timeout. Hệ thống phải đảm bảo các tính năng không liên quan đến thanh toán vẫn hoạt động bình thường khi payment gateway gặp sự cố kéo dài.
-→ _Giải pháp: Circuit Breaker (Resilience4j) với Graceful Degradation._
+**Cổng thanh toán không ổn định:** Luồng thanh toán chính xác nhận qua SePay webhook, còn payment adapter demo sinh success/fail/timeout để kiểm thử resilience. Hệ thống phải đảm bảo các tính năng không liên quan đến thanh toán vẫn hoạt động bình thường khi payment gateway gặp sự cố kéo dài.
+→ _Giải pháp: SePay webhook idempotent cho xác nhận chuyển khoản, PaymentTimeoutScheduler cho payment treo, Circuit Breaker (Resilience4j) với Graceful Degradation cho payment adapter demo._
 
 **Trừ tiền hai lần (Double Charge):** Nếu client timeout và retry, cùng một giao dịch có thể được gửi hai lần.
 → _Giải pháp: Idempotency Key — client sinh UUID trước khi gọi API, server cache kết quả trong Redis 24h._

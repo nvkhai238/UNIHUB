@@ -9,7 +9,7 @@
 Hệ thống thông báo đa kênh:
 - **Email (SMTP):** Xác nhận đăng ký, workshop bị hủy/đổi phòng
 - **In-app:** Insert vào bảng `notifications`, frontend polling hoặc Supabase Realtime subscribe
-- **Thiết kế mở rộng:** Dễ dàng thêm Telegram, SMS trong tương lai mà không thay đổi core logic
+- **Thiết kế mở rộng:** Đã có adapter Email, Telegram, SMS; Telegram/SMS chỉ gửi khi cấu hình token/credential hợp lệ
 
 ---
 
@@ -93,6 +93,17 @@ Event: Bất kỳ sự kiện quan trọng (workshop cancelled, status updated, 
 ### Luồng D: Mark Notification as Read
 
 ```
+
+### Luồng E: Refund / Workshop Update Email
+
+```
+Event: Workshop updated / refund processed
+  ├── EmailService.sendWorkshopUpdated(registrationId, changeSummary)
+  │   └── Dedup Redis key: email:workshop-updated:{registrationId}:{hash}
+  ├── EmailService.sendRefundCompleted(refundRequestId)
+  │   └── Dedup Redis key: email:refund-completed:{refundRequestId}:{processed}
+  └── In-app notification lưu payload JSON {workshopId, registrationId, refundRequestId}
+```
 PATCH /api/notifications/{notificationId}
   ├── Header: Authorization
   ├── Body: {is_read: true}
@@ -111,11 +122,11 @@ PATCH /api/notifications/{notificationId}
 | **SMTP connection failed** | Retry 3 lần (50ms, 100ms, 200ms exponential backoff), log error, không fail request chính |
 | **Email address invalid** | Skip this email, log warning, tiếp tục send cho người khác |
 | **Template file không tìm thấy** | Log error, send generic fallback email, không crash |
-| **Supabase connection down** | In-app notification fail insert, log error, email vẫn send (fallback to email) |
-| **Notification table write fail** | Log error, retry sau 1 phút qua Spring Batch, không block |
+| **Supabase Realtime connection down** | Notification vẫn được insert DB; frontend fallback bằng load lại danh sách/unread count |
+| **Notification table write fail** | Log error, không block transaction chính nếu được gọi async/after commit |
 | **Recipient không tồn tại** | Bỏ qua, không báo lỗi |
 | **Rate limit SMTP server** | Backoff & retry, đừng spam email liên tục |
-| **User unsubscribed from notifications** | Check flag `notification_enabled=false`, bỏ qua |
+| **Telegram/SMS credential thiếu** | Adapter log/skip channel, email/in-app vẫn hoạt động |
 
 ---
 
@@ -125,8 +136,8 @@ PATCH /api/notifications/{notificationId}
 |----------|---------|
 | **Async safety** | Email gửi không được block response; ThreadPool size ≥ 5, queue ≥ 100 |
 | **Idempotency** | Không gửi email duplicate (check via idempotency key hoặc bảng `email_sent`) |
-| **Retention** | Notifications lưu tối đa 90 ngày, sau đó auto-delete |
-| **Rate limit** | Mỗi user không nhận >100 notifications/ngày |
+| **Dedup email** | Redis key `email:*` TTL 7 ngày để tránh gửi trùng cùng sự kiện |
+| **Rate limit** | Không spam cùng sự kiện; channel optional được skip nếu thiếu config |
 | **SMTP config** | Timeout: 5s, Max retries: 3, Connection pool: 10 |
 | **Template** | UTF-8 encoding, HTML-safe, responsive design |
 | **Performance** | Batch send ≤ 1000 emails/phút (không overload SMTP server) |
@@ -143,7 +154,7 @@ PATCH /api/notifications/{notificationId}
 - ✅ Email không bị spam (mỗi sự kiện 1 email, không gửi lại)
 - ✅ Notification có thể mark as read (PATCH endpoint)
 - ✅ Nếu SMTP down, email queue lại và retry; không làm sập hệ thống
-- ✅ Frontend có cách unsubscribe từ in-app notifications
+- ✅ Có adapter Telegram/SMS mở rộng ngoài email/in-app
 - ✅ Template email hiển thị đúng trên mobile & desktop
 
 ---
@@ -285,7 +296,7 @@ Lấy notifications của user đang đăng nhập.
 
 ### API bổ sung
 
-#### `POST /api/notifications` — Create Notification
+#### `POST /api/notifications` — Create Notification nội bộ/service
 
 Cho phép ORGANIZER tạo thông báo mới cho một workshop cụ thể.
 

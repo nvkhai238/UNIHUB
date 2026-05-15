@@ -1,17 +1,18 @@
-﻿# Đặc tả: Xử lý thanh toán (Thành viên 1)
+# Đặc tả: Xử lý thanh toán (Thành viên 1)
 
-> **Phạm vi:** Xử lý thanh toán cho workshop có phí, Circuit Breaker, Idempotency Key chống trừ tiền hai lần.
+> **Phạm vi:** Xử lý thanh toán cho workshop có phí, SePay webhook, trạng thái thanh toán, timeout, refund, Circuit Breaker và Idempotency Key.
 
 ---
 
 ## Mô tả
 
 Khi sinh viên đăng ký workshop có phí, hệ thống:
-1. Tạo payment record với trạng thái `PENDING`.
-2. Gọi Mock Payment Gateway với cơ chế Circuit Breaker và Retry.
-3. Dùng Idempotency Key để tránh trừ tiền hai lần khi client gửi lại request.
-4. Cập nhật trạng thái registration theo kết quả thanh toán.
-5. Cho phép sinh viên kiểm tra trạng thái thanh toán và thử lại khi phù hợp.
+1. Tạo `Registration` trạng thái `PENDING` và giữ chỗ tạm thời.
+2. Tạo `Payment` trạng thái `PENDING` với mã chuyển khoản `UHxxxxxx`.
+3. Sinh viên chuyển khoản theo thông tin từ endpoint `payment-info`/QR SePay.
+4. Webhook `/api/webhooks/sepay` xác nhận thanh toán, chuyển registration sang `CONFIRMED` và sinh QR check-in.
+5. Scheduler hủy payment quá hạn sau 15 phút, hoàn ghế/promote waitlist.
+6. Duy trì Circuit Breaker/Retry cho client mock gateway nội bộ phục vụ demo resilience, nhưng luồng chính hiện tại là SePay webhook.
 
 ---
 
@@ -21,30 +22,28 @@ Khi sinh viên đăng ký workshop có phí, hệ thống:
 
 ```text
 POST /api/registrations
-  ├── [Validation & Idempotency checks]
+  ├── [Validation, rate limit, Redis idempotency]
   ├── [BEGIN TRANSACTION]
-  │   ├── INSERT registrations (status=PENDING)
-  │   ├── INSERT payments (status=PENDING, idempotency_key=?, amount=?)
+  │   ├── SELECT workshop FOR UPDATE
+  │   ├── INSERT/REUSE registration (status=PENDING)
+  │   ├── INSERT payment (status=PENDING, gateway_ref=UHxxxxxx, amount=workshop.price)
   │   ├── UPDATE workshops SET remaining_seats = remaining_seats - 1
   │   └── [COMMIT]
-  ├── [Call Payment Gateway with Circuit Breaker]
-  │   ├── SUCCESS:
-  │   │   ├── UPDATE payments SET status=SUCCESS, gateway_ref={ref}
-  │   │   ├── UPDATE registrations SET status=CONFIRMED, qr_code={uuid}
-  │   │   └── Return 201 {registrationId, status: CONFIRMED, qrCode}
-  │   ├── FAILED:
-  │   │   ├── UPDATE payments SET status=FAILED, error_message={msg}
-  │   │   ├── Rollback registration và hoàn ghế
-  │   │   └── Return 402 PAYMENT_DECLINED
-  │   ├── TIMEOUT:
-  │   │   ├── Không update trạng thái gateway thành SUCCESS
-  │   │   ├── Rollback registration và hoàn ghế
-  │   │   └── Return 504 PAYMENT_TIMEOUT
-  │   └── CIRCUIT BREAKER OPEN:
-  │       ├── Không gọi gateway
-  │       ├── Rollback registration và hoàn ghế
-  │       └── Return 503 PAYMENT_UNAVAILABLE
-  └── [Async: Send email notification]
+  ├── Cache response theo Idempotency-Key 24h
+  └── Return 201 {registrationId, status: PENDING}
+
+GET /api/registrations/{registrationId}/payment-info
+  └── Return paymentCode=UHxxxxxx, amount, bankName, accountNumber, accountName
+
+POST /api/webhooks/sepay
+  ├── Nhận transferType/content/transferAmount từ SePay
+  ├── Extract payment code bằng regex (UH\d{6})
+  ├── Tìm Payment theo gateway_ref
+  ├── Nếu amount >= payment.amount:
+  │   ├── UPDATE payments SET status=SUCCESS, gateway_response={"status":"SEPAY_SUCCESS"}
+  │   ├── UPDATE registrations SET status=CONFIRMED, qr_code=UUID, confirmed_at=now()
+  │   └── Tạo notification PAYMENT_SUCCESS
+  └── Nếu thiếu tiền/không tìm thấy mã: log warning, vẫn trả 200 để webhook không retry vô hạn
 ```
 
 ### Luồng: Check Payment Status
@@ -53,7 +52,7 @@ POST /api/registrations
 GET /api/registrations/{registrationId}/payment-status
   ├── Header: Authorization
   ├── Xác thực registration thuộc user đang đăng nhập
-  ├── SELECT * FROM payments WHERE registration_id = ?
+  ├── SELECT latest payment WHERE registration_id = ?
   └── Return 200 {paymentId, status, amount, gatewayRef, createdAt, updatedAt}
 ```
 
@@ -61,31 +60,33 @@ GET /api/registrations/{registrationId}/payment-status
 
 ```text
 POST /api/registrations/{registrationId}/payment/retry
-  ├── Header: Authorization, Idempotency-Key
+  ├── Header: Authorization
   ├── Xác thực registration thuộc user đang đăng nhập
-  ├── Validate:
-  │   ├── registration.status = PENDING
-  │   ├── payment.status = FAILED
-  │   └── Workshop chưa bắt đầu
-  ├── [Call Payment Gateway with Circuit Breaker]
-  │   ├── Nếu SUCCESS: registration → CONFIRMED, qr_code = new UUID
-  │   ├── Nếu FAILED: registration → CANCELLED, hoàn ghế
-  │   └── Return 201/402/504
-  └── [Async: Send email notification]
+  ├── Validate registration.status = PENDING hoặc CANCELLED
+  ├── Nếu CANCELLED: lock workshop, kiểm tra còn chỗ, giữ lại 1 ghế
+  ├── Reset latest payment:
+  │   ├── status = PENDING
+  │   ├── gateway_ref = mã UHxxxxxx mới
+  │   └── gateway_response = null
+  ├── Nếu registration CANCELLED: chuyển lại PENDING
+  ├── Cache response retry theo registrationId + user
+  └── Return 200 {registrationId, status: PENDING}
 ```
 
 ### Thiết kế dữ liệu liên quan
 
-- Bảng `payments` lưu `registration_id`, `workshop_id`, `user_id`, `amount`, `currency`, `status`, `idempotency_key`, `gateway_reference`, `error_message`, `created_at`, `updated_at`.
-- Redis cache dùng key `payment:idempotency:{idempotencyKey}` với TTL 24 giờ để replay kết quả cũ khi client retry cùng key.
-- Khi workshop bị hủy, các payment `SUCCESS` liên quan cần được chuyển sang luồng refund và registration liên quan bị `CANCELLED`.
+- Bảng `payments` lưu `registration_id`, `amount`, `status`, `idempotency_key`, `gateway_ref`, `gateway_response`, `created_at`, `updated_at`.
+- `gateway_ref` là mã `UHxxxxxx` để khớp nội dung chuyển khoản từ SePay.
+- Redis cache dùng key `idem:{principal}:{uuid}` cho đăng ký và key retry sinh từ `registrationId + principal`, TTL 24 giờ.
+- `PaymentTimeoutScheduler` quét payment `PENDING` quá 15 phút, chuyển `FAILED`, hủy registration, hoàn ghế hoặc promote waitlist.
+- Khi workshop bị hủy, payment `SUCCESS` chuyển `REFUNDED`; sinh viên gửi yêu cầu hoàn tiền qua `refund_requests`.
 
-### Hành vi Mock Payment Gateway
+### Hành vi Payment Demo Adapter
 
-- `70%` `SUCCESS` → trả `200`.
-- `10%` `FAILED` → trả `402`.
-- `10%` `TIMEOUT` → không phản hồi trong `5s`.
-- `10%` `CONNECTION_ERROR` → trả `500`.
+- `MockPaymentGatewayClient` trong backend mô phỏng `70% SUCCESS`, `20% FAILED`, `10% TIMEOUT` cho demo Circuit Breaker.
+- `PaymentService.processPayment()` có `@CircuitBreaker(name = "payment")` và `@Retry(name = "payment")`.
+- Luồng đăng ký thực tế không auto gọi mock gateway sau khi tạo payment; sinh viên tự chuyển khoản và hệ thống xác nhận qua SePay webhook.
+- Service Node `src/mock-payment` trong Docker Compose chỉ là mock HTTP tối giản để kiểm tra container/network, không phải luồng thanh toán chính.
 
 ---
 
@@ -93,14 +94,15 @@ POST /api/registrations/{registrationId}/payment/retry
 
 | Tình huống | HTTP | Code | Hành vi |
 |-----------|------|------|--------|
-| **Gateway trả lỗi (402)** | 402 | `PAYMENT_DECLINED` | registration=`CANCELLED`, hoàn ghế, đề nghị retry |
-| **Gateway timeout (>5s)** | 504 | `PAYMENT_TIMEOUT` | registration=`PENDING`, ghế được hoàn, sinh viên retry |
-| **Circuit Breaker OPEN** | 503 | `PAYMENT_UNAVAILABLE` | registration=`CANCELLED`, hoàn ghế, graceful degradation |
-| **DB transaction fail** | 500 | `PAYMENT_ERROR` | Rollback, không insert payment, sinh viên retry |
+| **Không tìm thấy payment** | 404 | `NOT_FOUND` | Báo lỗi cho trang trạng thái thanh toán |
+| **Payment không thuộc user** | 403 | `FORBIDDEN` | Không cho xem payment-info/payment-status |
+| **Webhook không có mã UH hợp lệ** | 200 | (accepted) | Log warning, không cập nhật payment |
+| **Webhook amount thấp hơn amount cần thu** | 200 | (accepted) | Giữ payment=`PENDING`, chờ giao dịch đúng hoặc xử lý thủ công |
+| **Payment PENDING quá 15 phút** | Async | `PENDING_PAYMENT_TIMEOUT` | payment=`FAILED`, registration=`CANCELLED`, hoàn ghế/promote waitlist |
+| **Retry khi hết chỗ** | 409 | `WORKSHOP_FULL` | Không chuyển registration lại PENDING |
+| **Retry khi registration không thuộc user** | 403 | `FORBIDDEN` | Reject |
 | **Idempotency Key trùng** | 200 | cached response | Trả lại kết quả cũ |
-| **Retry khi registration CONFIRMED** | 409 | `PAYMENT_ALREADY_COMPLETED` | Báo lỗi, không xử lý |
-| **Retry khi registration CANCELLED** | 409 | `PAYMENT_ALREADY_CANCELLED` | Báo lỗi, không xử lý |
-| **Insufficient funds** | 402 | `INSUFFICIENT_FUNDS` | payment=`FAILED`, registration=`CANCELLED` |
+| **Circuit Breaker OPEN trong demo gateway** | 503 | `PAYMENT_UNAVAILABLE` | Fallback không làm ảnh hưởng các route không liên quan payment |
 
 ---
 
@@ -108,27 +110,28 @@ POST /api/registrations/{registrationId}/payment/retry
 
 | Ràng buộc | Chi tiết |
 |----------|---------|
-| **Idempotency Key** | TTL `24h`, xác định duy nhất một giao dịch |
-| **Timeout** | Payment Gateway phải phản hồi trong `< 5s` |
-| **Circuit Breaker** | `50%` failure rate hoặc `80%` slow call thì chuyển `OPEN` |
+| **Idempotency Key** | TTL `24h`, scope theo user/principal |
+| **Payment timeout** | Payment `PENDING` quá `15 phút` bị hủy bởi scheduler chạy mỗi `60s` |
+| **Circuit Breaker** | `50%` failure rate hoặc `80%` slow call thì chuyển `OPEN` cho demo gateway |
 | **Wait duration** | `OPEN` kéo dài `30s`, sau đó thử `HALF-OPEN` |
-| **Retry limit** | Tối đa `3` lần gọi gateway |
-| **Atomic transaction** | INSERT payment + UPDATE registration phải nhất quán |
+| **Atomic transaction** | Registration, payment và remaining seats phải nhất quán trong transaction |
 | **Amount precision** | Giá tiền lưu dạng `DECIMAL(10,2)` |
-| **No double charge** | Redis idempotency cache phải ngăn trừ tiền hai lần |
-| **Graceful degradation** | Khi payment lỗi, các tính năng khác vẫn hoạt động bình thường |
+| **No double confirm** | Webhook idempotent: payment SUCCESS/registration CONFIRMED thì bỏ qua lần gọi sau |
+| **Payment code uniqueness** | `payments.gateway_ref` cần unique khi khác null để mã `UHxxxxxx` chỉ trỏ tới một payment |
+| **Graceful degradation** | Khi payment lỗi, xem workshop, auth, CSV, check-in vẫn hoạt động |
 
 ---
 
 ## Tiêu chí chấp nhận
 
-- ✅ Đăng ký có phí thành công thì registration chuyển `CONFIRMED` và có QR.
-- ✅ Payment fail thì registration chuyển `CANCELLED` và ghế được hoàn lại.
-- ✅ Payment timeout thì sinh viên có thể retry theo đúng trạng thái.
-- ✅ Retry với cùng `Idempotency-Key` phải trả kết quả cũ, không gọi gateway lần hai.
-- ✅ Circuit Breaker `OPEN` thì trả `503` ngay, không spam gateway.
+- ✅ Đăng ký có phí tạo payment `PENDING` và mã `UHxxxxxx`.
+- ✅ `GET payment-info` trả đủ thông tin để render QR SePay.
+- ✅ Webhook SePay đúng mã và đủ tiền chuyển payment `SUCCESS`, registration `CONFIRMED`, sinh QR.
+- ✅ Payment quá 15 phút chuyển `FAILED`, registration `CANCELLED`, ghế được hoàn/promote waitlist.
+- ✅ Retry payment sinh mã `UHxxxxxx` mới và không tạo duplicate registration.
+- ✅ Retry replay trả kết quả cũ khi key retry scoped đã được cache.
+- ✅ Circuit Breaker có endpoint status cho organizer theo dõi.
 - ✅ Organizer xem được thống kê payment theo workshop, trạng thái, khoảng thời gian.
-- ✅ 100 concurrent checkout không tạo duplicate charge.
 
 ---
 
@@ -152,33 +155,34 @@ Xem trạng thái thanh toán của một registration.
   "data": {
     "paymentId": "p1p2p3p4-...",
     "registrationId": "r1r2r3r4-...",
-    "workshopId": "w1w2w3w4-...",
     "amount": 50000,
-    "currency": "VND",
     "paymentStatus": "SUCCESS",
-    "gatewayReference": "MOC_PAY_12345",
-    "errorMessage": null,
+    "gatewayReference": "UH123456",
     "createdAt": "2026-05-03T10:00:00Z",
     "updatedAt": "2026-05-03T10:05:00Z"
   }
 }
 ```
 
-**Response 404 — Không tìm thấy payment:**
-```json
-{
-  "status": 404,
-  "code": "PAYMENT_NOT_FOUND",
-  "message": "Không tìm thấy thông tin thanh toán cho registration này."
-}
-```
+---
 
-**Response 403 — Không có quyền truy cập:**
+#### `GET /api/registrations/{registrationId}/payment-info`
+
+Lấy thông tin chuyển khoản cho payment đang chờ.
+
+**Header:** `Authorization: Bearer {accessToken}`
+
+**Response 200:**
 ```json
 {
-  "status": 403,
-  "code": "FORBIDDEN",
-  "message": "Bạn không có quyền xem thông tin thanh toán này."
+  "status": 200,
+  "data": {
+    "paymentCode": "UH123456",
+    "amount": 50000,
+    "bankName": "MBBank",
+    "accountNumber": "0123456789",
+    "accountName": "NGUYEN VAN A"
+  }
 }
 ```
 
@@ -186,65 +190,47 @@ Xem trạng thái thanh toán của một registration.
 
 #### `POST /api/registrations/{registrationId}/payment/retry`
 
-Thử lại thanh toán cho registration có status `PENDING` hoặc `FAILED`.
+Reset payment về `PENDING` và sinh mã `UHxxxxxx` mới.
 
-**Header:** `Authorization: Bearer {accessToken}`, `Idempotency-Key: {UUID}`
-
-**Path Params:**
-- `registrationId` — UUID của registration
+**Header:** `Authorization: Bearer {accessToken}`
 
 **Request Body:** (empty)
 ```json
 {}
 ```
 
-**Response 201 — Thanh toán thành công:**
+**Response 200:**
 ```json
 {
-  "status": 201,
+  "status": 200,
   "data": {
-    "paymentId": "p1p2p3p4-...",
-    "paymentStatus": "SUCCESS",
-    "registrationStatus": "CONFIRMED",
-    "qrCode": "qr-code-uuid",
-    "message": "Thanh toán thành công. Vui lòng kiểm tra email xác nhận."
+    "id": "r1r2r3r4-...",
+    "status": "PENDING",
+    "qrCode": null
   }
 }
 ```
 
-**Response 402 — Thanh toán bị từ chối:**
+---
+
+#### `POST /api/webhooks/sepay`
+
+Webhook công khai nhận thông báo chuyển khoản từ SePay.
+
+**Request Body:**
 ```json
 {
-  "status": 402,
-  "code": "PAYMENT_DECLINED",
-  "message": "Thanh toán bị từ chối. Vui lòng kiểm tra thông tin thẻ hoặc thử lại."
+  "transferType": "in",
+  "content": "Thanh toan UH123456",
+  "transferAmount": 50000
 }
 ```
 
-**Response 504 — Payment timeout:**
+**Response 200:**
 ```json
 {
-  "status": 504,
-  "code": "PAYMENT_TIMEOUT",
-  "message": "Thanh toán vượt quá thời gian chờ. Ghế đã được hoàn lại. Vui lòng thử đăng ký lại."
-}
-```
-
-**Response 503 — Payment service unavailable (CB OPEN):**
-```json
-{
-  "status": 503,
-  "code": "PAYMENT_UNAVAILABLE",
-  "message": "Dịch vụ thanh toán tạm thời không khả dụng. Ghế đã được hoàn lại. Vui lòng thử lại sau."
-}
-```
-
-**Response 409 — Conflict (already completed/cancelled):**
-```json
-{
-  "status": 409,
-  "code": "REGISTRATION_ALREADY_COMPLETED",
-  "message": "Đăng ký này đã được hoàn tất hoặc hủy. Không thể thực hiện thanh toán lại."
+  "status": 200,
+  "data": "Webhook processed"
 }
 ```
 
@@ -257,9 +243,9 @@ Xem thống kê thanh toán (`ORGANIZER` only).
 **Header:** `Authorization: Bearer {accessToken}`
 
 **Query Params:**
-- `?from=2026-05-01&to=2026-05-05` — Lọc theo ngày (tùy chọn)
+- `?from=2026-05-01T00:00:00Z&to=2026-05-05T23:59:59Z` — Lọc theo thời gian (tùy chọn)
 - `?workshopId=abc123` — Lọc theo workshop (tùy chọn)
-- `?status=SUCCESS` — Lọc theo payment status: `SUCCESS`, `FAILED`, `TIMEOUT`, `PENDING`
+- `?status=SUCCESS` — Lọc theo payment status: `SUCCESS`, `FAILED`, `PENDING`, `REFUNDED`
 
 **Response 200:**
 ```json
@@ -270,42 +256,36 @@ Xem thống kê thanh toán (`ORGANIZER` only).
     "totalAmount": 7800000,
     "currency": "VND",
     "byStatus": {
-      "SUCCESS": {
-        "count": 145,
-        "amount": 7250000
-      },
-      "FAILED": {
-        "count": 8,
-        "amount": 400000
-      },
-      "TIMEOUT": {
-        "count": 3,
-        "amount": 150000
-      },
-      "PENDING": {
-        "count": 0,
-        "amount": 0
-      }
+      "SUCCESS": { "count": 145, "amount": 7250000 },
+      "FAILED": { "count": 8, "amount": 400000 },
+      "PENDING": { "count": 3, "amount": 150000 },
+      "REFUNDED": { "count": 0, "amount": 0 }
     },
     "successRate": "92.95%",
     "averageAmount": 50000,
-    "topWorkshops": [
-      {
-        "workshopId": "w1w2w3w4-...",
-        "title": "AI trong giáo dục",
-        "totalPayments": 45,
-        "successCount": 42,
-        "revenue": 2100000
-      }
-    ],
-    "period": {
-      "from": "2026-05-01T00:00:00Z",
-      "to": "2026-05-05T23:59:59Z"
-    }
+    "topWorkshops": []
   }
 }
 ```
 
+---
 
+#### `GET /api/admin/payments/circuit-breaker-status`
 
+Organizer xem trạng thái circuit breaker payment demo.
 
+#### `GET /api/admin/refunds`
+
+Organizer xem hàng đợi hoàn tiền.
+
+#### `PATCH /api/admin/refunds/{refundRequestId}`
+
+Organizer đánh dấu yêu cầu hoàn tiền đã xử lý/chưa xử lý.
+
+#### `GET /api/refunds/my/registrations/{registrationId}`
+
+Sinh viên xem yêu cầu hoàn tiền của registration.
+
+#### `POST /api/refunds/my/registrations/{registrationId}`
+
+Sinh viên tạo/cập nhật thông tin hoàn tiền sau khi workshop có phí bị hủy.
