@@ -27,12 +27,7 @@ export default function MyRegistrationsPage() {
     load();
   }, [page]);
 
-  const retryPayment = async (id, status) => {
-    if (status === 'PENDING') {
-      navigate(`/student/registrations/${id}/payment`);
-      return;
-    }
-
+  const retryPayment = async (id) => {
     setNotice(null);
     try {
       await api.post(`/api/registrations/${id}/payment/retry`, {}, {
@@ -96,6 +91,8 @@ export default function MyRegistrationsPage() {
               const isCancelling = cancellingIds.includes(registration.id);
               const canCancel = Boolean(registration.canCancel);
               const cancellationReason = getCancellationReason(registration);
+              const isCancelled = registration.status === 'CANCELLED';
+              const isPending = registration.status === 'PENDING';
 
               return (
                 <div key={registration.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
@@ -121,7 +118,8 @@ export default function MyRegistrationsPage() {
                       >
                         Chi tiết
                       </Link>
-                      {registration.status === 'CONFIRMED' && (
+
+                      {!isCancelled && registration.status === 'CONFIRMED' && (
                         <Link
                           className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                           to={`/student/registrations/${registration.id}/qr`}
@@ -129,16 +127,18 @@ export default function MyRegistrationsPage() {
                           Xem QR
                         </Link>
                       )}
-                      {(registration.status === 'PENDING' || registration.status === 'CANCELLED') && (
+
+                      {!isCancelled && isPending && (
                         <button
                           type="button"
-                          onClick={() => retryPayment(registration.id, registration.status)}
+                          onClick={() => retryPayment(registration.id)}
                           className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
                         >
-                          {registration.status === 'PENDING' ? 'Thanh toán' : 'Thử lại thanh toán'}
+                          Thanh toán
                         </button>
                       )}
-                      {registration.status !== 'CANCELLED' && (
+
+                      {!isCancelled && (
                         <button
                           type="button"
                           disabled={!canCancel || isCancelling}
@@ -152,7 +152,8 @@ export default function MyRegistrationsPage() {
                         </button>
                       )}
                     </div>
-                    {!canCancel && registration.status !== 'CANCELLED' && (
+
+                    {!isCancelled && !canCancel && (
                       <p className="max-w-xs text-xs text-gray-500 md:text-right">{cancellationReason}</p>
                     )}
                   </div>

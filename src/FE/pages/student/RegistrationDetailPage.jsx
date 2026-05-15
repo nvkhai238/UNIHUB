@@ -58,6 +58,8 @@ export default function RegistrationDetailPage() {
 
   const canCancel = Boolean(registration?.canCancel);
   const cancellationReason = getCancellationReason(registration);
+  const isCancelled = registration?.status === 'CANCELLED';
+  const isPending = registration?.status === 'PENDING';
 
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
@@ -93,7 +95,7 @@ export default function RegistrationDetailPage() {
             </dl>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {registration.status === 'CONFIRMED' && (
+              {!isCancelled && registration.status === 'CONFIRMED' && (
                 <Link
                   className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                   to={`/student/registrations/${registration.id}/qr`}
@@ -102,7 +104,7 @@ export default function RegistrationDetailPage() {
                 </Link>
               )}
 
-              {(registration.status === 'PENDING' || registration.status === 'CANCELLED') && (
+              {!isCancelled && isPending && (
                 <>
                   <button
                     type="button"
@@ -120,7 +122,7 @@ export default function RegistrationDetailPage() {
                 </>
               )}
 
-              {registration.status !== 'CANCELLED' && (
+              {!isCancelled && (
                 <button
                   type="button"
                   disabled={!canCancel || cancelling}
@@ -135,7 +137,7 @@ export default function RegistrationDetailPage() {
               )}
             </div>
 
-            {!canCancel && registration.status !== 'CANCELLED' && (
+            {!isCancelled && !canCancel && (
               <p className="mt-3 text-sm text-gray-500">{cancellationReason}</p>
             )}
           </>
