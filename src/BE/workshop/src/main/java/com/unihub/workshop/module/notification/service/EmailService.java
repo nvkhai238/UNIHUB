@@ -1,12 +1,13 @@
 package com.unihub.workshop.module.notification.service;
 
+import com.unihub.workshop.module.payment.entity.PaymentStatus;
+import com.unihub.workshop.module.payment.entity.RefundRequest;
+import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import com.unihub.workshop.module.payment.repository.RefundRequestRepository;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.registration.service.QrCodeService;
-import com.unihub.workshop.module.payment.entity.RefundRequest;
-import com.unihub.workshop.module.payment.entity.PaymentStatus;
-import com.unihub.workshop.module.payment.repository.PaymentRepository;
-import com.unihub.workshop.module.payment.repository.RefundRequestRepository;
+import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +25,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.HtmlUtils;
-
-import jakarta.mail.MessagingException;
 
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -82,7 +81,7 @@ public class EmailService {
         byte[] qrBytes = qrCodeService.generatePng(registration.getQrCode());
         boolean sent = sendWithRetry(
                 registration.getUser().getEmail(),
-                "[UniHub] Dang ky thanh cong - " + registration.getWorkshop().getTitle(),
+                "[UniHub] Đăng ký thành công - " + registration.getWorkshop().getTitle(),
                 helper -> {
                     helper.setText(buildRegistrationConfirmationHtml(registration), true);
                     helper.addInline("qrCode", new ByteArrayResource(qrBytes), "image/png");
@@ -114,7 +113,7 @@ public class EmailService {
 
         boolean sent = sendWithRetry(
                 registration.getUser().getEmail(),
-                "[UniHub] Thong bao huy workshop - " + registration.getWorkshop().getTitle(),
+                "[UniHub] Thông báo hủy workshop - " + registration.getWorkshop().getTitle(),
                 helper -> helper.setText(buildWorkshopCancellationHtml(registration), true),
                 "workshop cancellation"
         );
@@ -143,7 +142,7 @@ public class EmailService {
         Registration registration = refundRequest.getRegistration();
         boolean sent = sendWithRetry(
                 registration.getUser().getEmail(),
-                "[UniHub] Hoan tien thanh cong - " + registration.getWorkshop().getTitle(),
+                "[UniHub] Hoàn tiền thành công - " + registration.getWorkshop().getTitle(),
                 helper -> helper.setText(buildRefundCompletedHtml(refundRequest), true),
                 "refund completion"
         );
@@ -171,7 +170,7 @@ public class EmailService {
 
         boolean sent = sendWithRetry(
                 registration.getUser().getEmail(),
-                "[UniHub] Workshop cap nhat - " + registration.getWorkshop().getTitle(),
+                "[UniHub] Workshop cập nhật - " + registration.getWorkshop().getTitle(),
                 helper -> helper.setText(buildWorkshopUpdatedHtml(registration, changeSummary), true),
                 "workshop update"
         );
@@ -184,7 +183,7 @@ public class EmailService {
     public void sendRegistrationOtp(String email, String fullName, String otpCode, int expiresInMinutes) {
         boolean sent = sendWithRetry(
                 email,
-                "[UniHub] Ma xac thuc dang ky tai khoan",
+                "[UniHub] Mã xác thực đăng ký tài khoản",
                 helper -> helper.setText(buildRegistrationOtpHtml(fullName, otpCode, expiresInMinutes), true),
                 "registration otp"
         );
@@ -260,16 +259,16 @@ public class EmailService {
                 <!doctype html>
                 <html lang="vi">
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-                  <h2 style="margin:0 0 12px">Dang ky workshop thanh cong</h2>
-                  <p>Xin chao %s,</p>
-                  <p>Ban da dang ky thanh cong workshop <strong>%s</strong>.</p>
+                  <h2 style="margin:0 0 12px">Đăng ký workshop thành công</h2>
+                  <p>Xin chào %s,</p>
+                  <p>Bạn đã đăng ký thành công workshop <strong>%s</strong>.</p>
                   <ul>
-                    <li>Thoi gian: %s</li>
-                    <li>Phong: %s</li>
+                    <li>Thời gian: %s</li>
+                    <li>Phòng: %s</li>
                   </ul>
-                  <p>Vui long dua ma QR nay cho nhan su check-in tai cua phong.</p>
+                  <p>Vui lòng đưa mã QR này cho nhân sự check-in tại cửa phòng.</p>
                   <p><img src="cid:qrCode" width="220" height="220" alt="UniHub QR code"></p>
-                  <p style="font-size:12px;color:#6b7280">Ma QR: %s</p>
+                  <p style="font-size:12px;color:#6b7280">Mã QR: %s</p>
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle, startTime, room, qrCode);
@@ -287,7 +286,7 @@ public class EmailService {
             String resolvedRefundUrl = resolveRefundFormUrl(registration);
             String safeRefundUrl = escape(resolvedRefundUrl);
             refundSection = """
-                  <p>Workshop nay co thu phi. De BTC xu ly hoan tien, vui long dien form sau va gui kem thong tin ngan hang cung minh chung thanh toan:</p>
+                  <p>Workshop này có thu phí. Để ban tổ chức xử lý hoàn tiền, vui lòng điền form sau và gửi kèm thông tin ngân hàng cùng minh chứng thanh toán:</p>
                   <p><a href="%s">%s</a></p>
                 """.formatted(safeRefundUrl, safeRefundUrl);
         }
@@ -296,11 +295,11 @@ public class EmailService {
                 <!doctype html>
                 <html lang="vi">
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-                  <h2 style="margin:0 0 12px">Thong bao huy workshop</h2>
-                  <p>Xin chao %s,</p>
-                  <p>Workshop <strong>%s</strong> da bi huy.</p>
+                  <h2 style="margin:0 0 12px">Thông báo hủy workshop</h2>
+                  <p>Xin chào %s,</p>
+                  <p>Workshop <strong>%s</strong> đã bị hủy.</p>
                   %s
-                  <p>Cam on ban da theo doi UniHub.</p>
+                  <p>Cảm ơn bạn đã theo dõi UniHub.</p>
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle, refundSection);
@@ -314,12 +313,12 @@ public class EmailService {
                 <!doctype html>
                 <html lang="vi">
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-                  <h2 style="margin:0 0 12px">Xac thuc dang ky tai khoan</h2>
-                  <p>Xin chao %s,</p>
-                  <p>Ban dang tao tai khoan sinh vien tren UniHub Workshop. Ma OTP cua ban la:</p>
+                  <h2 style="margin:0 0 12px">Xác thực đăng ký tài khoản</h2>
+                  <p>Xin chào %s,</p>
+                  <p>Bạn đang tạo tài khoản sinh viên trên UniHub Workshop. Mã OTP của bạn là:</p>
                   <p style="margin:20px 0;font-size:28px;font-weight:700;letter-spacing:6px">%s</p>
-                  <p>Ma nay co hieu luc trong %d phut.</p>
-                  <p style="font-size:12px;color:#6b7280">Neu ban khong thuc hien yeu cau nay, vui long bo qua email.</p>
+                  <p>Mã này có hiệu lực trong %d phút.</p>
+                  <p style="font-size:12px;color:#6b7280">Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.</p>
                 </body>
                 </html>
                 """.formatted(recipientName, safeOtp, expiresInMinutes);
@@ -336,15 +335,15 @@ public class EmailService {
                 <!doctype html>
                 <html lang="vi">
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-                  <h2 style="margin:0 0 12px">Workshop da duoc cap nhat</h2>
-                  <p>Xin chao %s,</p>
-                  <p>Workshop <strong>%s</strong> vua co thay doi quan trong.</p>
-                  <p><strong>Noi dung cap nhat:</strong> %s</p>
+                  <h2 style="margin:0 0 12px">Workshop đã được cập nhật</h2>
+                  <p>Xin chào %s,</p>
+                  <p>Workshop <strong>%s</strong> vừa có thay đổi quan trọng.</p>
+                  <p><strong>Nội dung cập nhật:</strong> %s</p>
                   <ul>
-                    <li>Thoi gian hien tai: %s</li>
-                    <li>Phong hien tai: %s</li>
+                    <li>Thời gian hiện tại: %s</li>
+                    <li>Phòng hiện tại: %s</li>
                   </ul>
-                  <p>Vui long kiem tra lai lich tham du cua ban tren UniHub.</p>
+                  <p>Vui lòng kiểm tra lại lịch tham dự của bạn trên UniHub.</p>
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle, summary, startTime, room);
@@ -364,14 +363,14 @@ public class EmailService {
                 <!doctype html>
                 <html lang="vi">
                 <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-                  <h2 style="margin:0 0 12px">Hoan tien thanh cong</h2>
-                  <p>Xin chao %s,</p>
-                  <p>BTC da xu ly hoan tien thanh cong cho workshop <strong>%s</strong>.</p>
+                  <h2 style="margin:0 0 12px">Hoàn tiền thành công</h2>
+                  <p>Xin chào %s,</p>
+                  <p>Ban tổ chức đã xử lý hoàn tiền thành công cho workshop <strong>%s</strong>.</p>
                   <ul>
-                    <li>Tai khoan nhan: %s - %s</li>
-                    <li>So tien du kien: %s VND</li>
+                    <li>Tài khoản nhận: %s - %s</li>
+                    <li>Số tiền dự kiến: %s VND</li>
                   </ul>
-                  <p>Neu ban can doi chieu them, vui long lien he BTC.</p>
+                  <p>Nếu bạn cần đối chiếu thêm, vui lòng liên hệ ban tổ chức.</p>
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle, bankName, bankAccountNumber, amount);
