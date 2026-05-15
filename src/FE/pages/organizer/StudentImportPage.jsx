@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { formatDateTime } from '../../utils/dateTime';
 
 export default function StudentImportPage() {
@@ -9,16 +10,20 @@ export default function StudentImportPage() {
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const loadData = async () => {
+  const loadData = async (nextPage = page) => {
     setLoading(true);
     try {
       const [batchRes, statusRes] = await Promise.allSettled([
-        api.get('/api/admin/student-imports'),
+        api.get('/api/admin/student-imports', { params: { page: nextPage, size: 10 } }),
         api.get('/api/csv/status'),
       ]);
+
       if (batchRes.status === 'fulfilled') {
-        setBatches(batchRes.value.data.data ?? []);
+        setBatches(batchRes.value.data.data?.content ?? []);
+        setTotalPages(batchRes.value.data.data?.totalPages ?? 0);
       }
       if (statusRes.status === 'fulfilled') {
         setLatestStatus(statusRes.value.data.data ?? null);
@@ -32,7 +37,9 @@ export default function StudentImportPage() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData(page);
+  }, [page]);
 
   const runImport = async () => {
     setRunning(true);
@@ -44,7 +51,8 @@ export default function StudentImportPage() {
       const batch = data.data ?? {};
       setMessage(`Import CSV ${batchStatusLabel(batch.status).toLowerCase()}: ${batch.successRows ?? 0} dòng hợp lệ, ${batch.errorRows ?? 0} dòng lỗi.`);
       setMessageType(batch.status === 'COMPLETED' ? 'success' : 'warning');
-      await loadData();
+      setPage(0);
+      await loadData(0);
     } catch (err) {
       setMessage(err?.response?.data?.message || 'Import thất bại. Vui lòng kiểm tra batch log.');
       setMessageType('error');
@@ -72,7 +80,7 @@ export default function StudentImportPage() {
             {running ? 'Đang chạy...' : 'Chạy import ngay'}
           </button>
           <button
-            onClick={loadData}
+            onClick={() => loadData(page)}
             disabled={loading}
             className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -101,49 +109,53 @@ export default function StudentImportPage() {
           <p className="text-sm text-gray-500">Chưa có lần import nào được ghi nhận.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-100 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lần chạy</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">File</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Trạng thái</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Tổng dòng</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Hợp lệ</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lỗi</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Thời gian</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Chi tiết lỗi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {batches.map((batch) => (
-                <tr key={batch.id} className="align-top hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{formatJobId(batch.id)}</td>
-                  <td className="px-4 py-3 text-gray-950">{batch.fileName ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${batchStatusStyle(batch.status)}`}>
-                      {batchStatusLabel(batch.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{batch.totalRows ?? 0}</td>
-                  <td className="px-4 py-3 font-semibold text-emerald-700">{batch.successRows ?? 0}</td>
-                  <td className={`px-4 py-3 font-semibold ${(batch.errorRows ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                    {batch.errorRows ?? 0}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    <div>{formatDate(batch.startedAt)}</div>
-                    <div>{formatDate(batch.completedAt)}</div>
-                  </td>
-                  <td className="max-w-sm px-4 py-3 text-xs text-gray-500">
-                    {batch.errorLog ? (
-                      <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-2 text-xs text-gray-700">{batch.errorLog}</pre>
-                    ) : '—'}
-                  </td>
+        <>
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-gray-100 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lần chạy</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">File</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Trạng thái</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Tổng dòng</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Hợp lệ</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Lỗi</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Thời gian</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Chi tiết lỗi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {batches.map((batch) => (
+                  <tr key={batch.id} className="align-top hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{formatJobId(batch.id)}</td>
+                    <td className="px-4 py-3 text-gray-950">{batch.fileName ?? '-'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${batchStatusStyle(batch.status)}`}>
+                        {batchStatusLabel(batch.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{batch.totalRows ?? 0}</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-700">{batch.successRows ?? 0}</td>
+                    <td className={`px-4 py-3 font-semibold ${(batch.errorRows ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {batch.errorRows ?? 0}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      <div>{formatDate(batch.startedAt)}</div>
+                      <div>{formatDate(batch.completedAt)}</div>
+                    </td>
+                    <td className="max-w-sm px-4 py-3 text-xs text-gray-500">
+                      {batch.errorLog ? (
+                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-2 text-xs text-gray-700">{batch.errorLog}</pre>
+                      ) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </section>
   );
@@ -190,10 +202,10 @@ function batchStatusLabel(status) {
 }
 
 function formatDate(value) {
-  return formatDateTime(value, '—');
+  return formatDateTime(value, '-');
 }
 
 function formatJobId(value) {
-  if (!value) return '—';
+  if (!value) return '-';
   return String(value).length > 8 ? `${String(value).slice(0, 8)}...` : value;
 }

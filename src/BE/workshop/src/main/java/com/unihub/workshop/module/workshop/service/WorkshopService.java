@@ -63,6 +63,7 @@ public class WorkshopService {
     @Transactional
     public WorkshopResponse create(WorkshopRequest request) {
         User creator = getCurrentUser();
+        validateWorkshopSchedule(request);
 
         Workshop workshop = Workshop.builder()
                 .title(request.getTitle())
@@ -88,6 +89,7 @@ public class WorkshopService {
     @Transactional
     public WorkshopResponse update(UUID id, WorkshopRequest request) {
         Workshop workshop = findEntityById(id);
+        validateWorkshopSchedule(request);
 
         if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
             throw new AppException(ErrorCode.FORBIDDEN, "Cannot update a cancelled workshop");
@@ -195,8 +197,11 @@ public class WorkshopService {
 
                 paymentRepository.findTopByRegistrationOrderByCreatedAtDesc(registration)
                         .ifPresent(payment -> {
-                            if (payment.getStatus() == PaymentStatus.SUCCESS || payment.getStatus() == PaymentStatus.PENDING) {
+                            if (payment.getStatus() == PaymentStatus.SUCCESS) {
                                 payment.setStatus(PaymentStatus.REFUNDED);
+                                paymentRepository.save(payment);
+                            } else if (payment.getStatus() == PaymentStatus.PENDING) {
+                                payment.setStatus(PaymentStatus.FAILED);
                                 paymentRepository.save(payment);
                             }
                         });
@@ -472,6 +477,16 @@ public class WorkshopService {
 
     private String safeValue(String value) {
         return value == null || value.isBlank() ? "(trong)" : value;
+    }
+
+    private void validateWorkshopSchedule(WorkshopRequest request) {
+        ZonedDateTime now = ZonedDateTime.now();
+        if (!request.getStartTime().isAfter(now)) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Thoi gian bat dau phai muon hon thoi diem hien tai");
+        }
+        if (!request.getEndTime().isAfter(request.getStartTime())) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Thoi gian ket thuc phai sau thoi gian bat dau");
+        }
     }
 
     private String formatDateTime(ZonedDateTime value) {

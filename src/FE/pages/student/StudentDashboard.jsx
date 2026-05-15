@@ -9,19 +9,20 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    api.get('/api/registrations/my?size=5') // Fetch 5 most recent registrations for dashboard
+    api.get('/api/registrations/my?size=5')
       .then(({ data }) => mounted && setRegistrations(data.data?.content ?? []))
       .catch(() => mounted && setRegistrations([]))
       .finally(() => mounted && setLoading(false));
+
     return () => {
       mounted = false;
     };
   }, []);
 
   const summary = useMemo(() => ({
-    confirmed: registrations.filter((r) => r.status === 'CONFIRMED').length,
-    pending: registrations.filter((r) => r.status === 'PENDING').length,
-    waitlisted: registrations.filter((r) => r.status === 'WAITLISTED').length,
+    confirmed: registrations.filter((item) => item.status === 'CONFIRMED').length,
+    pending: registrations.filter((item) => item.status === 'PENDING').length,
+    waitlisted: registrations.filter((item) => item.status === 'WAITLISTED').length,
   }), [registrations]);
 
   return (
@@ -29,24 +30,28 @@ export default function StudentDashboard() {
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-normal">Tổng quan sinh viên</h1>
-          <p className="mt-2 text-sm text-gray-600">Theo dõi đăng ký, thanh toán pending và mã QR check-in.</p>
+          <p className="mt-2 text-sm text-gray-600">Theo dõi đăng ký, thanh toán chờ xử lý và mã QR check-in.</p>
         </div>
-        <Link to="/student/workshops" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        <Link
+          to="/student/workshops"
+          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+        >
           Xem lịch workshop
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Metric label="Đã xác nhận" value={summary.confirmed} />
         <Metric label="Đang thanh toán" value={summary.pending} />
         <Metric label="Danh sách chờ" value={summary.waitlisted} />
-        <Metric label="Thông báo" value="—" to="/student/notifications" />
       </div>
 
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Đăng ký gần đây</h2>
-          <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700">Xem tất cả</Link>
+          <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700">
+            Xem tất cả
+          </Link>
         </div>
         {loading ? (
           <p className="text-sm text-gray-500">Đang tải...</p>
@@ -54,7 +59,7 @@ export default function StudentDashboard() {
           <p className="text-sm text-gray-500">Bạn chưa đăng ký workshop nào.</p>
         ) : (
           <div className="divide-y divide-gray-100">
-            {registrations.slice(0, 5).map((registration) => (
+            {registrations.map((registration) => (
               <div key={registration.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
                   <p className="font-medium text-gray-950">{registration.workshopTitle || registration.workshopId}</p>
@@ -78,12 +83,11 @@ export default function StudentDashboard() {
   );
 }
 
-function Metric({ label, value, to }) {
+function Metric({ label, value }) {
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white p-5 shadow-sm ${to ? 'cursor-pointer hover:border-emerald-300 hover:shadow-md' : ''}`}>
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <p className="text-sm text-gray-500">{label}</p>
       <p className="mt-2 text-3xl font-bold text-gray-950">{value}</p>
-      {to && <Link to={to} className="mt-1 block text-xs font-medium text-emerald-600 hover:underline">Xem →</Link>}
     </div>
   );
 }
@@ -95,7 +99,12 @@ function StatusBadge({ status }) {
     WAITLISTED: 'bg-sky-50 text-sky-700',
     CANCELLED: 'bg-gray-100 text-gray-600',
   };
-  return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>{registrationStatusLabel(status)}</span>;
+
+  return (
+    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>
+      {registrationStatusLabel(status)}
+    </span>
+  );
 }
 
 function registrationStatusLabel(status) {

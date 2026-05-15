@@ -1,29 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { formatDateTime } from '../../utils/dateTime';
 
-const initialForm = {
-  title: '',
-  description: '',
-  speakerName: '',
-  speakerBio: '',
-  room: '',
-  roomLayoutUrl: '',
-  startTime: '',
-  endTime: '',
-  capacity: 30,
-  price: 0,
-  pdfUrl: '',
-};
+function createEmptyForm() {
+  return {
+    title: '',
+    description: '',
+    speakerName: '',
+    speakerBio: '',
+    room: '',
+    roomLayoutUrl: '',
+    startTime: '',
+    endTime: '',
+    capacity: '30',
+    price: '0',
+    pdfUrl: '',
+  };
+}
 
 export default function WorkshopManagePage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(createEmptyForm());
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -34,18 +39,21 @@ export default function WorkshopManagePage() {
 
   const load = () => {
     setLoading(true);
-    api.get('/api/workshops/admin?size=50')
-      .then(({ data }) => setWorkshops(data.data?.content ?? []))
+    api.get('/api/workshops/admin', { params: { page, size: 10 } })
+      .then(({ data }) => {
+        setWorkshops(data.data?.content ?? []);
+        setTotalPages(data.data?.totalPages ?? 0);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     if (!isCreateModalOpen) {
-      setForm(initialForm);
+      setForm(createEmptyForm());
       setFormError('');
       setSubmitting(false);
     }
@@ -59,7 +67,7 @@ export default function WorkshopManagePage() {
 
   const cancel = async (id) => {
     await api.post(`/api/workshops/${id}/cancel`);
-    setMessage('Workshop đã hủy. Các giao dịch liên quan sẽ được xử lý hoàn tiền và gửi thông báo bất đồng bộ.');
+    setMessage('Workshop đã hủy. Nếu có giao dịch thành công, sinh viên sẽ nhận hướng dẫn điền form hoàn tiền.');
     load();
   };
 
@@ -77,15 +85,21 @@ export default function WorkshopManagePage() {
 
   const submitCreate = async (event) => {
     event.preventDefault();
-    setFormError('');
+    const nextError = getWorkshopFormError(form);
+    setFormError(nextError);
+    if (nextError) {
+      return;
+    }
+
     setSubmitting(true);
     try {
       await api.post('/api/workshops', toPayload(form));
       setMessage('Tạo workshop thành công. Workshop mới đang ở trạng thái nháp.');
       navigate('/admin/workshops', { replace: true });
+      setPage(0);
       load();
-    } catch {
-      setFormError('Không tạo được workshop. Kiểm tra lại dữ liệu nhập.');
+    } catch (err) {
+      setFormError(err?.response?.data?.message || 'Không tạo được workshop. Kiểm tra lại dữ liệu nhập.');
     } finally {
       setSubmitting(false);
     }
@@ -100,13 +114,21 @@ export default function WorkshopManagePage() {
             Theo dõi trạng thái, ghế còn lại và thao tác xuất bản hoặc hủy.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-        >
-          Tạo workshop
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/admin/refunds"
+            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Danh sách hoàn tiền
+          </Link>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            Tạo workshop
+          </button>
+        </div>
       </div>
 
       {message && (
@@ -128,7 +150,7 @@ export default function WorkshopManagePage() {
                     <StatusBadge status={workshop.status} />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    {formatDate(workshop.startTime)} · {workshop.room}
+                    {formatDate(workshop.startTime)} | {workshop.room}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
                     Ghế còn lại {workshop.remainingSeats}/{workshop.capacity}
@@ -172,11 +194,10 @@ export default function WorkshopManagePage() {
         )}
       </div>
 
+      <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+
       {isCreateModalOpen && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-gray-950/40 px-4 py-8"
-          onClick={closeModal}
-        >
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-950/40 px-4 py-8" onClick={closeModal}>
           <div
             className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -213,6 +234,7 @@ export default function WorkshopManagePage() {
                   type="datetime-local"
                   value={form.startTime}
                   onChange={(value) => update('startTime', value)}
+                  min={getDateTimeMin()}
                   required
                 />
                 <Field
@@ -220,37 +242,18 @@ export default function WorkshopManagePage() {
                   type="datetime-local"
                   value={form.endTime}
                   onChange={(value) => update('endTime', value)}
+                  min={form.startTime || getDateTimeMin()}
                   required
                 />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field
-                  label="Sức chứa"
-                  type="number"
-                  value={form.capacity}
-                  onChange={(value) => update('capacity', Number(value))}
-                  required
-                />
-                <Field
-                  label="Giá vé"
-                  type="number"
-                  value={form.price}
-                  onChange={(value) => update('price', Number(value))}
-                  required
-                />
+                <NumericField label="Sức chứa" value={form.capacity} onChange={(value) => update('capacity', value)} />
+                <NumericField label="Giá vé" value={form.price} onChange={(value) => update('price', value)} />
               </div>
               <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
               <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
-              <Field
-                label="URL sơ đồ phòng"
-                value={form.roomLayoutUrl}
-                onChange={(value) => update('roomLayoutUrl', value)}
-              />
-              <Field
-                label="URL tài liệu PDF"
-                value={form.pdfUrl}
-                onChange={(value) => update('pdfUrl', value)}
-              />
+              <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
+              <Field label="URL tài liệu PDF" value={form.pdfUrl} onChange={(value) => update('pdfUrl', value)} />
 
               <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <button
@@ -276,15 +279,42 @@ export default function WorkshopManagePage() {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', required = false }) {
+function Field({ label, value, onChange, type = 'text', min, required = false }) {
   return (
     <label className="text-sm font-semibold text-gray-700">
       {label}
       <input
         type={type}
+        min={min}
         value={value}
         required={required}
         onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
+function NumericField({ label, value, onChange }) {
+  return (
+    <label className="text-sm font-semibold text-gray-700">
+      {label}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onFocus={(event) => {
+          if (event.target.value === '0') {
+            event.target.select();
+          }
+        }}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (/^\d*$/.test(nextValue)) {
+            onChange(nextValue);
+          }
+        }}
+        onBlur={() => onChange(normalizeNumericValue(value))}
         className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
     </label>
@@ -325,7 +355,6 @@ function workshopStatusLabel(status) {
     PUBLISHED: 'Đã xuất bản',
     CANCELLED: 'Đã hủy',
   };
-
   return labels[status] ?? status;
 }
 
@@ -333,12 +362,49 @@ function formatDate(value) {
   return formatDateTime(value);
 }
 
+function normalizeNumericValue(value) {
+  if (!value) return '0';
+  return String(Number(value));
+}
+
+function getWorkshopFormError(form) {
+  if (!form.title.trim() || !form.room.trim() || !form.startTime || !form.endTime) {
+    return 'Vui lòng điền đầy đủ các trường bắt buộc.';
+  }
+
+  const startTime = new Date(form.startTime);
+  const endTime = new Date(form.endTime);
+  const now = new Date();
+
+  if (!(startTime > now)) {
+    return 'Thời gian bắt đầu phải trễ hơn thời điểm hiện tại.';
+  }
+  if (!(endTime > startTime)) {
+    return 'Thời gian kết thúc phải sau thời gian bắt đầu.';
+  }
+
+  if (Number(form.capacity) <= 0) {
+    return 'Sức chứa phải lớn hơn 0.';
+  }
+  if (Number(form.price) < 0) {
+    return 'Giá vé không được âm.';
+  }
+
+  return '';
+}
+
 function toPayload(form) {
   return {
     ...form,
     startTime: new Date(form.startTime).toISOString(),
     endTime: new Date(form.endTime).toISOString(),
-    price: Number(form.price),
-    capacity: Number(form.capacity),
+    price: Number(normalizeNumericValue(form.price)),
+    capacity: Number(normalizeNumericValue(form.capacity)),
   };
+}
+
+function getDateTimeMin() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
 }

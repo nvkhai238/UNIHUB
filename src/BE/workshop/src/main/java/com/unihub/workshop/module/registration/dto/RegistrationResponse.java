@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
@@ -33,20 +34,23 @@ public class RegistrationResponse {
     private ZonedDateTime confirmedAt;
     private Boolean canCancel;
     private String cancellationUnavailableReason;
-
-    // Thêm các trường của Sinh viên để hiển thị bên Admin
     private String studentName;
     private String studentCode;
     private String studentEmail;
 
     public static RegistrationResponse from(Registration registration) {
         Workshop workshop = registration.getWorkshop();
-        boolean isAlreadyCancelled = registration.getStatus() == RegistrationStatus.CANCELLED;
-        boolean canCancel = !isAlreadyCancelled;
+        boolean isCancelled = registration.getStatus() == RegistrationStatus.CANCELLED;
+        boolean isPaidWorkshop = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
+        boolean isPendingPayment = registration.getStatus() == RegistrationStatus.PENDING;
 
+        boolean canCancel = !isCancelled && (!isPaidWorkshop || isPendingPayment);
         String cancellationUnavailableReason = null;
-        if (isAlreadyCancelled) {
+
+        if (isCancelled) {
             cancellationUnavailableReason = "Đăng ký đã được hủy.";
+        } else if (isPaidWorkshop && !isPendingPayment) {
+            cancellationUnavailableReason = "Workshop đã thanh toán thành công nên không hỗ trợ sinh viên tự hủy. BTC sẽ xử lý hoàn tiền nếu workshop bị hủy.";
         }
 
         return RegistrationResponse.builder()

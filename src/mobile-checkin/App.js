@@ -39,7 +39,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('Dang tai ung dung...');
+  const [message, setMessage] = useState('Đang tải ứng dụng...');
   const [preloadMessage, setPreloadMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -69,7 +69,7 @@ export default function App() {
       const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
       setOnline(nextOnline);
       if (nextOnline) {
-        syncPending('Mang da tro lai, dang dong bo...');
+        syncPending('Mạng đã trở lại, đang đồng bộ...');
       }
     });
 
@@ -77,7 +77,7 @@ export default function App() {
       const becameActive = appState.current.match(/inactive|background/) && nextState === 'active';
       appState.current = nextState;
       if (becameActive) {
-        syncPending('Ung dung tro lai foreground, dang dong bo...');
+        syncPending('Ứng dụng trở lại foreground, đang đồng bộ...');
       }
     });
 
@@ -92,7 +92,7 @@ export default function App() {
     const deviceId = await getOrCreateDeviceId();
     setSession(tokens.accessToken ? { deviceId, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : null);
     await refreshStats();
-    setMessage(tokens.accessToken ? 'San sang check-in.' : `Dang nhap bang tai khoan CHECKIN_STAFF. API: ${getApiBaseUrl()}`);
+    setMessage(tokens.accessToken ? 'Sẵn sàng check-in.' : `Đăng nhập bằng tài khoản CHECKIN_STAFF. API: ${getApiBaseUrl()}`);
     setLoading(false);
   }
 
@@ -106,13 +106,13 @@ export default function App() {
     try {
       const auth = await login(email.trim(), password);
       if (auth.user?.role !== 'CHECKIN_STAFF') {
-        throw new Error('Tai khoan nay khong co quyen CHECKIN_STAFF.');
+        throw new Error('Tài khoản này không có quyền CHECKIN_STAFF.');
       }
       await saveTokens(auth.accessToken, auth.refreshToken);
       const deviceId = await getOrCreateDeviceId();
       setSession({ deviceId, accessToken: auth.accessToken, refreshToken: auth.refreshToken, user: auth.user });
       setPassword('');
-      setMessage('Dang nhap thanh cong. Ban co the preload va quet QR.');
+      setMessage('Đăng nhập thành công. Bạn có thể preload và quét QR.');
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -123,19 +123,19 @@ export default function App() {
   async function handlePreload() {
     if (!session) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
-      setPreloadMessage('Ngay workshop phai dung dinh dang YYYY-MM-DD.');
+      setPreloadMessage('Ngày workshop phải đúng định dạng YYYY-MM-DD.');
       return;
     }
     setLoading(true);
-    setPreloadMessage('Dang tai danh sach QR...');
+    setPreloadMessage('Đang tải danh sách QR...');
     try {
       const selectedDate = date.trim();
       const rows = await preloadCheckins(selectedDate);
       await replaceQrRegistry(rows);
       await refreshStats();
       const nextMessage = rows.length === 0
-        ? 'Khong co QR confirmed cho ngay bat dau workshop nay. Kiem tra ngay bat dau workshop, trang thai dang ky/thanh toan, hoac quet QR khi online de xem ly do.'
-        : `Da tai ${rows.length} QR hop le cho ngay bat dau workshop.`;
+        ? 'Không có QR confirmed cho ngày bắt đầu workshop này. Kiểm tra ngày bắt đầu workshop, trạng thái đăng ký/thanh toán, hoặc quét QR khi online để xem lý do.'
+        : `Đã tải ${rows.length} QR hợp lệ cho ngày bắt đầu workshop.`;
       setPreloadMessage(nextMessage);
       setMessage(nextMessage);
     } catch (error) {
@@ -158,7 +158,7 @@ export default function App() {
       setLastScan(null);
       setPreloadMessage('');
       await refreshStats();
-      setMessage('Da dang xuat va xoa du lieu offline cua phien truoc.');
+      setMessage('Đã đăng xuất và xóa dữ liệu offline của phiên trước.');
       setLoading(false);
     }
   }
@@ -175,8 +175,8 @@ export default function App() {
       if (records.length === 0) {
         await refreshStats();
         if (statusMessage) {
-          setPreloadMessage('Khong co check-in pending nao can dong bo.');
-          setMessage('Khong co check-in pending nao can dong bo.');
+          setPreloadMessage('Không có check-in pending nào cần đồng bộ.');
+          setMessage('Không có check-in pending nào cần đồng bộ.');
         }
         return;
       }
@@ -192,11 +192,11 @@ export default function App() {
       );
       await markCheckinsSyncResult(response.items || []);
       await refreshStats();
-      setPreloadMessage(`Dong bo xong ${response.created}/${response.total} check-in.`);
-      setMessage(`Dong bo xong ${response.created}/${response.total} check-in.`);
+      setPreloadMessage(`Đồng bộ xong ${response.created}/${response.total} check-in.`);
+      setMessage(`Đồng bộ xong ${response.created}/${response.total} check-in.`);
     } catch (error) {
-      setPreloadMessage(`Chua the dong bo: ${error.message}`);
-      setMessage(`Chua the dong bo: ${error.message}`);
+      setPreloadMessage(`Chưa thể đồng bộ: ${error.message}`);
+      setMessage(`Chưa thể đồng bộ: ${error.message}`);
     } finally {
       syncingRef.current = false;
       setSyncing(false);
@@ -227,7 +227,7 @@ export default function App() {
         setLastScan({
           status: 'DUPLICATE',
           qrCode: normalizedQr,
-          message: 'QR da duoc luu/check-in tren thiet bi nay.',
+          message: 'QR đã được lưu/check-in trên thiết bị này.',
           fullName: registryRow.fullName,
           workshopId: registryRow.workshopId,
           workshopTitle: registryRow.workshopTitle,
@@ -251,14 +251,14 @@ export default function App() {
             await refreshStats();
           }
           setLastScan({
-            ...(item || { status: 'CREATED', qrCode: normalizedQr, message: 'Check-in thanh cong.' }),
+            ...(item || { status: 'CREATED', qrCode: normalizedQr, message: 'Check-in thành công.' }),
             fullName: registryRow.fullName,
             workshopId: registryRow.workshopId,
             workshopTitle: registryRow.workshopTitle,
           });
-          setMessage(item?.message || 'Check-in online thanh cong.');
+          setMessage(item?.message || 'Check-in online thành công.');
         } catch (error) {
-          setMessage(`Khong the check-in online, chuyen sang offline: ${error.message}`);
+          setMessage(`Không thể check-in online, chuyển sang offline: ${error.message}`);
           await saveOfflineScan(registryRow, timestamp);
         }
         return;
@@ -283,18 +283,18 @@ export default function App() {
     setLastScan({
       status: 'PENDING',
       qrCode: registryRow.qrCode,
-      message: 'Da luu offline. He thong se dong bo lai khi co mang.',
+      message: 'Đã lưu offline. Hệ thống sẽ đồng bộ lại khi có mạng.',
       fullName: registryRow.fullName,
       workshopId: registryRow.workshopId,
       workshopTitle: registryRow.workshopTitle,
     });
-    setMessage('Check-in duoc luu offline.');
+    setMessage('Check-in được lưu offline.');
   }
 
   async function handleQrMissingFromRegistry(qrCode, timestamp) {
     if (!online) {
-      setLastScan({ status: 'INVALID_QR', qrCode, message: 'QR khong nam trong danh sach preload cua ngay da chon.' });
-      setMessage('Dang offline nen chi check-in duoc QR da preload.');
+      setLastScan({ status: 'INVALID_QR', qrCode, message: 'QR không nằm trong danh sách preload của ngày đã chọn.' });
+      setMessage('Đang offline nên chỉ check-in được QR đã preload.');
       return;
     }
 
@@ -303,7 +303,7 @@ export default function App() {
       const lookupResult = {
         status: lookup.status || 'LOOKUP',
         qrCode,
-        message: lookup.message || 'QR khong nam trong danh sach preload.',
+        message: lookup.message || 'QR không nằm trong danh sách preload.',
         fullName: lookup.fullName,
         workshopId: lookup.workshopId,
         workshopTitle: lookup.workshopTitle,
@@ -329,15 +329,15 @@ export default function App() {
         await refreshStats();
       }
       setLastScan({
-        ...(item || { status: 'CREATED', qrCode, message: 'Check-in thanh cong.' }),
+        ...(item || { status: 'CREATED', qrCode, message: 'Check-in thành công.' }),
         fullName: lookup.fullName,
         workshopId: lookup.workshopId,
         workshopTitle: lookup.workshopTitle,
       });
-      setMessage(item?.message || 'Check-in online thanh cong.');
+      setMessage(item?.message || 'Check-in online thành công.');
     } catch (error) {
       setLastScan({ status: 'LOOKUP_FAILED', qrCode, message: error.message });
-      setMessage(`Khong kiem tra duoc QR tren server: ${error.message}`);
+      setMessage(`Không kiểm tra được QR trên server: ${error.message}`);
     }
   }
 
@@ -357,11 +357,11 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.heading}>UniHub Check-in Mobile</Text>
-          <Text style={styles.muted}>Dang nhap bang tai khoan co role CHECKIN_STAFF.</Text>
+          <Text style={styles.muted}>Đăng nhập bằng tài khoản có role CHECKIN_STAFF.</Text>
           <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
-          <TextInput style={styles.input} placeholder="Mat khau" secureTextEntry value={password} onChangeText={setPassword} />
+          <TextInput style={styles.input} placeholder="Mật khẩu" secureTextEntry value={password} onChangeText={setPassword} />
           <Pressable style={styles.primaryButton} onPress={handleLogin}>
-            <Text style={styles.primaryButtonText}>Dang nhap</Text>
+            <Text style={styles.primaryButtonText}>Đăng nhập</Text>
           </Pressable>
           <Text style={styles.feedback}>{message}</Text>
         </ScrollView>
@@ -380,24 +380,24 @@ export default function App() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Preload du lieu</Text>
-          <Text style={styles.muted}>Ngay bat dau workshop</Text>
+          <Text style={styles.cardTitle}>Preload dữ liệu</Text>
+          <Text style={styles.muted}>Ngày bắt đầu workshop</Text>
           <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
           <Pressable style={styles.primaryButton} onPress={handlePreload}>
-            <Text style={styles.primaryButtonText}>Tai QR theo ngay workshop</Text>
+            <Text style={styles.primaryButtonText}>Tải QR theo ngày workshop</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={() => syncPending('Dang dong bo thu cong...')}>
-            <Text style={styles.secondaryButtonText}>{syncing ? 'Dang dong bo...' : 'Dong bo pending ngay'}</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => syncPending('Đang đồng bộ thủ công...')}>
+            <Text style={styles.secondaryButtonText}>{syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</Text>
           </Pressable>
           <Text style={styles.muted}>Registry: {stats.registryCount} QR | Pending: {stats.pendingCount}</Text>
           {preloadMessage ? <Text style={styles.preloadFeedback}>{preloadMessage}</Text> : null}
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Quet QR</Text>
+          <Text style={styles.cardTitle}>Quét QR</Text>
           {!cameraPermission?.granted ? (
             <Pressable style={styles.primaryButton} onPress={requestCameraPermission}>
-              <Text style={styles.primaryButtonText}>Cap quyen camera</Text>
+              <Text style={styles.primaryButtonText}>Cấp quyền camera</Text>
             </Pressable>
           ) : (
             <CameraView
@@ -405,17 +405,17 @@ export default function App() {
               facing="back"
               autofocus="on"
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onCameraReady={() => setMessage('Camera san sang quet QR.')}
-              onMountError={(error) => setMessage(`Camera loi: ${error.message || 'khong khoi dong duoc camera'}`)}
+              onCameraReady={() => setMessage('Camera sẵn sàng quét QR.')}
+              onMountError={(error) => setMessage(`Camera lỗi: ${error.message || 'không khởi động được camera'}`)}
               onBarcodeScanned={handleBarcodeScanned}
             />
           )}
-          <Text style={styles.muted}>App uu tien online; neu mat mang se validate theo du lieu preload va xep hang sync offline.</Text>
+          <Text style={styles.muted}>App ưu tiên online; nếu mất mạng sẽ validate theo dữ liệu preload và xếp hàng sync offline.</Text>
         </View>
 
         {lastScan && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Ket qua gan nhat</Text>
+            <Text style={styles.cardTitle}>Kết quả gần nhất</Text>
             <Text style={styles.resultStatus}>{lastScan.status}</Text>
             {lastScan.fullName ? <Text style={styles.attendeeName}>{lastScan.fullName}</Text> : null}
             {lastScan.workshopTitle ? <Text style={styles.feedback}>{lastScan.workshopTitle}</Text> : null}
@@ -426,11 +426,11 @@ export default function App() {
         )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Phien lam viec</Text>
+          <Text style={styles.cardTitle}>Phiên làm việc</Text>
           <Text style={styles.muted}>Device ID: {session.deviceId}</Text>
           <Text style={styles.feedback}>{message}</Text>
           <Pressable style={styles.dangerButton} onPress={handleLogout}>
-            <Text style={styles.primaryButtonText}>Dang xuat va xoa du lieu offline</Text>
+            <Text style={styles.primaryButtonText}>Đăng xuất và xóa dữ liệu offline</Text>
           </Pressable>
         </View>
       </ScrollView>

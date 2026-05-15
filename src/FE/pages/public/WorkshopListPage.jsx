@@ -1,30 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { useWorkshopRealtime } from '../../hooks/useWorkshopRealtime';
+import { getCurrentUser } from '../../router/jwtUtils';
 import { formatDateTime } from '../../utils/dateTime';
+
+const PAGE_SIZE = 9;
 
 export default function WorkshopListPage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const location = useLocation();
+  const currentUser = getCurrentUser();
   const detailPrefix = location.pathname.startsWith('/student') ? '/student/workshops' : '/workshops';
 
-  const loadWorkshops = () => {
+  const loadWorkshops = useCallback((nextPage = page) => {
     setLoading(true);
     setError('');
-    api.get('/api/workshops?size=24')
-      .then(({ data }) => setWorkshops(data.data?.content ?? []))
+    api.get('/api/workshops', { params: { page: nextPage, size: PAGE_SIZE } })
+      .then(({ data }) => {
+        setWorkshops(data.data?.content ?? []);
+        setTotalPages(data.data?.totalPages ?? 0);
+      })
       .catch((err) => setError(resolveErrorMessage(err)))
       .finally(() => setLoading(false));
-  };
+  }, [page]);
 
-  const pollWorkshops = () => {
-    api.get('/api/workshops?size=24')
-      .then(({ data }) => setWorkshops(data.data?.content ?? []))
+  const pollWorkshops = useCallback(() => {
+    api.get('/api/workshops', { params: { page, size: PAGE_SIZE } })
+      .then(({ data }) => {
+        setWorkshops(data.data?.content ?? []);
+        setTotalPages(data.data?.totalPages ?? 0);
+      })
       .catch(() => {});
-  };
+  }, [page]);
 
   const handleListRealtimeUpdate = useCallback((payload) => {
     if (!payload?.new) return;
@@ -32,7 +45,6 @@ export default function WorkshopListPage() {
     setWorkshops((prev) => {
       const index = prev.findIndex((item) => item.id === payload.new.id);
       if (index === -1) return prev;
-
       const next = [...prev];
       next[index] = { ...next[index], ...payload.new };
       return next;
@@ -42,10 +54,13 @@ export default function WorkshopListPage() {
   const { realtimeAvailable } = useWorkshopRealtime({ onListUpdate: handleListRealtimeUpdate });
 
   useEffect(() => {
-    loadWorkshops();
+    loadWorkshops(page);
+  }, [page, loadWorkshops]);
+
+  useEffect(() => {
     const interval = setInterval(pollWorkshops, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pollWorkshops]);
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-8">
@@ -61,37 +76,43 @@ export default function WorkshopListPage() {
               : 'Realtime tạm thời gián đoạn. Hệ thống đang fallback sang polling 10s.'}
           </p>
         </div>
-        <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
-          Đăng ký của tôi
-        </Link>
+        {currentUser?.role === 'STUDENT' && (
+          <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+            Đăng ký của tôi
+          </Link>
+        )}
       </div>
 
       {loading && <StateBox text="Đang tải workshop..." />}
-      {error && <StateBox text={error} tone="error" onRetry={loadWorkshops} />}
+      {error && <StateBox text={error} tone="error" onRetry={() => loadWorkshops(page)} />}
 
       {!loading && !error && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {workshops.map((workshop) => (
-            <Link
-              key={workshop.id}
-              to={`${detailPrefix}/${workshop.id}`}
-              className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
-            >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <h2 className="line-clamp-2 text-lg font-semibold text-gray-950">{workshop.title}</h2>
-                <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  {workshop.remainingSeats}/{workshop.capacity}
-                </span>
-              </div>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p><strong>Thời gian:</strong> {formatDate(workshop.startTime)}</p>
-                <p><strong>Phòng:</strong> {workshop.room}</p>
-                <p><strong>Diễn giả:</strong> {workshop.speakerName || 'Đang cập nhật'}</p>
-                <p className="mt-1 font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {workshops.map((workshop) => (
+              <Link
+                key={workshop.id}
+                to={`${detailPrefix}/${workshop.id}`}
+                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <h2 className="line-clamp-2 text-lg font-semibold text-gray-950">{workshop.title}</h2>
+                  <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                    {workshop.remainingSeats}/{workshop.capacity}
+                  </span>
+                </div>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p><strong>Thời gian:</strong> {formatDate(workshop.startTime)}</p>
+                  <p><strong>Phòng:</strong> {workshop.room}</p>
+                  <p><strong>Diễn giả:</strong> {workshop.speakerName || 'Đang cập nhật'}</p>
+                  <p className="mt-1 font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </section>
   );
