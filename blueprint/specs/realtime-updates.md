@@ -1,6 +1,6 @@
 ﻿# Đặc tả: Cập nhật thời gian thực (Xuyên suốt - TV1, TV2, TV3)
 
-> **Phạm vi:** Supabase Realtime WebSocket để cập nhật số ghế còn lại, trạng thái workshop tự động không cần polling.
+> **Phạm vi:** Supabase Realtime WebSocket để cập nhật số ghế còn lại, notification, trạng thái registration/payment trên web app.
 
 ---
 
@@ -9,7 +9,7 @@
 Khi một sinh viên đăng ký thành công, tất cả sinh viên khác đang xem cùng workshop sẽ thấy số chỗ còn lại giảm xuống **ngay lập tức** (mà không cần refresh trang).
 
 Cơ chế:
-- Backend update `remaining_seats` → PostgreSQL trigger
+- Backend update `remaining_seats` / insert `notifications` / update `registrations` → PostgreSQL change event
 - Supabase Realtime nhận thay đổi → publish via WebSocket
 - Frontend subscribe → setState → re-render UI
 
@@ -66,9 +66,9 @@ useEffect(() => {
 ### Luồng Realtime Update
 
 ```
-Admin UI (trang CRUD workshop)
+Admin UI / Student UI
 
-// Subscribe to workshop updates (status, title, room, ...)
+// Subscribe to workshop, notification, registration updates
 const channel = supabase
   .channel(`workshop-${workshopId}`)
   .on('postgres_changes', {
@@ -106,7 +106,7 @@ const channel = supabase
 | **Latency** | Realtime update ≤ 500ms (WebSocket propagation time) |
 | **Bandwidth** | Không broadcast quá thường xuyên (debounce updates nếu cần) |
 | **Channel naming** | `workshop-seats` hoặc `workshop-{workshopId}` (format consistent) |
-| **Payload** | Chỉ send changed columns (không send toàn bộ row) |
+| **Payload** | Supabase `postgres_changes` payload; frontend gọi REST lại khi cần dữ liệu đầy đủ |
 | **Scalability** | Supabase Realtime hỗ trợ 10k+ concurrent connections |
 | **Authentication** | Supabase RLS (Row-Level Security) kiểm soát ai có thể subscribe |
 | **Reconnection** | Supabase client auto-reconnect 3 lần, exponential backoff |
@@ -120,7 +120,9 @@ const channel = supabase
 - ✅ 100 sinh viên xem cùng workshop → mỗi người thấy update realtime
 - ✅ Đóng tab → WebSocket disconnect, không leak connection
 - ✅ Mạng tạm yếu → Realtime reconnect tự động
-- ✅ Admin update workshop (room, title) → trang SV thấy change ngay lập tức
+- ✅ Admin update workshop (room, title) → trang SV/organizer refresh state qua subscription hoặc fetch lại
+- ✅ Notification mới → unread badge/list cập nhật theo Supabase Realtime
+- ✅ Registration/payment status page subscribe thay đổi registration để cập nhật trạng thái
 - ✅ Browser offline → Realtime pause, online trở lại → kết nối & sync lại
 - ✅ Supabase Realtime down → Fallback to polling hoặc hiển thị thông báo
 - ✅ Data consistency: UI thấy realtime + REST API response luôn match
@@ -130,17 +132,9 @@ const channel = supabase
 
 ## API Endpoints
 
-#### `GET /api/realtime/workshops/{id}` — Subscribe to Workshop Updates
+#### Supabase Realtime channel — Subscribe to Workshop/Notification/Registration Updates
 
-Cho phép client đăng ký theo dõi cập nhật thời gian thực cho một workshop cụ thể.
-
-**Response 200:**
-```json
-{
-  "status": 200,
-  "message": "Subscribed to workshop updates."
-}
-```
+Không có REST endpoint `/api/realtime/...` trong backend. Frontend dùng `@supabase/supabase-js` để subscribe trực tiếp các bảng được publish realtime (`workshops`, `notifications`, `registrations` nếu cấu hình DB bật publication).
 
 ---
 

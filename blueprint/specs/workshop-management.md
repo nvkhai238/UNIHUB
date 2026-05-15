@@ -24,7 +24,7 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
    - Cập nhật details (PUT /workshops/{id})
    - Upload PDF (POST /workshops/{id}/pdf) — xem ai-summary.md
    - Publish (PATCH /workshops/{id}/status → PUBLISHED)
-   - Cancel (PATCH /workshops/{id}/status → CANCELLED)
+   - Cancel (PATCH /workshops/{id}/status hoặc POST /workshops/{id}/cancel → CANCELLED)
 3. Khi PUBLISHED: sinh viên có thể xem + đăng ký
 4. Khi CANCELLED: 
    - Notify tất cả CONFIRMED sinh viên via email + in-app
@@ -241,7 +241,7 @@ PUBLISHED → CANCELLED
 
 ---
 
-#### `GET /api/admin/workshops` — Danh sách workshop (ORGANIZER)
+#### `GET /api/workshops/admin` — Danh sách workshop (ORGANIZER)
 
 Xem tất cả workshop (DRAFT, PUBLISHED, CANCELLED).
 
@@ -268,7 +268,7 @@ Xem tất cả workshop (DRAFT, PUBLISHED, CANCELLED).
 
 ---
 
-#### `GET /api/admin/workshops/{id}/stats` — Thống kê workshop (ORGANIZER)
+#### `GET /api/workshops/statistics` — Thống kê workshop (ORGANIZER)
 
 **Response 200:**
 ```json
@@ -293,7 +293,15 @@ Xem tất cả workshop (DRAFT, PUBLISHED, CANCELLED).
 
 ### API bổ sung
 
-#### `PATCH /api/workshops/{id}` — Update Workshop Details
+#### `GET /api/workshops/{id}/registrations` — Danh sách registration theo workshop
+
+Cho phép ORGANIZER xem danh sách đăng ký theo workshop, có filter `status` và phân trang.
+
+#### `POST /api/workshops/{id}/cancel` — Cancel Workshop
+
+Cho phép ORGANIZER hủy workshop qua endpoint hành động riêng. Backend chuyển workshop sang `CANCELLED`, xử lý registration/payment liên quan và gửi notification/email theo luồng cancellation.
+
+#### `PUT /api/workshops/{id}` — Update Workshop Details
 
 Cho phép ORGANIZER cập nhật thông tin workshop như tiêu đề, diễn giả, phòng và lịch trình.
 
@@ -316,9 +324,9 @@ Cho phép ORGANIZER cập nhật thông tin workshop như tiêu đề, diễn gi
 }
 ```
 
-#### `DELETE /api/workshops/{id}` — Cancel Workshop
+#### `PATCH /api/workshops/{id}/status` — Update Workshop Status
 
-Cho phép ORGANIZER hủy workshop. Trạng thái được cập nhật thành `CANCELLED`.
+Cho phép ORGANIZER đổi trạng thái workshop, chủ yếu `DRAFT -> PUBLISHED` và `PUBLISHED/DRAFT -> CANCELLED`.
 
 **Response 200:**
 ```json
