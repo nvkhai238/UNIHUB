@@ -18,6 +18,9 @@ public class TelegramNotificationAdapter implements NotificationAdapter {
     @Value("${app.notification.telegram.bot-token}")
     private String botToken;
 
+    @Value("${app.notification.telegram.admin-chat-id:}")
+    private String adminChatId;
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Override
@@ -29,6 +32,15 @@ public class TelegramNotificationAdapter implements NotificationAdapter {
     @Override
     public void send(Notification notification) {
         String telegramId = notification.getUser().getTelegramId();
+        
+        // Fallback to global admin ID for NEW_REGISTRATION if user has no ID
+        if (notification.getType() == Notification.NotificationType.NEW_REGISTRATION) {
+            if ((telegramId == null || telegramId.isEmpty()) && (adminChatId != null && !adminChatId.isEmpty())) {
+                telegramId = adminChatId;
+                log.info("Using global admin chat ID for NEW_REGISTRATION notification.");
+            }
+        }
+
         String userEmail = notification.getUser().getEmail();
         
         log.info("Notification process for user: {}. TelegramID from DB: {}", userEmail, telegramId);

@@ -69,7 +69,7 @@ export interface OtpChallengeData {
 
 // ─── Error codes that should trigger a token refresh ──────────────────────────
 // INVALID_CREDENTIALS is a login failure — it must NOT trigger refresh.
-const REFRESH_TRIGGER_CODES = new Set(['TOKEN_EXPIRED', 'TOKEN_INVALID']);
+const REFRESH_TRIGGER_CODES = new Set(['TOKEN_EXPIRED', 'TOKEN_INVALID', 'INVALID_TOKEN', 'UNAUTHORIZED']);
 
 // ─── Pending queue ────────────────────────────────────────────────────────────
 // While a token refresh is in flight, incoming 401 requests are queued here.
@@ -133,15 +133,20 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const code   = error.response?.data?.code ?? '';
 
+    const isLoginRequest = originalRequest.url?.includes('/api/auth/login');
+
     // ── Only handle 401s that indicate an expired/invalid token ─────────────
     const shouldRefresh =
       status === 401 &&
       REFRESH_TRIGGER_CODES.has(code) &&
+      !isLoginRequest &&
       !originalRequest._retry;           // prevent infinite retry loops
 
     if (!shouldRefresh) {
-      // 401 with INVALID_CREDENTIALS (wrong password) or other errors —
-      // propagate to the caller unchanged.
+      // 401 from non-login requests that we shouldn't/can't refresh -> kick user out
+      if (status === 401 && !isLoginRequest) {
+        handleSessionExpired();
+      }
       return Promise.reject(error);
     }
 

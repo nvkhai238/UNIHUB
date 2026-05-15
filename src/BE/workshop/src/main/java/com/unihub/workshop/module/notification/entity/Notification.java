@@ -51,6 +51,7 @@ public class Notification extends BaseEntity {
         PAYMENT_SUCCESS,
         PAYMENT_FAILED,
         CHECKIN_SUCCESS,
-        REMINDER
+        REMINDER,
+        NEW_REGISTRATION
     }
 }
