@@ -22,6 +22,7 @@ import RegistrationDetailPage from '../pages/student/RegistrationDetailPage';
 import NotificationsPage from '../pages/student/NotificationsPage';
 import PaymentStatusPage from '../pages/student/PaymentStatusPage';
 import StudentProfilePage from '../pages/student/StudentProfilePage';
+import StudentRefundRequestPage from '../pages/student/StudentRefundRequestPage';
 
 import OrganizerDashboard from '../pages/organizer/OrganizerDashboard';
 import WorkshopManagePage from '../pages/organizer/WorkshopManagePage';
@@ -66,6 +67,7 @@ const router = createBrowserRouter([
       { path: '/student/registrations/:registrationId', element: <RegistrationDetailPage /> },
       { path: '/student/registrations/:registrationId/qr', element: <MyQrCodePage /> },
       { path: '/student/registrations/:registrationId/payment', element: <PaymentStatusPage /> },
+      { path: '/student/refunds/:registrationId', element: <StudentRefundRequestPage /> },
       { path: '/student/notifications', element: <NotificationsPage /> },
     ],
   },

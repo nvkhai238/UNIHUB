@@ -3,8 +3,10 @@ package com.unihub.workshop.module.notification.service;
 import com.unihub.workshop.module.registration.entity.Registration;
 import com.unihub.workshop.module.registration.repository.RegistrationRepository;
 import com.unihub.workshop.module.registration.service.QrCodeService;
+import com.unihub.workshop.module.payment.entity.RefundRequest;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.repository.PaymentRepository;
+import com.unihub.workshop.module.payment.repository.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,7 @@ public class EmailService {
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final RegistrationRepository registrationRepository;
     private final PaymentRepository paymentRepository;
+    private final RefundRequestRepository refundRequestRepository;
     private final QrCodeService qrCodeService;
     private final StringRedisTemplate redisTemplate;
 
@@ -52,8 +55,8 @@ public class EmailService {
     @Value("${app.mail.admin:noreply@unihub.edu.vn}")
     private String adminAddress;
 
-    @Value("${app.refund.form-url:}")
-    private String refundFormUrl;
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
 
     public boolean isEmailSendingAvailable() {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
@@ -114,6 +117,35 @@ public class EmailService {
                 "[UniHub] Thong bao huy workshop - " + registration.getWorkshop().getTitle(),
                 helper -> helper.setText(buildWorkshopCancellationHtml(registration), true),
                 "workshop cancellation"
+        );
+
+        if (!sent) {
+            releaseEmailSend(dedupKey);
+        }
+    }
+
+    @Async("notificationTaskExecutor")
+    @Transactional(readOnly = true)
+    public void sendRefundCompleted(UUID refundRequestId) {
+        RefundRequest refundRequest = refundRequestRepository.findById(refundRequestId)
+                .orElse(null);
+        if (refundRequest == null) {
+            log.warn("Skip refund completion email because refund request {} is missing", refundRequestId);
+            return;
+        }
+
+        String dedupKey = "email:refund-completed:" + refundRequestId + ":" + Boolean.TRUE.equals(refundRequest.getProcessed());
+        if (!claimEmailSend(dedupKey)) {
+            log.info("Skip duplicate refund completion email for refund request {}", refundRequestId);
+            return;
+        }
+
+        Registration registration = refundRequest.getRegistration();
+        boolean sent = sendWithRetry(
+                registration.getUser().getEmail(),
+                "[UniHub] Hoan tien thanh cong - " + registration.getWorkshop().getTitle(),
+                helper -> helper.setText(buildRefundCompletedHtml(refundRequest), true),
+                "refund completion"
         );
 
         if (!sent) {
@@ -251,16 +283,13 @@ public class EmailService {
                 .orElse(false);
         String refundSection = "";
 
-        if (refundNeeded && StringUtils.hasText(refundFormUrl)) {
-            String safeRefundUrl = escape(refundFormUrl);
+        if (refundNeeded) {
+            String resolvedRefundUrl = resolveRefundFormUrl(registration);
+            String safeRefundUrl = escape(resolvedRefundUrl);
             refundSection = """
-                  <p>Workshop nay co thu phi. De BTC xu ly hoan tien, vui long dien Google Form sau va gui kem thong tin ngan hang cung minh chung thanh toan:</p>
+                  <p>Workshop nay co thu phi. De BTC xu ly hoan tien, vui long dien form sau va gui kem thong tin ngan hang cung minh chung thanh toan:</p>
                   <p><a href="%s">%s</a></p>
                 """.formatted(safeRefundUrl, safeRefundUrl);
-        } else if (refundNeeded) {
-            refundSection = """
-                  <p>Workshop nay co thu phi. BTC se lien he huong dan quy trinh hoan tien thu cong trong thoi gian som nhat.</p>
-                """;
         }
 
         return """
@@ -319,6 +348,44 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(studentName, workshopTitle, summary, startTime, room);
+    }
+
+    private String buildRefundCompletedHtml(RefundRequest refundRequest) {
+        Registration registration = refundRequest.getRegistration();
+        String studentName = escape(registration.getUser().getFullName());
+        String workshopTitle = escape(registration.getWorkshop().getTitle());
+        String amount = escape(String.valueOf(refundRequest.getRegistration()
+                .getWorkshop()
+                .getPrice()));
+        String bankName = escape(refundRequest.getBankName());
+        String bankAccountNumber = escape(refundRequest.getBankAccountNumber());
+
+        return """
+                <!doctype html>
+                <html lang="vi">
+                <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
+                  <h2 style="margin:0 0 12px">Hoan tien thanh cong</h2>
+                  <p>Xin chao %s,</p>
+                  <p>BTC da xu ly hoan tien thanh cong cho workshop <strong>%s</strong>.</p>
+                  <ul>
+                    <li>Tai khoan nhan: %s - %s</li>
+                    <li>So tien du kien: %s VND</li>
+                  </ul>
+                  <p>Neu ban can doi chieu them, vui long lien he BTC.</p>
+                </body>
+                </html>
+                """.formatted(studentName, workshopTitle, bankName, bankAccountNumber, amount);
+    }
+
+    private String resolveRefundFormUrl(Registration registration) {
+        return trimTrailingSlash(frontendBaseUrl) + "/student/refunds/" + registration.getId();
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "http://localhost:5173";
+        }
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private boolean claimEmailSend(String key) {

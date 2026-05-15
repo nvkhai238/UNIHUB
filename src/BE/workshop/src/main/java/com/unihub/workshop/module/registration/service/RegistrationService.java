@@ -216,10 +216,12 @@ public class RegistrationService {
         }
         if (registration.getWorkshop().getPrice() != null
                 && registration.getWorkshop().getPrice().compareTo(BigDecimal.ZERO) > 0) {
-            throw new AppException(
-                    ErrorCode.FORBIDDEN,
-                    "Workshop co thu phi khong ho tro sinh vien tu huy. Vui long lien he BTC neu can ho tro."
-            );
+            if (registration.getStatus() != RegistrationStatus.PENDING) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Workshop đã thanh toán thành công nên không hỗ trợ sinh viên tự hủy."
+                );
+            }
         }
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())

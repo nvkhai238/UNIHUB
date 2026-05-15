@@ -69,6 +69,30 @@ public class SchemaInitializer {
             }
 
             try {
+                stmt.execute("""
+                    CREATE TABLE IF NOT EXISTS refund_requests (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        registration_id UUID NOT NULL UNIQUE REFERENCES registrations(id) ON DELETE CASCADE,
+                        bank_name VARCHAR(255) NOT NULL,
+                        bank_account_name VARCHAR(255) NOT NULL,
+                        bank_account_number VARCHAR(50) NOT NULL,
+                        proof_url TEXT NOT NULL,
+                        proof_note TEXT,
+                        processed BOOLEAN NOT NULL DEFAULT false,
+                        processed_at TIMESTAMPTZ,
+                        processed_by_user_id UUID REFERENCES users(id),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                """);
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_refund_requests_processed ON refund_requests(processed)");
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_refund_requests_registration ON refund_requests(registration_id)");
+                log.info("SchemaInitializer: refund requests table ready.");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: skipped refund requests schema initialization.");
+            }
+
+            try {
                 stmt.execute("ALTER PUBLICATION supabase_realtime ADD TABLE notifications;");
                 log.info("SchemaInitializer: added notifications to supabase_realtime publication.");
             } catch (Exception e) {
@@ -80,6 +104,13 @@ public class SchemaInitializer {
                 log.info("SchemaInitializer: added workshops to supabase_realtime publication.");
             } catch (Exception e) {
                 log.info("SchemaInitializer: skipped adding workshops to supabase_realtime.");
+            }
+
+            try {
+                stmt.execute("ALTER PUBLICATION supabase_realtime ADD TABLE refund_requests;");
+                log.info("SchemaInitializer: added refund_requests to supabase_realtime publication.");
+            } catch (Exception e) {
+                log.info("SchemaInitializer: skipped adding refund_requests to supabase_realtime.");
             }
 
             log.info("SchemaInitializer: notifications table ready.");

@@ -162,7 +162,7 @@ public class PaymentService {
                 WorkshopStatus.CANCELLED,
                 workshopId,
                 pageable
-        ).map(RefundItemResponse::from);
+        ).map(payment -> RefundItemResponse.from(payment, null));
     }
 
     private List<PaymentStatsResponse.WorkshopPaymentSummary> buildTopWorkshops(List<Payment> payments) {

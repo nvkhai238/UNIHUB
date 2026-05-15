@@ -40,7 +40,7 @@ export default function MyRegistrationsPage() {
       });
       navigate(`/student/registrations/${id}/payment`);
     } catch (err) {
-      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể thử lại. Vui lòng liên hệ BTC.' });
+      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể thử lại. Vui lòng liên hệ ban tổ chức.' });
     }
   };
 

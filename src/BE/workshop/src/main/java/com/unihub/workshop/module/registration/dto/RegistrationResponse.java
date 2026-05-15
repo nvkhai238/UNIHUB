@@ -42,14 +42,15 @@ public class RegistrationResponse {
         Workshop workshop = registration.getWorkshop();
         boolean isCancelled = registration.getStatus() == RegistrationStatus.CANCELLED;
         boolean isPaidWorkshop = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
+        boolean isPendingPayment = registration.getStatus() == RegistrationStatus.PENDING;
 
-        boolean canCancel = !isCancelled && !isPaidWorkshop;
+        boolean canCancel = !isCancelled && (!isPaidWorkshop || isPendingPayment);
         String cancellationUnavailableReason = null;
 
         if (isCancelled) {
-            cancellationUnavailableReason = "Dang ky da duoc huy.";
-        } else if (isPaidWorkshop) {
-            cancellationUnavailableReason = "Workshop co thu phi khong ho tro sinh vien tu huy. BTC se xu ly thu cong neu workshop bi huy.";
+            cancellationUnavailableReason = "Đăng ký đã được hủy.";
+        } else if (isPaidWorkshop && !isPendingPayment) {
+            cancellationUnavailableReason = "Workshop đã thanh toán thành công nên không hỗ trợ sinh viên tự hủy. BTC sẽ xử lý hoàn tiền nếu workshop bị hủy.";
         }
 
         return RegistrationResponse.builder()

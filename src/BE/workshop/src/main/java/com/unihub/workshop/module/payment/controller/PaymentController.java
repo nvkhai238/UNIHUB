@@ -3,12 +3,15 @@ package com.unihub.workshop.module.payment.controller;
 import com.unihub.workshop.common.response.ApiResponse;
 import com.unihub.workshop.module.payment.dto.CircuitBreakerStatusResponse;
 import com.unihub.workshop.module.payment.dto.PagedResponse;
+import com.unihub.workshop.module.payment.dto.RefundRequestStatusUpdateRequest;
 import com.unihub.workshop.module.payment.dto.PaymentStatusResponse;
 import com.unihub.workshop.module.payment.dto.PaymentStatsResponse;
 import com.unihub.workshop.module.payment.dto.RefundItemResponse;
 import com.unihub.workshop.module.payment.entity.PaymentStatus;
 import com.unihub.workshop.module.payment.service.CircuitBreakerStatusService;
 import com.unihub.workshop.module.payment.service.PaymentService;
+import com.unihub.workshop.module.payment.service.RefundRequestService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -27,6 +30,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final CircuitBreakerStatusService circuitBreakerStatusService;
+    private final RefundRequestService refundRequestService;
 
     @GetMapping("/api/registrations/{registrationId}/payment-status")
     @PreAuthorize("hasRole('STUDENT')")
@@ -64,7 +68,18 @@ public class PaymentController {
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                PagedResponse.from(paymentService.getRefundQueue(workshopId, pageable))
+                PagedResponse.from(refundRequestService.getRefundQueue(workshopId, pageable))
+        ));
+    }
+
+    @PatchMapping("/api/admin/refunds/{refundRequestId}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<RefundItemResponse>> updateRefundStatus(
+            @PathVariable UUID refundRequestId,
+            @Valid @RequestBody RefundRequestStatusUpdateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                refundRequestService.updateRefundStatus(refundRequestId, request)
         ));
     }
 
