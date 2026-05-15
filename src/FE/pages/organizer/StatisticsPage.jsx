@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { formatDateTime } from '../../utils/dateTime';
 
+const STATS_PAGE_SIZE = 10;
 const DEFAULT_FILTERS = {
   workshopId: '',
   workshopStatus: '',
@@ -20,6 +22,7 @@ export default function StatisticsPage() {
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
   const [importRunning, setImportRunning] = useState(false);
+  const [statsPage, setStatsPage] = useState(0);
 
   const load = async (nextFilters = filters) => {
     setLoading(true);
@@ -30,11 +33,12 @@ export default function StatisticsPage() {
       const [statsRes, paymentRes, importRes, workshopRes] = await Promise.allSettled([
         api.get('/api/workshops/statistics', { params: workshopParams }),
         api.get('/api/admin/payments/stats', { params: paymentParams }),
-        api.get('/api/admin/student-imports'),
+        api.get('/api/admin/student-imports', { params: { page: 0, size: 8 } }),
         api.get('/api/workshops/admin', { params: { size: 100 } }),
       ]);
 
       const errors = [];
+
       if (statsRes.status === 'fulfilled') {
         setStats(statsRes.value.data.data);
       } else {
@@ -46,11 +50,11 @@ export default function StatisticsPage() {
         setPaymentStats(paymentRes.value.data.data);
       } else {
         setPaymentStats(null);
-        errors.push('Không tải được thống kê payment.');
+        errors.push('Không tải được thống kê thanh toán.');
       }
 
       if (importRes.status === 'fulfilled') {
-        setImports(importRes.value.data.data ?? []);
+        setImports(importRes.value.data.data?.content ?? []);
       } else {
         setImports([]);
         errors.push('Không tải được lịch sử import CSV.');
@@ -60,10 +64,11 @@ export default function StatisticsPage() {
         setWorkshops(workshopRes.value.data.data?.content ?? []);
       } else {
         setWorkshops([]);
-        errors.push('Không tải được danh sách workshop cho filter.');
+        errors.push('Không tải được danh sách workshop cho bộ lọc.');
       }
 
       setLoadError(errors.join(' '));
+      setStatsPage(0);
     } finally {
       setLoading(false);
     }
@@ -97,6 +102,10 @@ export default function StatisticsPage() {
     setFilters(DEFAULT_FILTERS);
     load(DEFAULT_FILTERS);
   };
+
+  const breakdown = stats?.breakdown ?? [];
+  const pagedBreakdown = breakdown.slice(statsPage * STATS_PAGE_SIZE, (statsPage + 1) * STATS_PAGE_SIZE);
+  const statsTotalPages = Math.max(1, Math.ceil(breakdown.length / STATS_PAGE_SIZE));
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-8">
@@ -137,7 +146,7 @@ export default function StatisticsPage() {
         </select>
         <input type="datetime-local" className="rounded-md border border-gray-300 px-3 py-2 text-sm" value={filters.from} onChange={(event) => setFilters((prev) => ({ ...prev, from: event.target.value }))} />
         <input type="datetime-local" className="rounded-md border border-gray-300 px-3 py-2 text-sm" value={filters.to} onChange={(event) => setFilters((prev) => ({ ...prev, to: event.target.value }))} />
-        <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Áp dụng filter</button>
+        <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Áp dụng bộ lọc</button>
         <button type="button" onClick={resetFilters} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Đặt lại</button>
       </form>
 
@@ -163,7 +172,7 @@ export default function StatisticsPage() {
                 <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
                   <tr>
                     <th className="px-4 py-3">Workshop</th>
-                    <th className="px-4 py-3">Tổng ĐK</th>
+                    <th className="px-4 py-3">Tổng đăng ký</th>
                     <th className="px-4 py-3">Đã xác nhận</th>
                     <th className="px-4 py-3">Chờ</th>
                     <th className="px-4 py-3">Đang xử lý</th>
@@ -175,12 +184,12 @@ export default function StatisticsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(stats.breakdown ?? []).length === 0 && (
+                  {breakdown.length === 0 && (
                     <tr>
-                      <td className="px-4 py-6 text-center text-gray-500" colSpan={10}>Không có workshop phù hợp với filter hiện tại.</td>
+                      <td className="px-4 py-6 text-center text-gray-500" colSpan={10}>Không có workshop phù hợp với bộ lọc hiện tại.</td>
                     </tr>
                   )}
-                  {(stats.breakdown ?? []).map((row) => (
+                  {pagedBreakdown.map((row) => (
                     <tr key={row.workshopId}>
                       <td className="px-4 py-3 font-medium text-gray-950">{row.workshopTitle}</td>
                       <td className="px-4 py-3">{row.registrationsCount}</td>
@@ -198,6 +207,7 @@ export default function StatisticsPage() {
               </table>
             </div>
           </div>
+          <PaginationControls page={statsPage} totalPages={statsTotalPages} onPageChange={setStatsPage} />
         </>
       )}
 
@@ -213,7 +223,7 @@ export default function StatisticsPage() {
       {paymentStats && (
         <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 p-5">
-            <h2 className="text-lg font-semibold">Phân bổ thanh toán</h2>
+            <h2 className="text-lg font-semibold">Phân bố thanh toán</h2>
           </div>
           <div className="grid gap-4 p-5 md:grid-cols-2">
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
@@ -222,7 +232,7 @@ export default function StatisticsPage() {
                 {Object.entries(paymentStats.byStatus ?? {}).map(([status, bucket]) => (
                   <div key={status} className="flex items-center justify-between gap-3">
                     <span className="font-medium text-gray-700">{paymentStatusLabel(status)}</span>
-                    <span className="text-right text-gray-950">{bucket.count} giao dịch - {formatMoney(bucket.amount)}</span>
+                    <span className="text-right text-gray-950">{bucket.count} giao dich - {formatMoney(bucket.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -231,7 +241,7 @@ export default function StatisticsPage() {
               <h3 className="font-semibold text-gray-900">Top workshop doanh thu</h3>
               <div className="mt-3 space-y-2 text-sm">
                 {(paymentStats.topWorkshops ?? []).length === 0 && (
-                  <p className="text-sm text-gray-500">Chưa có thanh toán phù hợp với filter hiện tại.</p>
+                  <p className="text-sm text-gray-500">Chưa có thanh toán phù hợp với bộ lọc hiện tại.</p>
                 )}
                 {(paymentStats.topWorkshops ?? []).map((item) => (
                   <div key={item.workshopId} className="flex items-center justify-between gap-3">
@@ -250,7 +260,7 @@ export default function StatisticsPage() {
         <div className="mt-4 divide-y divide-gray-100">
           {imports.length === 0 ? (
             <p className="text-sm text-gray-500">Chưa có batch import nào.</p>
-          ) : imports.slice(0, 8).map((batch) => (
+          ) : imports.map((batch) => (
             <div key={batch.id} className="grid gap-3 py-3 md:grid-cols-[1fr_auto] md:items-center">
               <div>
                 <p className="font-medium text-gray-950">{batch.fileName}</p>
@@ -301,7 +311,7 @@ function toIso(value) {
 
 function formatMoney(value) {
   const amount = Number(value ?? 0);
-  return `${amount.toLocaleString('vi-VN')} đ`;
+  return `${amount.toLocaleString('vi-VN')} d`;
 }
 
 function paymentStatusLabel(status) {
@@ -335,5 +345,5 @@ function batchStatusStyle(status) {
 }
 
 function formatDate(value) {
-  return formatDateTime(value, '—');
+  return formatDateTime(value, '-');
 }

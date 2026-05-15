@@ -11,6 +11,7 @@ export default function OrganizerLayout() {
             <nav className="flex flex-wrap gap-2 text-sm font-medium">
               <OrganizerNavLink to="/admin" end>Tổng quan</OrganizerNavLink>
               <OrganizerNavLink to="/admin/workshops" end>Workshop</OrganizerNavLink>
+              <OrganizerNavLink to="/admin/refunds">Hoàn tiền</OrganizerNavLink>
               <OrganizerNavLink to="/admin/statistics">Thống kê</OrganizerNavLink>
               <OrganizerNavLink to="/admin/student-imports">Import SV</OrganizerNavLink>
             </nav>

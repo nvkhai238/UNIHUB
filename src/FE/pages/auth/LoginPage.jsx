@@ -30,7 +30,6 @@ export default function LoginPage() {
       const from = location.state?.from?.pathname ?? ROLE_HOME[session.user?.role] ?? '/';
       navigate(from, { replace: true });
     } catch (err) {
-      const code = err?.response?.data?.code ?? '';
       const message = err?.response?.data?.message || err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
       addToast({ type: 'error', title: 'Đăng nhập thất bại', message });
     } finally {
@@ -100,7 +99,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tài khoản mẫu để demo</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Tài khoản mẫu để demo</p>
             <div className="space-y-1.5 text-xs text-gray-600">
               <DemoAccount label="Sinh viên" email="21521001@university.edu.vn" password="21521001@UniHub" />
               <DemoAccount label="Ban tổ chức" email="organizer@unihub.edu.vn" password="admin123" />

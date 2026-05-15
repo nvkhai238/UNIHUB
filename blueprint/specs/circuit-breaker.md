@@ -1,17 +1,17 @@
 ﻿# Đặc tả: Ngắt mạch (Thành viên 1)
 
-> **Phạm vi:** Bảo vệ backend khỏi lỗi từ Mock Payment Gateway, graceful degradation.
+> **Phạm vi:** Bảo vệ backend khỏi lỗi payment gateway demo trong `PaymentService.processPayment()`, graceful degradation cho các chức năng không liên quan thanh toán.
 
 ---
 
 ## Mô tả
 
-Khi Mock Payment Gateway liên tục fail, Circuit Breaker:
+Khi payment gateway demo liên tục fail, Circuit Breaker:
 - **CLOSED:** Gọi gateway bình thường
 - **OPEN:** Ngắt mạch, trả lỗi ngay lập tức (không gọi gateway)
 - **HALF-OPEN:** Thử 1 request; nếu ok → CLOSED; nếu fail → OPEN lại
 
-Mục tiêu: Ngăn backend spam lỗi, cho phép gateway recover, và **các tính năng khác vẫn hoạt động 100%** (graceful degradation).
+Mục tiêu: Ngăn backend spam lỗi, cho phép gateway recover, và **các tính năng khác vẫn hoạt động 100%** (graceful degradation). Luồng thanh toán chính trong codebase hiện tại xác nhận tiền qua SePay webhook; Circuit Breaker vẫn được giữ để chứng minh cơ chế bảo vệ payment adapter và expose trạng thái cho organizer.
 
 ---
 
@@ -22,7 +22,7 @@ Mục tiêu: Ngăn backend spam lỗi, cho phép gateway recover, và **các tí
 ```
 Trạng thái CLOSED (bình thường)
   │
-  ├── Mỗi request gọi Payment Gateway bình thường
+  ├── Mỗi request demo gọi Payment Gateway bình thường
   ├── Đếm failures trong sliding window (10 calls gần nhất)
   │
   └── Nếu:
@@ -35,7 +35,7 @@ Trạng thái CLOSED (bình thường)
 
 Trạng thái OPEN (đang sự cố)
   │
-  ├── Chặn TẤT CẢ request gọi Payment Gateway
+  ├── Chặn TẤT CẢ request demo gọi Payment Gateway
   ├── Trả lỗi 503 ngay lập tức (không chờ timeout)
   ├── Xem workshop, checkin, etc. vẫn hoạt động 100%
   │
@@ -78,9 +78,7 @@ resilience4j:
         # Retry & fallback
         registerHealthIndicator: true  # Health check endpoint
         recordExceptions:
-          - java.io.IOException
-          - java.net.SocketTimeoutException
-          - com.unihub.exception.PaymentGatewayException
+          - java.lang.RuntimeException
           
   retry:
     instances:
@@ -88,14 +86,13 @@ resilience4j:
         maxAttempts: 3                  # Retry 2 lần (total 3 attempts)
         waitDuration: 500               # Chờ 500ms trước khi retry
         retryExceptions:
-          - java.io.IOException
-          - java.net.SocketTimeoutException
+          - java.lang.RuntimeException
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,circuitbreakers # Expose CB metrics
+        include: health,metrics # Expose health/metrics
 ```
 
 ### Cài đặt service
@@ -109,7 +106,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepo;
 
     /**
-     * Call Payment Gateway với Circuit Breaker + Retry
+     * Call Payment Gateway demo với Circuit Breaker + Retry
      * - CB: ngắt mạch khi failure_rate ≥ 50%
      * - Retry: thử 3 lần nếu IOException hoặc timeout
      */
@@ -123,16 +120,9 @@ public class PaymentService {
         log.info("Processing payment: {}", request.getIdempotencyKey());
         
         try {
-            // Gọi Mock Payment Gateway
-            PaymentResult result = gatewayClient.pay(request);
-            
-            if (!result.isSuccess()) {
-                throw new PaymentGatewayException(
-                    "Gateway returned failure: " + result.getReason()
-                );
-            }
-            
-            return result;
+            PaymentStatus status = gatewayClient.processPayment(payment.getGatewayRef(), payment.getAmount());
+            payment.setStatus(status);
+            return paymentRepository.save(payment);
             
         } catch (SocketTimeoutException e) {
             log.warn("Payment timeout: {}", e.getMessage());
@@ -219,7 +209,7 @@ const handleRegister = async () => {
 
 | Tình huống | CB State | HTTP | Hành vi |
 |-----------|----------|------|--------|
-| **Payment GW OK** | CLOSED | 201 | Bình thường, đăng ký OK |
+| **Payment demo OK** | CLOSED | 200/201 | Payment demo xử lý bình thường |
 | **5/10 calls fail** | CLOSED→OPEN | 503 | Ngắt mạch, fallback 503 |
 | **Request khi OPEN** | OPEN | 503 | Trả 503 ngay (không gọi GW) |
 | **30s sau, try 1 call** | HALF-OPEN | 200 | Thành công → CLOSED (recover) |
@@ -227,7 +217,7 @@ const handleRegister = async () => {
 | **Call > 2s (slow)** | CLOSED | 200 | Tính là slow failure, đếm vào threshold |
 | **80% calls > 2s** | CLOSED→OPEN | — | Chuyển OPEN dù success rate cao |
 | **IOException hoặc timeout** | CLOSED | — | Retry 2 lần, nếu vẫn fail → fallback |
-| **CB config sai** | — | — | Warning log, CB disable, request pass |
+| **SePay webhook hoạt động** | Any | 200 | Luồng webhook vẫn xác nhận payment theo `gateway_ref` và không phụ thuộc request demo |
 
 ---
 
@@ -239,8 +229,8 @@ const handleRegister = async () => {
 | **Slow call detection** | 80% calls > 2s → OPEN (tính là failure) |
 | **Recovery time** | OPEN kéo dài 30s, sau đó HALF-OPEN |
 | **HALF-OPEN test** | Cho 1 request thử; success → CLOSED; fail → OPEN |
-| **Metrics** | Expose `/actuator/circuitbreakers/payment` |
-| **Health check** | registerHealthIndicator=true → `/actuator/health/circuitbreakers` |
+| **Metrics** | Expose qua `/actuator/metrics` và endpoint admin riêng |
+| **Health check** | `registerHealthIndicator=true`, health details bật trong `application.yml` |
 | **Retry behavior** | Max 3 attempts, exponential backoff 500ms |
 | **Graceful degradation** | Xem workshop, check-in, etc. KHÔNG bị ảnh hưởng khi CB OPEN |
 
@@ -248,15 +238,15 @@ const handleRegister = async () => {
 
 ## Tiêu chí chấp nhận
 
-- ✅ Payment GW fail 5/10 calls → CB chuyển OPEN → client nhận 503
+- ✅ Payment demo fail 5/10 calls → CB chuyển OPEN → fallback `PAYMENT_UNAVAILABLE`
 - ✅ Khi CB OPEN, request tiếp theo trả 503 ngay lập tức (không timeout)
 - ✅ Banner hiển thị: "Hệ thống thanh toán tạm gián đoạn" (graceful)
 - ✅ Xem danh sách workshop vẫn hoạt động 100% khi CB OPEN
 - ✅ Check-in không bị ảnh hưởng (CB chỉ wrap payment service)
 - ✅ Sau 30s, CB thử 1 call; nếu ok → CLOSED (recover)
 - ✅ Nếu lần thử còn fail → OPEN thêm 30s
-- ✅ Metrics available: `/actuator/metrics/resilience4j.circuitbreaker.state`
-- ✅ Health check: `/actuator/health/circuitbreakers` show status OPEN/CLOSED/HALF_OPEN
+- ✅ Metrics/status available qua `/api/admin/payments/circuit-breaker-status`
+- ✅ Health/metrics actuator expose `health,metrics`
 - ✅ Load test: 10 calls, 5 fail → CB OPEN, các call tiếp theo 503 (không slow)
 
 ---
@@ -265,9 +255,9 @@ const handleRegister = async () => {
 
 ## API Endpoints
 
-#### `GET /api/circuit-breaker/status` — Check Circuit Breaker State
+#### `GET /api/admin/payments/circuit-breaker-status` — Check Circuit Breaker State
 
-Cho phép ADMIN xem trạng thái hiện tại của circuit breaker cho cổng thanh toán.
+Cho phép ORGANIZER xem trạng thái hiện tại của circuit breaker cho payment adapter.
 
 **Response 200:**
 ```json

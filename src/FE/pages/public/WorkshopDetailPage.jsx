@@ -20,10 +20,9 @@ export default function WorkshopDetailPage() {
 
   const refreshRegistrationState = useCallback((workshopData) => {
     if (currentUser?.role !== 'STUDENT') return;
-    api.get('/api/registrations/my?size=50')
+    api.get(`/api/registrations/my/workshops/${workshopData?.id}`)
       .then(({ data }) => {
-        const myRegistrations = data.data?.content ?? [];
-        const existing = myRegistrations.find((r) => r.workshopId === workshopData?.id && r.status !== 'CANCELLED');
+        const existing = data.data ?? null;
         setAlreadyRegistered(!!existing);
         setExistingRegistration(existing || null);
         if (!existing) setResult(null);
@@ -46,8 +45,8 @@ export default function WorkshopDetailPage() {
     const fetchAll = () => Promise.all([
       api.get(`/api/workshops/${id}`),
       currentUser?.role === 'STUDENT'
-        ? api.get('/api/registrations/my?size=50').catch(() => ({ data: { data: { content: [] } } }))
-        : Promise.resolve({ data: { data: [] } }),
+        ? api.get(`/api/registrations/my/workshops/${id}`).catch(() => ({ data: { data: null } }))
+        : Promise.resolve({ data: { data: null } }),
     ]);
 
     fetchAll()
@@ -55,10 +54,7 @@ export default function WorkshopDetailPage() {
         if (!mounted) return;
         const workshopData = workshopRes.data.data;
         setWorkshop(workshopData);
-
-        const myRegistrations = registrationsRes.data?.data?.content ?? [];
-        const existing = myRegistrations.find((registration) =>
-          registration.workshopId === workshopData?.id && registration.status !== 'CANCELLED');
+        const existing = registrationsRes.data?.data ?? null;
 
         setAlreadyRegistered(!!existing);
         setExistingRegistration(existing || null);

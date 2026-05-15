@@ -38,7 +38,7 @@ export default function RegistrationDetailPage() {
   };
 
   const cancelRegistration = async () => {
-    if (!canCancelRegistration(registration)) {
+    if (!registration?.canCancel) {
       setNotice({ type: 'error', text: getCancellationReason(registration) });
       return;
     }
@@ -56,6 +56,11 @@ export default function RegistrationDetailPage() {
     }
   };
 
+  const canCancel = Boolean(registration?.canCancel);
+  const cancellationReason = getCancellationReason(registration);
+  const isCancelled = registration?.status === 'CANCELLED';
+  const isPending = registration?.status === 'PENDING';
+
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
       <Link to="/student/registrations" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
@@ -68,20 +73,17 @@ export default function RegistrationDetailPage() {
         {loading && <p className="mt-4 text-sm text-gray-500">Đang tải chi tiết...</p>}
         {error && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
         {notice && (
-          <p className={notice.type === 'error'
-            ? 'mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700'
-            : 'mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800'}
+          <p
+            className={notice.type === 'error'
+              ? 'mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700'
+              : 'mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800'}
           >
             {notice.text}
           </p>
         )}
 
-        {!loading && !error && registration && (() => {
-          const canCancel = canCancelRegistration(registration);
-          const cancellationReason = getCancellationReason(registration);
-
-          return (
-            <>
+        {!loading && !error && registration && (
+          <>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
               <Info label="Workshop" value={registration.workshopTitle || registration.workshopId} />
               <Info label="Trạng thái" value={registrationStatusLabel(registration.status)} />
@@ -93,7 +95,7 @@ export default function RegistrationDetailPage() {
             </dl>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {registration.status === 'CONFIRMED' && (
+              {!isCancelled && registration.status === 'CONFIRMED' && (
                 <Link
                   className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                   to={`/student/registrations/${registration.id}/qr`}
@@ -102,7 +104,7 @@ export default function RegistrationDetailPage() {
                 </Link>
               )}
 
-              {(registration.status === 'PENDING' || registration.status === 'CANCELLED') && (
+              {!isCancelled && isPending && (
                 <>
                   <button
                     type="button"
@@ -119,7 +121,8 @@ export default function RegistrationDetailPage() {
                   </Link>
                 </>
               )}
-              {registration.status !== 'CANCELLED' && (
+
+              {!isCancelled && (
                 <button
                   type="button"
                   disabled={!canCancel || cancelling}
@@ -133,12 +136,12 @@ export default function RegistrationDetailPage() {
                 </button>
               )}
             </div>
-            {!canCancel && registration.status !== 'CANCELLED' && (
+
+            {!isCancelled && !canCancel && (
               <p className="mt-3 text-sm text-gray-500">{cancellationReason}</p>
             )}
           </>
-          );
-        })()}
+        )}
       </div>
     </section>
   );
@@ -165,12 +168,6 @@ function registrationStatusLabel(status) {
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
-}
-
-function canCancelRegistration(registration) {
-  if (!registration) return false;
-  if (registration.status === 'CANCELLED') return false;
-  return true; // Cho phép hủy bất cứ lúc nào
 }
 
 function getCancellationReason(registration) {

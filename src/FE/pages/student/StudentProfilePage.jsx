@@ -32,7 +32,10 @@ export default function StudentProfilePage() {
   const [phoneNumberStr, setPhoneNumberStr] = useState(() => {
     if (user?.phone) {
       if (user.phone.startsWith('+84')) return user.phone.substring(3);
-      if (user.phone.startsWith('+1')) { setPhonePrefix('+1'); return user.phone.substring(2); }
+      if (user.phone.startsWith('+1')) {
+        setPhonePrefix('+1');
+        return user.phone.substring(2);
+      }
     }
     return user?.phone || '';
   });
@@ -44,7 +47,7 @@ export default function StudentProfilePage() {
       setIsUpdating(true);
       const finalPhone = phonePrefix + phoneNumberStr;
       await api.put('/api/users/me/phone', { phone: finalPhone });
-      user.phone = finalPhone; // Cập nhật local role object
+      user.phone = finalPhone;
       saveUserProfile(user);
       alert('Đã lưu số điện thoại thành công!');
     } catch (error) {
@@ -104,14 +107,13 @@ export default function StudentProfilePage() {
       </div>
 
       <div className="mt-5 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-bold text-gray-950">Kênh nhận thông báo (Mở rộng)</h3>
+        <h3 className="mb-4 text-lg font-bold text-gray-950">Kênh nhận thông báo</h3>
         <p className="mb-4 text-sm text-gray-600">
-          Ngoài Email, UniHub hỗ trợ gửi cập nhật workshop qua SMS và Telegram. Liên kết ngay để không bỏ lỡ thông báo.
+          Ngoài email, UniHub hỗ trợ gửi cập nhật workshop qua SMS và Telegram. Liên kết ngay để không bỏ lỡ thông báo.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          {/* SMS Adapter UI */}
           <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-4">
-            <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-800">Tin nhắn SMS</p>
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs ${user?.phone ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
                 {user?.phone ? 'Đã liên kết' : 'Chưa cập nhật'}
@@ -121,36 +123,35 @@ export default function StudentProfilePage() {
               <select
                 value={phonePrefix}
                 onChange={(e) => setPhonePrefix(e.target.value)}
-                className="rounded-l-md border border-gray-300 border-r-0 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-emerald-500"
+                className="rounded-l-md border border-gray-300 border-r-0 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none"
               >
-                <option value="+84">🇻🇳 +84</option>
-                <option value="+1">🇺🇸 +1</option>
+                <option value="+84">VN +84</option>
+                <option value="+1">US +1</option>
               </select>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={phoneNumberStr}
                 onChange={(e) => {
                   let val = e.target.value;
                   if (val.startsWith('0')) val = val.substring(1);
                   setPhoneNumberStr(val);
                 }}
-                placeholder="Nhập số (vd: 912345678)" 
-                className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" 
+                placeholder="Nhập số, ví dụ 912345678"
+                className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
-              <button 
+              <button
                 type="button"
                 disabled={isUpdating}
-                className="rounded-r-md border border-gray-300 border-l-0 bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors disabled:opacity-50"
+                className="rounded-r-md border border-gray-300 border-l-0 bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50"
                 onClick={handleUpdatePhone}
               >
                 Lưu
               </button>
             </div>
           </div>
-          
-          {/* Telegram Adapter UI */}
+
           <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-4">
-            <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-800">Telegram Chat ID: {user?.telegramId || '...'}</p>
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs ${user?.telegramId ? 'bg-blue-100 text-blue-800' : 'bg-blue-50 text-blue-600'}`}>
                 {user?.telegramId ? 'Đã liên kết' : 'Chưa liên kết'}
@@ -164,10 +165,10 @@ export default function StudentProfilePage() {
                 value={telegramInput}
                 onChange={(e) => setTelegramInput(e.target.value)}
               />
-              <button 
+              <button
                 type="button"
                 disabled={isUpdating}
-                className="flex-shrink-0 rounded-r-md bg-[#0088cc] px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0077b3] transition-colors disabled:opacity-50"
+                className="flex-shrink-0 rounded-r-md bg-[#0088cc] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0077b3] disabled:opacity-50"
                 onClick={handleUpdateTelegram}
               >
                 Kết nối

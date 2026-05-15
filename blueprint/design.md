@@ -1,6 +1,6 @@
 # UniHub Workshop — Technical Design
 
-> **Stack đã chốt:** Java 21 + Spring Boot 3.x · React + Vite cho Student/Admin Web · Check-in Mobile App native (React Native/Expo) · SQLite/local secure storage · Supabase (PostgreSQL + Storage) · Redis · Gemini API · SMTP
+> **Stack đã chốt:** Java 21 + Spring Boot 3.5.x · React 18 + Vite cho Student/Admin Web · Check-in Mobile App native (React Native/Expo SDK 54) · Expo SQLite + SecureStore · Supabase (PostgreSQL + Storage + Realtime) · Redis · Gemini API · SMTP · Docker Compose
 >
 > **Phân công:** Thành viên 1 — Đăng ký & Giao dịch | Thành viên 2 — Quản trị & AI | Thành viên 3 — Vận hành & Đồng bộ
 
@@ -15,12 +15,14 @@ Nhóm chọn kiến trúc **Modular Monolith** cho backend Spring Boot. Toàn b�
 ```
 com.unihub.workshop
 ├── module.auth          (TV2 — Spring Security, JWT)
-├── module.workshop      (TV1, TV2 — CRUD, AI summary)
+├── module.user          (TV2 — user profile, phone, Telegram)
+├── module.workshop      (TV1, TV2 — CRUD, AI summary, Supabase Storage)
 ├── module.registration  (TV1 — đăng ký, seat locking)
-├── module.payment       (TV1 — Circuit Breaker, Idempotency)
-├── module.checkin       (TV3 — API ghi nhận, sync offline)
-├── module.notification  (TV3 — Email, in-app)
-└── module.csvimport     (TV3 — Spring Batch)
+├── module.payment       (TV1 — payment status, SePay webhook, refund, Circuit Breaker)
+├── module.checkin       (TV3 — preload, lookup, sync offline)
+├── module.notification  (TV3 — Email, in-app, adapter Telegram/SMS)
+├── module.csvimport     (TV3 — Spring Batch orchestration)
+└── module.studentimport (TV3 — batch history entity/repository)
 ```
 
 **Lý do không chọn Microservices:**
@@ -37,7 +39,7 @@ com.unihub.workshop
 **Lý do chọn Java 21 + Spring Boot 3.x:**
 
 - **Spring Batch:** Giải quyết bài toán CSV import phức tạp với cơ chế chunk processing, retry, skip, restart — không cần tự viết từ đầu.
-- **Resilience4j:** Tích hợp sẵn Circuit Breaker, Rate Limiter, Retry với annotation `@CircuitBreaker`, `@RateLimiter` — không cần tự implement thuật toán.
+- **Resilience4j + Redis:** Resilience4j dùng cho Circuit Breaker/Retry payment demo; Redis Sorted Set/lock dùng cho sliding-window rate limit, idempotency và seat queue guard.
 - **Spring Security:** RBAC + JWT filter chain được thiết lập chặt chẽ, không để lọt request không hợp lệ qua bất kỳ tầng nào.
 - **JPA + Pessimistic Locking:** `@Lock(LockModeType.PESSIMISTIC_WRITE)` giải quyết race condition chỗ ngồi trực tiếp ở tầng ORM.
 
@@ -72,7 +74,7 @@ flowchart TB
         legacy["&lt;&lt;external system&gt;&gt;<br/>Legacy Student System<br/><span style='font-size:13px'>Chỉ export CSV hằng đêm</span>"]
         email["&lt;&lt;external system&gt;&gt;<br/>Email Service<br/><span style='font-size:13px'>SMTP gửi QR, thông báo</span>"]
         ai["&lt;&lt;external system&gt;&gt;<br/>AI Service (Gemini)<br/><span style='font-size:13px'>Tóm tắt PDF workshop</span>"]
-        payment["&lt;&lt;external system&gt;&gt;<br/>Mock Payment Gateway<br/><span style='font-size:13px'>Thanh toán workshop có phí</span>"]
+        payment["&lt;&lt;external system&gt;&gt;<br/>SePay Webhook / Payment Demo<br/><span style='font-size:13px'>Xác nhận chuyển khoản, demo lỗi payment</span>"]
     end
 
     %% ================= INVISIBLE LAYOUT LINKS =================
@@ -89,7 +91,7 @@ flowchart TB
 
     unihub -->|Gửi thông báo<br/>SMTP| email
     unihub -->|Tóm tắt PDF<br/>Gemini API| ai
-    unihub -->|Thanh toán có phí<br/>REST / HTTPS| payment
+    payment -->|Webhook chuyển khoản<br/>HTTPS| unihub
 
     %% ================= STYLES =================
     classDef titleStyle fill:transparent,stroke:transparent,color:#111,font-size:22px,font-weight:bold;
@@ -149,7 +151,7 @@ flowchart TB
     subgraph EXTERNALS["[ Hệ thống bên ngoài ]"]
         direction LR
         legacy["&lt;&lt;external system&gt;&gt;<br/><b>Legacy Student System</b><br/>(CSV export nightly)"]
-        payment["&lt;&lt;external system&gt;&gt;<br/><b>Mock Payment Gateway</b><br/>(REST API)"]
+        payment["&lt;&lt;external system&gt;&gt;<br/><b>SePay / Payment Demo</b><br/>(Webhook + demo adapter)"]
         ai["&lt;&lt;external system&gt;&gt;<br/><b>AI Service</b><br/>(Gemini API)"]
         emailSvc["&lt;&lt;external system&gt;&gt;<br/><b>Email Service</b><br/>(SMTP)"]
     end
@@ -233,7 +235,7 @@ flowchart LR
 
     subgraph EXTERNALS["External Systems"]
         Legacy_System["Legacy Student System<br/>CSV export only"]
-        Payment_Gateway["Mock Payment Gateway<br/>REST API"]
+        Payment_Gateway["SePay Webhook / Payment Demo<br/>Webhook + adapter"]
         AI_Model["Gemini API<br/>PDF summary"]
         Email_Provider["SMTP Provider<br/>Email delivery"]
     end
@@ -257,7 +259,8 @@ flowchart LR
     Registration_Service -->|Rate/idempotency lookup| Redis
     Registration_Service -->|Emit confirmation event| Notification_Service
 
-    Payment_Service -->|REST call with idempotency key| Payment_Gateway
+    Payment_Gateway -->|POST /api/webhooks/sepay| Payment_Service
+    Payment_Service -->|Circuit Breaker demo call| Payment_Gateway
     Payment_Service -->|Cache response + circuit state| Redis
     Payment_Service -->|Payment status| DB
 
@@ -282,147 +285,300 @@ flowchart LR
 
 **Không dùng NoSQL** cho dữ liệu nghiệp vụ vì: dữ liệu có quan hệ rõ ràng (user → registration → payment → workshop), cần JOIN và transaction ACID, và PostgreSQL Pessimistic Lock là công cụ chuẩn cho bài toán seat contention.
 
-### Schema PostgreSQL
+### Schema PostgreSQL hiện tại trên Supabase
 
 ```sql
 -- =============================================
--- ENUM types
+-- Spring Batch metadata tables
 -- =============================================
-CREATE TYPE user_role AS ENUM ('STUDENT', 'ORGANIZER', 'CHECKIN_STAFF');
-CREATE TYPE workshop_status AS ENUM ('DRAFT', 'PUBLISHED', 'CANCELLED');
-CREATE TYPE registration_status AS ENUM (
-    'PENDING',      -- Đang xử lý thanh toán
-    'CONFIRMED',    -- Đã thanh toán / đã đăng ký miễn phí thành công
-    'CANCELLED',    -- Đã hủy (thanh toán lỗi hoặc SV hủy)
-    'WAITLISTED'    -- Hết chỗ, vào danh sách chờ
+CREATE TABLE public.batch_job_instance (
+    job_instance_id BIGINT NOT NULL,
+    version BIGINT,
+    job_name VARCHAR NOT NULL,
+    job_key VARCHAR NOT NULL,
+    CONSTRAINT batch_job_instance_pkey PRIMARY KEY (job_instance_id)
 );
-CREATE TYPE payment_status AS ENUM ('PENDING', 'SUCCESS', 'FAILED', 'REFUNDED');
+
+CREATE TABLE public.batch_job_execution (
+    job_execution_id BIGINT NOT NULL,
+    version BIGINT,
+    job_instance_id BIGINT NOT NULL,
+    create_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    start_time TIMESTAMP WITHOUT TIME ZONE,
+    end_time TIMESTAMP WITHOUT TIME ZONE,
+    status VARCHAR,
+    exit_code VARCHAR,
+    exit_message VARCHAR,
+    last_updated TIMESTAMP WITHOUT TIME ZONE,
+    CONSTRAINT batch_job_execution_pkey PRIMARY KEY (job_execution_id),
+    CONSTRAINT job_inst_exec_fk FOREIGN KEY (job_instance_id)
+        REFERENCES public.batch_job_instance(job_instance_id)
+);
+
+CREATE TABLE public.batch_job_execution_context (
+    job_execution_id BIGINT NOT NULL,
+    short_context VARCHAR NOT NULL,
+    serialized_context TEXT,
+    CONSTRAINT batch_job_execution_context_pkey PRIMARY KEY (job_execution_id),
+    CONSTRAINT job_exec_ctx_fk FOREIGN KEY (job_execution_id)
+        REFERENCES public.batch_job_execution(job_execution_id)
+);
+
+CREATE TABLE public.batch_job_execution_params (
+    job_execution_id BIGINT NOT NULL,
+    parameter_name VARCHAR NOT NULL,
+    parameter_type VARCHAR NOT NULL,
+    parameter_value VARCHAR,
+    identifying CHAR NOT NULL,
+    CONSTRAINT job_exec_params_fk FOREIGN KEY (job_execution_id)
+        REFERENCES public.batch_job_execution(job_execution_id)
+);
+
+CREATE TABLE public.batch_step_execution (
+    step_execution_id BIGINT NOT NULL,
+    version BIGINT NOT NULL,
+    step_name VARCHAR NOT NULL,
+    job_execution_id BIGINT NOT NULL,
+    create_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    start_time TIMESTAMP WITHOUT TIME ZONE,
+    end_time TIMESTAMP WITHOUT TIME ZONE,
+    status VARCHAR,
+    commit_count BIGINT,
+    read_count BIGINT,
+    filter_count BIGINT,
+    write_count BIGINT,
+    read_skip_count BIGINT,
+    write_skip_count BIGINT,
+    process_skip_count BIGINT,
+    rollback_count BIGINT,
+    exit_code VARCHAR,
+    exit_message VARCHAR,
+    last_updated TIMESTAMP WITHOUT TIME ZONE,
+    CONSTRAINT batch_step_execution_pkey PRIMARY KEY (step_execution_id),
+    CONSTRAINT job_exec_step_fk FOREIGN KEY (job_execution_id)
+        REFERENCES public.batch_job_execution(job_execution_id)
+);
+
+CREATE TABLE public.batch_step_execution_context (
+    step_execution_id BIGINT NOT NULL,
+    short_context VARCHAR NOT NULL,
+    serialized_context TEXT,
+    CONSTRAINT batch_step_execution_context_pkey PRIMARY KEY (step_execution_id),
+    CONSTRAINT step_exec_ctx_fk FOREIGN KEY (step_execution_id)
+        REFERENCES public.batch_step_execution(step_execution_id)
+);
 
 -- =============================================
 -- Bảng người dùng
 -- =============================================
-CREATE TABLE users (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id  VARCHAR(20) UNIQUE,          -- Mã SV, null nếu là Organizer/Staff
-    email       VARCHAR(255) UNIQUE NOT NULL,
-    full_name   VARCHAR(255) NOT NULL,
-    role        user_role NOT NULL DEFAULT 'STUDENT',
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE public.users (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    student_id VARCHAR UNIQUE,
+    email VARCHAR NOT NULL UNIQUE,
+    full_name VARCHAR NOT NULL,
+    role VARCHAR NOT NULL DEFAULT 'STUDENT'::user_role,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    password_hash VARCHAR NOT NULL,
+    phone VARCHAR,
+    telegram_id VARCHAR,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
 -- =============================================
 -- Bảng workshop
 -- =============================================
-CREATE TABLE workshops (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title            VARCHAR(500) NOT NULL,
-    description      TEXT,
-    speaker_name     VARCHAR(255),
-    speaker_bio      TEXT,
-    room             VARCHAR(100) NOT NULL,
-    room_layout_url  TEXT,                    -- URL ảnh sơ đồ phòng (Supabase Storage)
-    start_time       TIMESTAMPTZ NOT NULL,
-    end_time         TIMESTAMPTZ NOT NULL,
-    capacity         INT NOT NULL CHECK (capacity > 0),
-    remaining_seats  INT NOT NULL CHECK (remaining_seats >= 0),
-    price            NUMERIC(10,2) NOT NULL DEFAULT 0.00, -- 0 = miễn phí
-    status           workshop_status NOT NULL DEFAULT 'DRAFT',
-    pdf_url          TEXT,                    -- URL file PDF (Supabase Storage)
-    ai_summary       TEXT,                    -- Tóm tắt do Gemini API tạo
-    ai_summary_status VARCHAR(20) DEFAULT 'NONE', -- NONE/PROCESSING/DONE/FAILED
-    created_by       UUID NOT NULL REFERENCES users(id),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-    CONSTRAINT remaining_lte_capacity CHECK (remaining_seats <= capacity)
+CREATE TABLE public.workshops (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    title VARCHAR NOT NULL,
+    description TEXT,
+    speaker_name VARCHAR,
+    speaker_bio TEXT,
+    room VARCHAR NOT NULL,
+    room_layout_url TEXT,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    capacity INTEGER NOT NULL CHECK (capacity > 0),
+    remaining_seats INTEGER NOT NULL CHECK (remaining_seats >= 0),
+    price NUMERIC NOT NULL DEFAULT 0.00,
+    status VARCHAR NOT NULL DEFAULT 'DRAFT'::workshop_status,
+    pdf_url TEXT,
+    ai_summary TEXT,
+    ai_summary_status VARCHAR DEFAULT 'NONE'::character varying,
+    created_by UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT workshops_pkey PRIMARY KEY (id),
+    CONSTRAINT workshops_created_by_fkey FOREIGN KEY (created_by)
+        REFERENCES public.users(id)
 );
 
 -- =============================================
 -- Bảng đăng ký
 -- =============================================
-CREATE TABLE registrations (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    workshop_id   UUID NOT NULL REFERENCES workshops(id) ON DELETE RESTRICT,
-    status        registration_status NOT NULL DEFAULT 'PENDING',
-    qr_code       VARCHAR(255) UNIQUE,        -- UUID ngẫu nhiên, chỉ sinh khi CONFIRMED
+CREATE TABLE public.registrations (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    workshop_id UUID NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'PENDING'::registration_status,
+    qr_code VARCHAR UNIQUE,
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    confirmed_at  TIMESTAMPTZ,
-    cancelled_at  TIMESTAMPTZ,
-
-    UNIQUE (user_id, workshop_id)             -- Một SV không đăng ký 2 lần cùng 1 workshop
+    confirmed_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    CONSTRAINT registrations_pkey PRIMARY KEY (id),
+    CONSTRAINT registrations_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES public.users(id),
+    CONSTRAINT registrations_workshop_id_fkey FOREIGN KEY (workshop_id)
+        REFERENCES public.workshops(id)
 );
 
 -- =============================================
 -- Bảng thanh toán
 -- =============================================
-CREATE TABLE payments (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    registration_id  UUID NOT NULL REFERENCES registrations(id),
-    idempotency_key  VARCHAR(255) UNIQUE NOT NULL,  -- UUID do client gửi
-    amount           NUMERIC(10,2) NOT NULL,
-    status           payment_status NOT NULL DEFAULT 'PENDING',
-    gateway_ref      VARCHAR(255),            -- Mã giao dịch từ Mock Payment GW
-    gateway_response JSONB,                   -- Raw response để debug
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE public.payments (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    registration_id UUID NOT NULL,
+    idempotency_key VARCHAR NOT NULL UNIQUE,
+    amount NUMERIC NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'PENDING'::payment_status,
+    gateway_ref VARCHAR,
+    gateway_response JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT payments_pkey PRIMARY KEY (id),
+    CONSTRAINT payments_registration_id_fkey FOREIGN KEY (registration_id)
+        REFERENCES public.registrations(id)
+);
+
+-- =============================================
+-- Bảng yêu cầu hoàn tiền
+-- =============================================
+CREATE TABLE public.refund_requests (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    registration_id UUID NOT NULL UNIQUE,
+    bank_name VARCHAR NOT NULL,
+    bank_account_name VARCHAR NOT NULL,
+    bank_account_number VARCHAR NOT NULL,
+    proof_url TEXT NOT NULL,
+    proof_note TEXT,
+    processed BOOLEAN NOT NULL DEFAULT false,
+    processed_at TIMESTAMPTZ,
+    processed_by_user_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT refund_requests_pkey PRIMARY KEY (id),
+    CONSTRAINT refund_requests_registration_id_fkey FOREIGN KEY (registration_id)
+        REFERENCES public.registrations(id),
+    CONSTRAINT refund_requests_processed_by_user_id_fkey FOREIGN KEY (processed_by_user_id)
+        REFERENCES public.users(id)
 );
 
 -- =============================================
 -- Bảng check-in
 -- =============================================
-CREATE TABLE checkins (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    registration_id UUID NOT NULL REFERENCES registrations(id),
-    checked_in_at   TIMESTAMPTZ NOT NULL,     -- Thời điểm quét QR (local device time)
-    synced_at       TIMESTAMPTZ,              -- null = chưa sync từ offline
-    device_id       VARCHAR(255),             -- ID thiết bị nhân sự
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-    UNIQUE (registration_id)                  -- Mỗi SV chỉ check-in 1 lần
+CREATE TABLE public.checkins (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    registration_id UUID NOT NULL UNIQUE,
+    checked_in_at TIMESTAMPTZ NOT NULL,
+    synced_at TIMESTAMPTZ,
+    device_id VARCHAR,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT checkins_pkey PRIMARY KEY (id),
+    CONSTRAINT checkins_registration_id_fkey FOREIGN KEY (registration_id)
+        REFERENCES public.registrations(id)
 );
 
 -- =============================================
 -- Bảng batch import CSV
 -- =============================================
-CREATE TABLE student_import_batches (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    file_name     VARCHAR(500),
-    total_rows    INT DEFAULT 0,
-    success_rows  INT DEFAULT 0,
-    error_rows    INT DEFAULT 0,
-    status        VARCHAR(20) NOT NULL DEFAULT 'RUNNING',  -- RUNNING/COMPLETED/FAILED/SKIPPED
-    error_log     TEXT,                       -- Chi tiết các dòng bị lỗi
-    started_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    completed_at  TIMESTAMPTZ
+CREATE TABLE public.student_import_batches (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    file_name VARCHAR,
+    total_rows INTEGER DEFAULT 0,
+    success_rows INTEGER DEFAULT 0,
+    error_rows INTEGER DEFAULT 0,
+    status VARCHAR NOT NULL DEFAULT 'RUNNING'::character varying,
+    error_log TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ,
+    CONSTRAINT student_import_batches_pkey PRIMARY KEY (id)
 );
 
 -- =============================================
--- Indexes
+-- Bảng notification in-app
 -- =============================================
-CREATE INDEX idx_workshops_start_time   ON workshops(start_time);
-CREATE INDEX idx_workshops_status       ON workshops(status);
-CREATE INDEX idx_workshops_remaining    ON workshops(remaining_seats) WHERE remaining_seats > 0;
-CREATE INDEX idx_registrations_user     ON registrations(user_id);
-CREATE INDEX idx_registrations_workshop ON registrations(workshop_id);
-CREATE INDEX idx_registrations_qr       ON registrations(qr_code) WHERE qr_code IS NOT NULL;
-CREATE INDEX idx_registrations_status   ON registrations(status);
-CREATE INDEX idx_checkins_unsynced      ON checkins(registration_id) WHERE synced_at IS NULL;
-CREATE INDEX idx_payments_idem          ON payments(idempotency_key);
+CREATE TABLE public.notifications (
+    id UUID NOT NULL,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    body TEXT NOT NULL,
+    data JSONB,
+    is_read BOOLEAN NOT NULL,
+    title VARCHAR NOT NULL,
+    type VARCHAR NOT NULL,
+    user_id UUID NOT NULL,
+    CONSTRAINT notifications_pkey PRIMARY KEY (id),
+    CONSTRAINT fk9y21adhxn0ayjhfocscqox7bh FOREIGN KEY (user_id)
+        REFERENCES public.users(id)
+);
+```
+
+### Bổ sung cần kiểm tra trên Supabase hiện tại
+
+Schema export từ Supabase có thể thiếu một số constraint/index vì bảng được tạo qua nhiều lần migrate hoặc `SchemaInitializer`. Trước khi demo/chấm, cần bảo đảm các mục dưới đây tồn tại:
+
+```sql
+-- Mỗi sinh viên chỉ có một registration record cho một workshop.
+-- Code reuse record CANCELLED dựa trên constraint này.
+ALTER TABLE public.registrations
+ADD CONSTRAINT registrations_user_workshop_unique UNIQUE (user_id, workshop_id);
+
+-- Không để remaining_seats vượt capacity khi hủy/retry/promote waitlist.
+ALTER TABLE public.workshops
+ADD CONSTRAINT workshops_remaining_lte_capacity
+CHECK (remaining_seats <= capacity);
+
+-- Mã chuyển khoản UHxxxxxx phải match duy nhất một payment khi SePay webhook gọi về.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_gateway_ref_unique
+ON public.payments(gateway_ref)
+WHERE gateway_ref IS NOT NULL;
+
+-- Index hỗ trợ các màn hình danh sách/filter chính.
+CREATE INDEX IF NOT EXISTS idx_registrations_user ON public.registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_registrations_workshop ON public.registrations(workshop_id);
+CREATE INDEX IF NOT EXISTS idx_registrations_status ON public.registrations(status);
+CREATE INDEX IF NOT EXISTS idx_workshops_status ON public.workshops(status);
+CREATE INDEX IF NOT EXISTS idx_workshops_start_time ON public.workshops(start_time);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_refund_requests_processed ON public.refund_requests(processed);
+```
+
+Nếu constraint đã tồn tại với tên khác thì không cần tạo lại; chỉ cần xác nhận bằng `pg_constraint`/Supabase Table Editor. Với `registrations_user_workshop_unique`, cần xử lý dữ liệu trùng trước khi thêm constraint nếu database đã có duplicate lịch sử.
+
+### Spring Batch metadata
+
+Spring Batch cần các bảng metadata chuẩn ngoài bảng nghiệp vụ `student_import_batches`: `batch_job_instance`, `batch_job_execution`, `batch_job_execution_params`, `batch_job_execution_context`, `batch_step_execution`, `batch_step_execution_context` và các sequence tương ứng để cấp id. Nếu Supabase đã có các bảng `batch_*` nhưng thiếu sequence, CSV import có thể fail khi `JobRepository` tạo job execution mới.
+
+Các sequence cần kiểm tra:
+
+```sql
+CREATE SEQUENCE IF NOT EXISTS public.batch_job_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.batch_job_execution_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.batch_step_execution_seq START WITH 1 INCREMENT BY 1;
 ```
 
 ### Redis Key Convention
 
-| Key Pattern             | Type             | TTL          | Mục đích                                          |
-| ----------------------- | ---------------- | ------------ | ------------------------------------------------- |
-| `rl:user:{userId}`      | String (counter) | 10s          | Rate limiting per user (Resilience4j + Redis)     |
-| `rl:ip:{ipAddress}`     | String (counter) | 60s          | Rate limiting per IP (fallback)                   |
-| `idem:{idempotencyKey}` | String (JSON)    | 86400s (24h) | Cache response thanh toán chống double-charge     |
-| `cb:payment:failures`   | String (counter) | 30s          | Đếm failures trong Circuit Breaker sliding window |
-| `cb:payment:state`      | String           | —            | Trạng thái CB: CLOSED / OPEN / HALF_OPEN          |
-| `ws:seats:{workshopId}` | String           | 30s          | Cache số ghế còn lại (giảm tải DB reads)          |
+| Key Pattern | Type | TTL | Mục đích |
+| ----------- | ---- | --- | -------- |
+| `idem:{principal}:{uuid}` | String (JSON) | 24h | Cache response `POST /api/registrations` theo user + Idempotency-Key |
+| `idem:{principal}:payment-retry:{encoded}` | String (JSON) | 24h | Cache response retry payment theo registration + user |
+| `rate:registration:{principal}` | Sorted Set | 10s | Sliding window rate limit cho đăng ký |
+| `rate:workshop-read:{principal}` | Sorted Set | 10s | Sliding window rate limit cho đọc danh sách/chi tiết workshop |
+| `lock:registration:student:{email}:{workshopId}` | String | 10s | Chặn cùng một student gửi song song nhiều request đăng ký cùng workshop |
+| `lock:registration:workshop:{workshopId}` | String | 10s | Chặn hàng đợi cập nhật seat bị chạy song song quá mức |
+| `email:*` | String | 7 ngày | Dedup email xác nhận, hủy workshop, cập nhật workshop, hoàn tiền |
 
 ---
 
@@ -459,10 +615,10 @@ Tài khoản `ORGANIZER` và `CHECKIN_STAFF` được tạo thủ công qua seed
 | Đăng ký workshop (`POST /api/registrations/**`) | ✅ | ❌ | ❌ |
 | Xem registration / mã QR của chính mình (`GET /api/registrations/my/**`) | ✅ | ❌ | ❌ |
 | Tạo / cập nhật / hủy workshop (`POST/PUT/DELETE /api/workshops/**`) | ❌ | ✅ | ❌ |
-| Upload PDF giới thiệu workshop (`POST /api/admin/workshops/{id}/pdf`) | ❌ | ✅ | ❌ |
-| Xem danh sách sinh viên đăng ký / thống kê (`GET /api/admin/**`) | ❌ | ✅ | ❌ |
-| Preload danh sách QR hợp lệ (`GET /api/checkins/preload`) | ❌ | ❌ | ✅ |
-| Quét QR / đồng bộ check-in offline (`POST /api/checkins/**`) | ❌ | ❌ | ✅ |
+| Upload PDF giới thiệu workshop (`POST /api/workshops/{id}/pdf`) | ❌ | ✅ | ❌ |
+| Xem danh sách sinh viên đăng ký / thống kê (`GET /api/workshops/admin`, `GET /api/workshops/statistics`, `GET /api/admin/**`) | ❌ | ✅ | ❌ |
+| Preload / lookup danh sách QR hợp lệ (`GET /api/checkins/preload`, `GET /api/checkins/lookup`) | ❌ | ✅ | ✅ |
+| Quét QR / đồng bộ check-in offline (`POST /api/checkins/sync`) | ❌ | ✅ | ✅ |
 
 ### 5.5. Kiểm soát truy cập tại API Endpoint
 Tất cả request từ Student Web, Organizer Admin Web và Check-in Mobile App đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend chỉ ẩn/hiện route và nút chức năng theo role để cải thiện UX; bảo mật thật sự phải được kiểm tra ở backend.
@@ -573,11 +729,11 @@ SV (Browser)         React Frontend        Spring Boot API         Redis / Postg
       │                     │  {uuid}              │                       │
       │                     │  Body: {workshopId}  │                       │
       │                     │                     │                       │
-      │                     │                     │── ① Rate limit check ─▶│ Redis INCR rl:user:{id}
+      │                     │                     │── ① Rate limit check ─▶│ Redis ZSET rate:registration:{email}
       │                     │                     │◀─ OK (< 5 req/10s) ───│
       │                     │                     │   hoặc 429 (exceeded) │
       │                     │                     │                       │
-      │                     │                     │── ② Idem key check ──▶│ Redis GET idem:{key}
+      │                     │                     │── ② Idem key check ──▶│ Redis GET idem:{email}:{key}
       │                     │                     │◀─ null (chưa có) ─────│
       │                     │                     │   (nếu có → return    │
       │                     │                     │    cached response)   │
@@ -589,8 +745,8 @@ SV (Browser)         React Frontend        Spring Boot API         Redis / Postg
       │                     │                     │   FOR UPDATE            │ ← Pessimistic Lock
       │                     │                     │                         │
       │                     │                     │   remaining_seats = 0?  │
-      │                     │                     │   → ROLLBACK            │
-      │                     │                     │   → 409 Conflict        │
+      │                     │                     │   → INSERT WAITLISTED   │
+      │                     │                     │   → COMMIT              │
       │                     │                     │                         │
       │                     │                     │   INSERT registrations  │
       │                     │                     │   status = 'PENDING'    │
@@ -602,46 +758,37 @@ SV (Browser)         React Frontend        Spring Boot API         Redis / Postg
       │                     │                     │                         │
       │                     │                     │   INSERT payments       │
       │                     │                     │   status = 'PENDING'    │
+      │                     │                     │   gateway_ref='UHxxxxxx'│
       │                     │                     │── COMMIT ───────────────│
       │                     │                     │                         │
-      │                     │                     │── ④ Call Payment GW ───── (Circuit Breaker)
-      │                     │                     │   POST mock-payment/pay │
-      │                     │                     │   + Idempotency-Key hdr │
-      │                     │                     │                         │
-      │                     │                     │◀─── [Kịch bản SUCCESS] ──
-      │                     │                     │   UPDATE payments       │
-      │                     │                     │   status = 'SUCCESS'    │
-      │                     │                     │   UPDATE registrations  │
-      │                     │                     │   status = 'CONFIRMED'  │
-      │                     │                     │   qr_code = UUID.new()  │
-      │                     │                     │── ⑤ Cache idem key ────▶│ Redis SET idem:{key}
+      │                     │                     │── ④ Cache idem key ────▶│ Redis SET idem:{email}:{key}
       │                     │                     │                    EX 86400
-      │                     │                     │── ⑥ Send Email ─────────── EmailService (async)
-      │                     │◀── 201 {qrCode} ────│                         │
-      │◀── Hiển thị QR ─────│                     │                         │
+      │                     │◀── 201 {registrationId,status:PENDING}────────│
+      │                     │──GET /payment-info───────────────────────────▶│
+      │                     │◀── {paymentCode,amount,bank}─────────────────│
+      │◀── Hiển thị QR SePay / thông tin chuyển khoản                       │
       │                     │                     │                         │
-      │                     │                     │◀─── [Kịch bản TIMEOUT] ──
+      │                     │                     │◀─── [SePay webhook] ─────
+      │                     │                     │   POST /api/webhooks/sepay
+      │                     │                     │   content contains UHxxxxxx
+      │                     │                     │   amount >= payment.amount
+      │                     │                     │   UPDATE payments SUCCESS│
+      │                     │                     │   UPDATE registrations CONFIRMED
+      │                     │                     │   qr_code = UUID.new()  │
+      │                     │                     │   Send notification/email│
+      │                     │                     │                         │
+      │                     │                     │◀─── [Payment timeout] ───
+      │                     │                     │   Scheduler sau 15 phút │
       │                     │                     │   UPDATE payments FAILED│
-      │                     │                     │   UPDATE registrations  │
-      │                     │                     │   status = 'CANCELLED'  │
-      │                     │                     │   UPDATE workshops      │
-      │                     │                     │   remaining_seats += 1  │ ← Hoàn lại ghế
-      │                     │◀── 504 + message ───│                         │
-      │◀── "Thanh toán lỗi, │                     │                         │
-      │    vui lòng thử lại"│                     │                         │
-      │                     │                     │                         │
-      │                     │                     │◀─── [CB OPEN state] ─────
-      │                     │                     │   Ngay lập tức 503      │
-      │                     │                     │   Không gọi gateway     │
-      │                     │                     │   remaining_seats += 1  │
-      │                     │◀── 503 + message ───│                         │
+      │                     │                     │   UPDATE registrations CANCELLED
+      │                     │                     │   remaining_seats += 1/promote waitlist
 ```
 
 **Kịch bản client retry với cùng idempotency key:**
 
 ```
 Client gửi lại request với cùng Idempotency-Key
-→ API: Redis GET idem:{key} → Tìm thấy response cũ
+→ API: Redis GET idem:{email}:{key} → Tìm thấy response cũ
 → Return cached response ngay, không xử lý lại
 → Header: X-Idempotent-Replayed: true
 ```
@@ -689,17 +836,17 @@ sequenceDiagram
   Sync->>LocalDB: SELECT * FROM pending_sync WHERE synced = 0
   LocalDB-->>Sync: [{qr_code, timestamp, device_id, ...}]
   Sync->>API: POST /api/checkins/sync (Gửi array batch)
-  API->>DB: UPSERT checkins
-  Note right of API: ON CONFLICT (reg_id) DO NOTHING
+  API->>DB: INSERT checkins nếu registration CONFIRMED và chưa tồn tại
+  Note right of API: Unique registration_id phân loại DUPLICATE/CONFLICT
 
   alt Kết nối chập chờn / Lỗi Server
     DB-->>API: Error / Timeout
     API-->>Sync: 500 Internal Server Error
     Sync->>LocalDB: Giữ nguyên synced=0, retry với exponential backoff
   else Thành công
-    DB-->>API: Số dòng bị ảnh hưởng
-    API-->>Sync: 200 OK {synced_ids: [...]}
-    Sync->>LocalDB: UPDATE pending_sync SET synced = 1
+    DB-->>API: CREATED/DUPLICATE/CONFLICT/INVALID_QR
+    API-->>Sync: 200 OK {items: [...]}
+    Sync->>LocalDB: UPDATE pending_checkins theo từng item
   end
 ```
 
@@ -722,9 +869,9 @@ Nhân sự        Mobile App        Local SQLite        Spring Boot API        P
    │ [Khi mạng trở lại / app foreground]                  │                  │
    │               │── Read pending rows ───────────────▶│                  │
    │               │── POST /checkins/sync ───────────────▶│
-   │               │                  │                    │── UPSERT checkins ON CONFLICT
-   │               │◀── {synced:[ids]} ───────────────────│
-   │               │── Mark synced=1 ───────────────────▶│
+   │               │                  │                    │── INSERT/validate checkins
+   │               │◀── {items:[CREATED/...]} ───────────│
+   │               │── Mark result per row ─────────────▶│
 ```
 
 **Xử lý lỗi:**
@@ -733,7 +880,7 @@ Nhân sự        Mobile App        Local SQLite        Spring Boot API        P
 | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
 | QR không có trong local DB   | Hiện "Không tìm thấy sinh viên", ghi log, cho phép nhập tay/kiểm tra lại                             |
 | Sync thất bại (mạng đứt lại) | Giữ nguyên `synced=0`, mobile sync worker retry khi có mạng hoặc app foreground                      |
-| Check-in trùng (SV đã scan)  | SQLite UNIQUE constraint ngăn lưu trùng local; PostgreSQL `ON CONFLICT DO NOTHING` ngăn trùng server |
+| Check-in trùng (SV đã scan)  | SQLite flag/local pending ngăn lưu trùng local; unique `registration_id` trên PostgreSQL giúp backend trả `DUPLICATE` hoặc `CONFLICT` |
 | File preload quá lớn         | Phân trang theo `workshop_id`, chỉ load workshop của ngày hôm nay                                    |
 
 ---
@@ -744,19 +891,19 @@ sequenceDiagram
   autonumber
   participant Cron as Scheduler (Cronjob)
   participant Worker as Spring Batch Job
-  participant FTP as Legacy System (FTP)
+  participant CSV as /data CSV folder
   participant DB as PostgreSQL
   participant Log as Hệ thống Monitor / Log
 
   Cron->>Worker: Kích hoạt lúc 02:00 AM
-  Worker->>FTP: Request tải file `students_export.csv`
+  Worker->>CSV: Đọc file `students_YYYY-MM-DD.csv`
 
-  alt File không tồn tại / Lỗi kết nối FTP
-    FTP-->>Worker: Error (404 / Timeout)
-    Worker->>Log: Báo lỗi CRITICAL "Không lấy được file CSV"
-    Note over Worker: Đóng Job (Status = FAILED), kết thúc luồng.
+  alt File không tồn tại / Header sai / File rỗng
+    CSV-->>Worker: Validation error
+    Worker->>Log: Ghi batch status = SKIPPED và gửi email admin
+    Note over Worker: Không insert partial data.
   else Lấy file thành công
-    FTP-->>Worker: Stream file CSV (UTF-8)
+    CSV-->>Worker: Read lines UTF-8
 
     loop Đọc từng Chunk (vd: 1000 dòng/lần)
       Worker->>Worker: FlatFileItemReader (Bỏ qua dòng Header)
@@ -767,8 +914,8 @@ sequenceDiagram
         Note over Worker: SkipPolicy: Bỏ qua dòng lỗi, tiếp tục xử lý các dòng khác
       end
 
-      Worker->>DB: JdbcBatchItemWriter (Gửi mảng dữ liệu đã validate)
-      Note right of DB: UPSERT: ON CONFLICT (student_id) <br/> DO UPDATE SET email=EXCLUDED.email, <br/> full_name=EXCLUDED.full_name <br/> (TUYỆT ĐỐI KHÔNG ghi đè Role)
+      Worker->>DB: UserRepository.saveAll (Gửi mảng dữ liệu đã validate)
+      Note right of DB: Nếu user STUDENT tồn tại: update email/full_name.<br/>Nếu chưa có: tạo STUDENT.<br/>Không downgrade ORGANIZER/CHECKIN_STAFF.
       DB-->>Worker: Trả về số dòng bị ảnh hưởng
     end
 
@@ -781,7 +928,7 @@ sequenceDiagram
 
 ### 7.1 Kiểm soát tải đột biến — Rate Limiting (Thành viên 1)
 
-**Lý do chọn Sliding Window (Resilience4j):**
+**Lý do chọn Sliding Window Redis:**
 
 So sánh các thuật toán:
 
@@ -792,7 +939,7 @@ So sánh các thuật toán:
 | Token Bucket   | Cho phép burst ngắn | Khó integrate với Resilience4j      | Có thể           |
 | Leaky Bucket   | Rate đều tuyệt đối  | Queue delay — không công bằng       | ❌               |
 
-Sliding Window được chọn vì: công bằng nhất giữa các sinh viên, Resilience4j hỗ trợ native, không cần tự viết Lua script.
+Sliding Window được chọn vì công bằng hơn fixed window ở biên thời gian. Code hiện dùng Redis Sorted Set trong `RegistrationSlidingWindowService` và `WorkshopReadSlidingWindowService`; Resilience4j ratelimiter config vẫn là cấu hình tham chiếu nhưng không phải cơ chế chính.
 
 **Cấu hình (application.yml):**
 
@@ -814,21 +961,18 @@ resilience4j:
 
 ```java
 @PostMapping("/registrations")
-@RateLimiter(name = "registration", fallbackMethod = "registrationRateLimitFallback")
-public ResponseEntity<RegistrationResponse> register(
+public ResponseEntity<ApiResponse<RegistrationResponse>> register(
         @RequestHeader("Idempotency-Key") String idempotencyKey,
         @Valid @RequestBody RegistrationRequest request,
-        @AuthenticationPrincipal UserDetails user) {
-    return ResponseEntity.status(201)
-        .body(registrationService.register(request, user.getId(), idempotencyKey));
-}
-
-public ResponseEntity<?> registrationRateLimitFallback(
-        String idempotencyKey, RegistrationRequest req,
-        UserDetails user, RequestNotPermitted ex) {
-    return ResponseEntity.status(429)
-        .header("Retry-After", "10")
-        .body(ApiResponse.error(429, "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 giây."));
+        Authentication authentication) {
+    if (!registrationSlidingWindowService.tryAcquire(authentication.getName())) {
+        long retryAfter = registrationSlidingWindowService.retryAfterSeconds();
+        return ResponseEntity.status(429)
+            .header("Retry-After", String.valueOf(retryAfter))
+            .body(ApiResponse.error(429, "RATE_LIMIT_EXCEEDED",
+                "Quá nhiều yêu cầu. Vui lòng thử lại sau " + retryAfter + " giây."));
+    }
+    return ResponseEntity.status(201).body(ApiResponse.success(...));
 }
 ```
 
@@ -854,12 +998,12 @@ limit_req_status 429;
 
 ```
 Trạng thái CLOSED (bình thường):
-  → Mọi request gọi Payment Gateway bình thường
+  → Mọi request demo gọi Payment Gateway bình thường
   → Đếm failures trong sliding window (10 calls gần nhất)
   → failure rate ≥ 50% → chuyển sang OPEN
 
 Trạng thái OPEN (đang sự cố):
-  → Chặn TẤT CẢ request gọi Payment Gateway
+  → Chặn TẤT CẢ request demo gọi Payment Gateway
   → Trả về lỗi ngay lập tức (không chờ timeout)
   → Sau 30 giây → chuyển sang HALF-OPEN
   → Tính năng KHÔNG liên quan đến thanh toán:
@@ -896,17 +1040,19 @@ public class PaymentService {
 
     @CircuitBreaker(name = "payment", fallbackMethod = "paymentFallback")
     @Retry(name = "payment")  // Retry 2 lần trước khi tính là failure
-    public PaymentResult processPayment(PaymentRequest request) {
-        return mockPaymentGatewayClient.pay(request);
+    public Payment processPayment(Payment payment) {
+        PaymentStatus status = paymentGatewayClient.processPayment(
+            payment.getGatewayRef(), payment.getAmount());
+        payment.setStatus(status);
+        payment.setGatewayResponse("{\"status\":\"" + status.name() + "\"}");
+        return paymentRepository.save(payment);
     }
 
     // Fallback khi CB OPEN hoặc sau khi hết retry
-    public PaymentResult paymentFallback(PaymentRequest request, Exception ex) {
+    public Payment paymentFallback(Payment payment, Exception ex) {
         log.warn("Payment CB triggered: {}", ex.getMessage());
-        throw new PaymentUnavailableException(
-            "Hệ thống thanh toán đang gián đoạn. " +
-            "Vui lòng thử lại sau ít phút. " +
-            "Chức năng xem và tìm kiếm workshop vẫn hoạt động bình thường.");
+        throw new AppException(ErrorCode.PAYMENT_UNAVAILABLE,
+            "Payment service is currently unavailable");
     }
 }
 ```
@@ -923,7 +1069,7 @@ public class PaymentService {
 }
 ```
 
-Frontend hiển thị banner cảnh báo chỉ trên luồng đăng ký có phí. Trang xem danh sách workshop, trang chi tiết, tính năng check-in — không bị ảnh hưởng.
+Frontend hiển thị cảnh báo chỉ trên luồng payment demo/gateway lỗi. Trang xem danh sách workshop, trang chi tiết, tính năng check-in và SePay webhook — không bị ảnh hưởng.
 
 ---
 
@@ -941,9 +1087,9 @@ GỌI API LẦN 1:
   Header: Idempotency-Key: "550e8400-e29b-41d4-a716-446655440000"
 
   Server:
-  1. Redis GET "idem:550e8400-..."  → null (chưa có)
-  2. Xử lý thanh toán (atomic transaction)
-  3. Redis SET "idem:550e8400-..." "{response_json}" EX 86400
+  1. Redis GET "idem:{principal}:550e8400-..."  → null (chưa có)
+  2. Xử lý registration/payment pending (atomic transaction)
+  3. Redis SET "idem:{principal}:550e8400-..." "{response_json}" EX 86400
      (SET NX — chỉ set nếu key chưa tồn tại, atomic)
   4. Return response
 
@@ -952,10 +1098,10 @@ CLIENT TIMEOUT → RETRY (cùng key):
   Header: Idempotency-Key: "550e8400-e29b-41d4-a716-446655440000"
 
   Server:
-  1. Redis GET "idem:550e8400-..."  → "{...response cũ...}"
+  1. Redis GET "idem:{principal}:550e8400-..."  → "{...response cũ...}"
   2. Return cached response NGAY
      Header: X-Idempotent-Replayed: true
-  3. KHÔNG gọi Payment Gateway, KHÔNG trừ tiền lại
+  3. KHÔNG tạo duplicate registration/payment
 ```
 
 **Triển khai (Thành viên 1):**
@@ -966,9 +1112,9 @@ public class IdempotencyService {
     private final RedisTemplate<String, String> redisTemplate;
     private static final Duration TTL = Duration.ofHours(24);
 
-    public Optional<String> getCachedResponse(String key) {
+    public Optional<String> getCachedResponse(String key, String principal) {
         try {
-            String value = redisTemplate.opsForValue().get("idem:" + key);
+            String value = redisTemplate.opsForValue().get("idem:" + principal + ":" + key);
             return Optional.ofNullable(value);
         } catch (Exception e) {
             log.warn("Redis unavailable for idempotency check, proceeding without cache");
@@ -976,10 +1122,9 @@ public class IdempotencyService {
         }
     }
 
-    public void cacheResponse(String key, Object response) {
+    public void cacheResponse(String key, String principal, Object response) {
         String json = objectMapper.writeValueAsString(response);
-        // SET NX EX: chỉ set nếu chưa có, atomic
-        redisTemplate.opsForValue().setIfAbsent("idem:" + key, json, TTL);
+        redisTemplate.opsForValue().set("idem:" + principal + ":" + key, json, TTL);
     }
 }
 ```
@@ -1036,9 +1181,12 @@ Organizer               Spring Boot               Supabase Storage    Gemini API
 ```
 StudentImportJob
   │
-  ├── Step 1: ValidateFileTasklet
+  ├── Step 1: Preprocess/Validate CSV
   │   ├── Kiểm tra file tồn tại (/data/students_{date}.csv)
-  │   ├── Kiểm tra header đúng format (student_id, full_name, email)
+  │   ├── Kiểm tra header đúng format (student_id,full_name,email hoặc studentId,fullName,email)
+  │   ├── Validate từng dòng, ghi line number/error reason
+  │   ├── Dedupe student_id, giữ dòng hợp lệ cuối cùng
+  │   ├── Ghi file tạm sanitized cho Spring Batch đọc
   │   ├── Lỗi → INSERT batch record status='SKIPPED', gửi alert email admin
   │   └── OK → tiếp tục Step 2
   │
@@ -1051,13 +1199,10 @@ StudentImportJob
   │   │   ├── Normalize: email.toLowerCase().trim()
   │   │   ├── Skip row không hợp lệ (SkipPolicy: ghi log, tiếp tục)
   │   │   └── Map → UserEntity (role=STUDENT, is_active=true)
-  │   └── ItemWriter: JpaItemWriter với UPSERT
-  │       └── INSERT INTO users (...)
-  │           ON CONFLICT (student_id) DO UPDATE
-  │           SET full_name = EXCLUDED.full_name,
-  │               email = EXCLUDED.email,
-  │               updated_at = now()
-  │           (KHÔNG xóa account, KHÔNG ảnh hưởng registrations đang có)
+  │   └── ItemWriter: UserRepository.saveAll(...)
+  │       ├── Nếu user STUDENT tồn tại: update full_name/email
+  │       ├── Nếu user chưa tồn tại: tạo STUDENT với password mặc định
+  │       └── KHÔNG downgrade ORGANIZER/CHECKIN_STAFF, KHÔNG ảnh hưởng registrations đang có
   │
   └── Step 3: ReportTasklet
       └── UPDATE student_import_batches
@@ -1068,11 +1213,9 @@ StudentImportJob
 **Cron trigger:**
 
 ```java
-@Scheduled(cron = "0 0 2 * * *")  // 2:00 AM mỗi ngày
+@Scheduled(cron = "0 0 2 * * *", zone = "Asia/Ho_Chi_Minh")  // 2:00 AM mỗi ngày
 public void runCsvImportJob() {
-    jobLauncher.run(studentImportJob, new JobParametersBuilder()
-        .addDate("runDate", new Date())
-        .toJobParameters());
+    csvImportScheduler.runImportJob();
 }
 ```
 

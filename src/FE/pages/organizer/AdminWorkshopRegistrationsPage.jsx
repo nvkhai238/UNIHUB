@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { formatDateTime } from '../../utils/dateTime';
 
 export default function AdminWorkshopRegistrationsPage() {
@@ -8,24 +9,23 @@ export default function AdminWorkshopRegistrationsPage() {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [workshop, setWorkshop] = useState(null);
-  
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState('');
 
   const loadData = () => {
     setLoading(true);
-    
-    // Fetch workshop details if not already loaded
+
     if (!workshop) {
       api.get(`/api/workshops/${id}`)
-         .then(({ data }) => setWorkshop(data.data))
-         .catch(console.error);
+        .then(({ data }) => setWorkshop(data.data))
+        .catch(() => {});
     }
 
-    // Fetch paginated & filtered registrations
-    const params = new URLSearchParams({ page, size: 20 });
-    if (statusFilter) params.append('status', statusFilter);
+    const params = new URLSearchParams({ page: String(page), size: '20' });
+    if (statusFilter) {
+      params.append('status', statusFilter);
+    }
 
     api.get(`/api/workshops/${id}/registrations?${params.toString()}`)
       .then(({ data }) => {
@@ -39,32 +39,30 @@ export default function AdminWorkshopRegistrationsPage() {
     loadData();
   }, [id, page, statusFilter]);
 
-  const handleFilterChange = (e) => {
-    setStatusFilter(e.target.value);
-    setPage(0); // reset to page 0 when filtering
-  };
-
   return (
     <section className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Link to="/admin/workshops" className="text-emerald-600 hover:text-emerald-700 text-sm font-semibold">
-              &larr; Quay lại
+          <div className="mb-2 flex items-center gap-2">
+            <Link to="/admin/workshops" className="text-sm font-semibold text-emerald-600 hover:text-emerald-700">
+              ← Quay lại
             </Link>
           </div>
           <h1 className="text-3xl font-bold tracking-normal">
             Danh sách vé {workshop ? `- ${workshop.title}` : ''}
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Xem danh sách sinh viên đã đăng ký, lọc theo trạng thái và tải dữ liệu.
+            Xem danh sách sinh viên đã đăng ký và lọc theo trạng thái.
           </p>
         </div>
-        
+
         <div className="flex gap-2">
-          <select 
+          <select
             value={statusFilter}
-            onChange={handleFilterChange}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setPage(0);
+            }}
             className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
             <option value="">Tất cả trạng thái</option>
@@ -82,13 +80,13 @@ export default function AdminWorkshopRegistrationsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-600">
-              <thead className="bg-gray-50 text-gray-900 border-b border-gray-200">
+              <thead className="border-b border-gray-200 bg-gray-50 text-gray-900">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Sinh viên</th>
                   <th className="px-5 py-3 font-semibold">Trạng thái</th>
                   <th className="px-5 py-3 font-semibold">Mã vé (QR Code)</th>
-                  <th className="px-5 py-3 font-semibold">Thời gian ĐK</th>
-                  <th className="px-5 py-3 font-semibold">Thời gian XN</th>
+                  <th className="px-5 py-3 font-semibold">Thời gian đăng ký</th>
+                  <th className="px-5 py-3 font-semibold">Thời gian xác nhận</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -99,18 +97,18 @@ export default function AdminWorkshopRegistrationsPage() {
                     </td>
                   </tr>
                 ) : (
-                  registrations.map(reg => (
-                    <tr key={reg.id} className="hover:bg-gray-50/50">
+                  registrations.map((registration) => (
+                    <tr key={registration.id} className="hover:bg-gray-50/50">
                       <td className="px-5 py-4 font-medium text-gray-900">
-                        {reg.studentName || 'Chưa cập nhật'}
-                        {reg.studentCode && <div className="text-sm font-normal text-gray-500">{reg.studentCode}</div>}
+                        {registration.studentName || 'Chưa cập nhật'}
+                        {registration.studentCode && <div className="text-sm font-normal text-gray-500">{registration.studentCode}</div>}
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge status={reg.status} />
+                        <StatusBadge status={registration.status} />
                       </td>
-                      <td className="px-5 py-4 font-mono text-xs text-gray-500 break-all w-64">{reg.qrCode}</td>
-                      <td className="px-5 py-4">{formatDate(reg.registeredAt)}</td>
-                      <td className="px-5 py-4">{formatDate(reg.confirmedAt)}</td>
+                      <td className="w-64 break-all px-5 py-4 font-mono text-xs text-gray-500">{registration.qrCode}</td>
+                      <td className="px-5 py-4">{formatDate(registration.registeredAt)}</td>
+                      <td className="px-5 py-4">{formatDate(registration.confirmedAt)}</td>
                     </tr>
                   ))
                 )}
@@ -120,29 +118,7 @@ export default function AdminWorkshopRegistrationsPage() {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="mt-6 flex justify-center gap-2">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage(page - 1)}
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 hover:bg-gray-50"
-          >
-            Trang trước
-          </button>
-          <span className="flex items-center px-3 text-sm text-gray-600">
-            Trang {page + 1} / {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage(page + 1)}
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 hover:bg-gray-50"
-          >
-            Trang sau
-          </button>
-        </div>
-      )}
+      <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
     </section>
   );
 }
@@ -154,6 +130,7 @@ function StatusBadge({ status }) {
     WAITLISTED: 'bg-sky-50 text-sky-700 border border-sky-200',
     CANCELLED: 'bg-gray-100 text-gray-600 border border-gray-200',
   };
+
   return (
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>
       {registrationStatusLabel(status)}
@@ -165,7 +142,7 @@ function registrationStatusLabel(status) {
   const labels = {
     CONFIRMED: 'Đã xác nhận',
     PENDING: 'Đang xử lý',
-    WAITLISTED: 'Chờ (Waitlist)',
+    WAITLISTED: 'Chờ',
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;

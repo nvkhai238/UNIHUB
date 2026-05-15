@@ -13,7 +13,7 @@
 | Làm mới token                | Nhận refresh token hợp lệ → trả về access token mới (không cần đăng nhập lại)           |
 | Đăng xuất                    | Blacklist refresh token trong Redis (TTL bằng thời gian còn lại của token)              |
 | Bảo vệ route theo role       | JWT filter chain + method-level `@PreAuthorize` — 3 role: STUDENT, ORGANIZER, CHECKIN_STAFF |
-| Khởi tạo tài khoản sinh viên | Tài khoản sinh viên được tạo tự động từ CSV import (Spring Batch, module CsvImport)      |
+| Khởi tạo tài khoản sinh viên | Tài khoản sinh viên được tạo từ CSV import hoặc qua luồng đăng ký OTP email              |
 
 ---
 
@@ -58,6 +58,27 @@ Khi `/api/auth/refresh` được gọi:
 1. Kiểm tra token có trong Redis blacklist không → nếu có → 401
 2. Verify signature + expiry
 3. Cấp access token mới
+
+---
+
+### Đăng ký tài khoản sinh viên bằng OTP
+
+Luồng public hiện tại có 2 bước để tránh tạo tài khoản bằng email chưa xác thực:
+
+```
+POST /api/auth/register/request-otp
+  ├── Validate email/fullName/studentId/password
+  ├── Kiểm tra sinh viên hợp lệ theo dữ liệu CSV/user hiện có
+  ├── Sinh OTP, lưu pending payload tạm thời
+  └── EmailService.sendRegistrationOtp(...)
+
+POST /api/auth/register/verify-otp
+  ├── Validate email + otpCode
+  ├── Tạo/cập nhật user STUDENT
+  └── Return AuthResponse (accessToken + refreshToken)
+```
+
+Endpoint `POST /api/auth/register` vẫn tồn tại cho luồng đăng ký trực tiếp, nhưng luồng UI chính dùng OTP.
 
 ---
 
@@ -150,7 +171,7 @@ Mọi response lỗi từ module Auth đều theo format chung:
 - [ ] Tạo `JwtService` — `generateAccessToken()`, `validateToken()`, `extractClaims()`
 - [ ] Tạo `RefreshTokenService` — lưu/xóa/blacklist trong Redis
 - [ ] Cấu hình `SecurityFilterChain` bean trong `SecurityConfig`
-- [ ] Tạo `AuthController` với 4 endpoints: login, refresh, logout, change-password
+- [ ] Tạo `AuthController` với endpoints: login, refresh, logout, change-password, register, request-otp, verify-otp
 - [ ] Tạo `UserDetailsServiceImpl` — load user từ PostgreSQL theo email
 - [ ] Viết `PasswordEncoder` bean (BCrypt, strength 12)
 - [ ] Test: login thành công, sai password, token hết hạn, blacklist refresh token
@@ -269,6 +290,49 @@ Làm mới access token mà không cần đăng nhập lại.
 ---
 
 #### `POST /api/auth/change-password`
+
+Đổi mật khẩu cho user đã đăng nhập.
+
+---
+
+#### `POST /api/auth/register/request-otp`
+
+Gửi OTP xác thực đăng ký tài khoản sinh viên qua email.
+
+**Request Body:**
+```json
+{
+  "studentId": "21521234",
+  "fullName": "Nguyễn Văn A",
+  "email": "nguyenvana@university.edu.vn",
+  "password": "Abc@12345"
+}
+```
+
+**Response 202:**
+```json
+{
+  "status": 202,
+  "code": "OTP_REQUIRED",
+  "message": "OTP has been sent to the provided email."
+}
+```
+
+---
+
+#### `POST /api/auth/register/verify-otp`
+
+Xác thực OTP và hoàn tất đăng ký.
+
+**Request Body:**
+```json
+{
+  "email": "nguyenvana@university.edu.vn",
+  "otpCode": "123456"
+}
+```
+
+**Response 201:** Trả về payload giống `POST /api/auth/login`.
 
 Đổi mật khẩu. Yêu cầu đã đăng nhập.
 

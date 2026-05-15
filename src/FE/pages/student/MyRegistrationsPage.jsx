@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import PaginationControls from '../../components/PaginationControls';
 import { formatDateTime } from '../../utils/dateTime';
 
 export default function MyRegistrationsPage() {
@@ -9,13 +10,12 @@ export default function MyRegistrationsPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState(null);
   const [cancellingIds, setCancellingIds] = useState([]);
-  
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
   const load = () => {
     setLoading(true);
-    api.get(`/api/registrations/my?page=${page}&size=10`)
+    api.get('/api/registrations/my', { params: { page, size: 10 } })
       .then(({ data }) => {
         setRegistrations(data.data?.content ?? []);
         setTotalPages(data.data?.totalPages ?? 0);
@@ -27,11 +27,7 @@ export default function MyRegistrationsPage() {
     load();
   }, [page]);
 
-  const retryPayment = async (id, status) => {
-    if (status === 'PENDING') {
-      navigate(`/student/registrations/${id}/payment`);
-      return;
-    }
+  const retryPayment = async (id) => {
     setNotice(null);
     try {
       await api.post(`/api/registrations/${id}/payment/retry`, {}, {
@@ -39,12 +35,12 @@ export default function MyRegistrationsPage() {
       });
       navigate(`/student/registrations/${id}/payment`);
     } catch (err) {
-      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể thử lại. Vui lòng liên hệ BTC.' });
+      setNotice({ type: 'error', text: err?.response?.data?.message || 'Không thể thử lại. Vui lòng liên hệ ban tổ chức.' });
     }
   };
 
   const cancelRegistration = async (registration) => {
-    if (!canCancelRegistration(registration)) {
+    if (!registration.canCancel) {
       setNotice({ type: 'error', text: getCancellationReason(registration) });
       return;
     }
@@ -58,7 +54,7 @@ export default function MyRegistrationsPage() {
       setRegistrations((prev) => prev.map((item) => (item.id === id ? data.data : item)));
       setNotice({
         type: 'success',
-        text: 'Đăng ký đã được hủy. Hệ thống sẽ tự động chuyển chỗ cho sinh viên đầu danh sách chờ nếu có.',
+        text: 'Đăng ký đã được hủy. Hệ thống sẽ tự động chuyển chỗ cho sinh viên tiếp theo nếu có.',
       });
       load();
     } catch (err) {
@@ -92,9 +88,11 @@ export default function MyRegistrationsPage() {
         ) : (
           <div className="divide-y divide-gray-100">
             {registrations.map((registration) => {
-              const canCancel = canCancelRegistration(registration);
               const isCancelling = cancellingIds.includes(registration.id);
+              const canCancel = Boolean(registration.canCancel);
               const cancellationReason = getCancellationReason(registration);
+              const isCancelled = registration.status === 'CANCELLED';
+              const isPending = registration.status === 'PENDING';
 
               return (
                 <div key={registration.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
@@ -104,9 +102,14 @@ export default function MyRegistrationsPage() {
                       <StatusBadge status={registration.status} />
                     </div>
                     <p className="mt-1 text-sm text-gray-500">Đăng ký lúc {formatDate(registration.registeredAt)}</p>
-                    {registration.workshopStartTime && <p className="text-sm text-gray-500">Workshop bắt đầu lúc {formatDate(registration.workshopStartTime)}</p>}
-                    {registration.confirmedAt && <p className="text-sm text-gray-500">Xác nhận lúc {formatDate(registration.confirmedAt)}</p>}
+                    {registration.workshopStartTime && (
+                      <p className="text-sm text-gray-500">Workshop bắt đầu lúc {formatDate(registration.workshopStartTime)}</p>
+                    )}
+                    {registration.confirmedAt && (
+                      <p className="text-sm text-gray-500">Xác nhận lúc {formatDate(registration.confirmedAt)}</p>
+                    )}
                   </div>
+
                   <div className="flex flex-col gap-2 md:items-end">
                     <div className="flex flex-wrap gap-2 md:justify-end">
                       <Link
@@ -115,21 +118,27 @@ export default function MyRegistrationsPage() {
                       >
                         Chi tiết
                       </Link>
-                      {registration.status === 'CONFIRMED' && (
-                        <Link className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700" to={`/student/registrations/${registration.id}/qr`}>
+
+                      {!isCancelled && registration.status === 'CONFIRMED' && (
+                        <Link
+                          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                          to={`/student/registrations/${registration.id}/qr`}
+                        >
                           Xem QR
                         </Link>
                       )}
-                      {(registration.status === 'PENDING' || registration.status === 'CANCELLED') && (
+
+                      {!isCancelled && isPending && (
                         <button
                           type="button"
-                          onClick={() => retryPayment(registration.id, registration.status)}
+                          onClick={() => retryPayment(registration.id)}
                           className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
                         >
-                          {registration.status === 'PENDING' ? 'Thanh toán' : 'Thử lại thanh toán'}
+                          Thanh toán
                         </button>
                       )}
-                      {registration.status !== 'CANCELLED' && (
+
+                      {!isCancelled && (
                         <button
                           type="button"
                           disabled={!canCancel || isCancelling}
@@ -143,7 +152,8 @@ export default function MyRegistrationsPage() {
                         </button>
                       )}
                     </div>
-                    {!canCancel && registration.status !== 'CANCELLED' && (
+
+                    {!isCancelled && !canCancel && (
                       <p className="max-w-xs text-xs text-gray-500 md:text-right">{cancellationReason}</p>
                     )}
                   </div>
@@ -153,30 +163,8 @@ export default function MyRegistrationsPage() {
           </div>
         )}
       </div>
-      
-      {totalPages > 1 && (
-        <div className="mt-6 flex justify-center gap-2">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage(page - 1)}
-            className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
-          >
-            Trang trước
-          </button>
-          <span className="flex items-center px-3 text-sm text-gray-600">
-            {page + 1} / {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage(page + 1)}
-            className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
-          >
-            Trang sau
-          </button>
-        </div>
-      )}
+
+      <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
     </section>
   );
 }
@@ -188,7 +176,12 @@ function StatusBadge({ status }) {
     WAITLISTED: 'bg-sky-50 text-sky-700',
     CANCELLED: 'bg-gray-100 text-gray-600',
   };
-  return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>{registrationStatusLabel(status)}</span>;
+
+  return (
+    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${styles[status] ?? styles.CANCELLED}`}>
+      {registrationStatusLabel(status)}
+    </span>
+  );
 }
 
 function registrationStatusLabel(status) {
@@ -199,15 +192,6 @@ function registrationStatusLabel(status) {
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
-}
-
-function canCancelRegistration(registration) {
-  if (registration.canCancel !== undefined && registration.canCancel !== null) {
-    // If the server explicitly says it can cancel (or cannot), follow it unless status is cancelled
-    if (registration.status === 'CANCELLED') return false;
-  }
-  if (registration.status === 'CANCELLED') return false;
-  return true; // Cho phép hủy bất cứ lúc nào
 }
 
 function getCancellationReason(registration) {

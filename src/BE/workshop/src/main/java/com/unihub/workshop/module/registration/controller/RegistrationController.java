@@ -106,6 +106,11 @@ public class RegistrationController {
         return ResponseEntity.ok(ApiResponse.success(registrationService.getMyRegistrations(pageable)));
     }
 
+    @GetMapping("/my/workshops/{workshopId}")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> getMyRegistrationForWorkshop(@PathVariable UUID workshopId) {
+        return ResponseEntity.ok(ApiResponse.success(registrationService.getMyRegistrationForWorkshop(workshopId)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<RegistrationResponse>> getMyRegistration(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(registrationService.getMyRegistration(id)));

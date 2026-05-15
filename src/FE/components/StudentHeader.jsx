@@ -9,7 +9,6 @@ const navLinkBase =
 export default function StudentHeader() {
   const user = getCurrentUser();
   const displayName = user?.fullName || user?.email || 'Sinh viên';
-  const initial = displayName.trim().charAt(0).toUpperCase() || 'U';
 
   return (
     <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 shadow-sm backdrop-blur">

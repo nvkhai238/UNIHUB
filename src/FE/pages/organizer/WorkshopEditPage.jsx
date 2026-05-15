@@ -35,28 +35,35 @@ export default function WorkshopEditPage() {
       interval = setInterval(() => {
         api.get(`/api/workshops/${id}/ai-summary/status`)
           .then(({ data }) => {
-            const newStatus = data.data?.aiSummaryStatus ?? 'NONE';
-            if (newStatus !== 'PROCESSING') {
-              setAiSummaryStatus(newStatus);
+            const nextStatus = data.data?.aiSummaryStatus ?? 'NONE';
+            if (nextStatus !== 'PROCESSING') {
+              setAiSummaryStatus(nextStatus);
               setAiSummary(data.data?.aiSummary ?? '');
               clearInterval(interval);
             }
           })
-          .catch(console.error);
+          .catch(() => {});
       }, 3000);
     }
     return () => clearInterval(interval);
   }, [id, aiSummaryStatus]);
 
+  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
   const submit = async (event) => {
     event.preventDefault();
-    setError('');
+    const nextError = getWorkshopFormError(form);
+    setError(nextError);
     setActionMsg('');
+    if (nextError) {
+      return;
+    }
+
     try {
       await api.put(`/api/workshops/${id}`, toPayload(form));
       setActionMsg('Lưu thay đổi thành công.');
-    } catch {
-      setError('Không cập nhật được workshop.');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không cập nhật được workshop.');
     }
   };
 
@@ -135,25 +142,19 @@ export default function WorkshopEditPage() {
   if (!form) {
     return (
       <section className="mx-auto max-w-4xl px-4 py-8">
-        <p className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-500">{error || 'Đang tải workshop...'}</p>
+        <p className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-500">
+          {error || 'Đang tải workshop...'}
+        </p>
       </section>
     );
   }
-
-  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
-
-  const statusStyle = {
-    DRAFT: 'bg-amber-50 text-amber-700 border-amber-200',
-    PUBLISHED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    CANCELLED: 'bg-gray-100 text-gray-600 border-gray-300',
-  };
 
   return (
     <section className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-normal">Chỉnh sửa workshop</h1>
         {workshopStatus && (
-          <span className={`rounded-md border px-3 py-1 text-sm font-semibold ${statusStyle[workshopStatus] ?? ''}`}>
+          <span className={`rounded-md border px-3 py-1 text-sm font-semibold ${statusStyle(workshopStatus)}`}>
             {workshopStatusLabel(workshopStatus)}
           </span>
         )}
@@ -184,20 +185,34 @@ export default function WorkshopEditPage() {
       </div>
 
       <form onSubmit={submit} className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <Field label="Tiêu đề" value={form.title} onChange={(v) => update('title', v)} required />
-        <Field label="Diễn giả" value={form.speakerName} onChange={(v) => update('speakerName', v)} />
-        <Field label="Phòng" value={form.room} onChange={(v) => update('room', v)} required />
+        <Field label="Tiêu đề" value={form.title} onChange={(value) => update('title', value)} required />
+        <Field label="Diễn giả" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
+        <Field label="Phòng" value={form.room} onChange={(value) => update('room', value)} required />
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Bắt đầu" type="datetime-local" value={form.startTime} onChange={(v) => update('startTime', v)} required />
-          <Field label="Kết thúc" type="datetime-local" value={form.endTime} onChange={(v) => update('endTime', v)} required />
+          <Field
+            label="Bắt đầu"
+            type="datetime-local"
+            value={form.startTime}
+            min={getDateTimeMin()}
+            onChange={(value) => update('startTime', value)}
+            required
+          />
+          <Field
+            label="Kết thúc"
+            type="datetime-local"
+            value={form.endTime}
+            min={form.startTime || getDateTimeMin()}
+            onChange={(value) => update('endTime', value)}
+            required
+          />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Sức chứa" type="number" value={form.capacity} onChange={(v) => update('capacity', Number(v))} required />
-          <Field label="Giá vé (VNĐ)" type="number" value={form.price} onChange={(v) => update('price', Number(v))} required />
+          <NumericField label="Sức chứa" value={form.capacity} onChange={(value) => update('capacity', value)} />
+          <NumericField label="Giá vé (VND)" value={form.price} onChange={(value) => update('price', value)} />
         </div>
-        <Textarea label="Mô tả" value={form.description} onChange={(v) => update('description', v)} />
-        <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(v) => update('speakerBio', v)} />
-        <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(v) => update('roomLayoutUrl', v)} />
+        <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
+        <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
+        <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
         <label className="text-sm font-semibold text-gray-700">
           Tải PDF tài liệu
           <input
@@ -205,7 +220,7 @@ export default function WorkshopEditPage() {
             type="file"
             accept="application/pdf"
             disabled={uploadingPdf || workshopStatus === 'CANCELLED'}
-            onChange={(e) => uploadPdf(e.target.files?.[0])}
+            onChange={(event) => uploadPdf(event.target.files?.[0])}
             className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-semibold"
           />
         </label>
@@ -213,11 +228,12 @@ export default function WorkshopEditPage() {
         <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
           <p className="text-xs font-semibold uppercase text-gray-500">Tóm tắt AI</p>
           <p className={`mt-1 text-sm font-semibold ${
-            aiSummaryStatus === 'PROCESSING' ? 'text-blue-600' :
-            aiSummaryStatus === 'FAILED' ? 'text-red-600' :
-            aiSummaryStatus === 'DONE' ? 'text-green-600' :
-            'text-gray-950'
-          }`}>
+            aiSummaryStatus === 'PROCESSING' ? 'text-blue-600'
+              : aiSummaryStatus === 'FAILED' ? 'text-red-600'
+                : aiSummaryStatus === 'DONE' ? 'text-green-600'
+                  : 'text-gray-950'
+          }`}
+          >
             {aiSummaryStatusLabel(aiSummaryStatus)}
           </p>
           {aiSummary && (
@@ -273,15 +289,42 @@ export default function WorkshopEditPage() {
   }
 }
 
-function Field({ label, value, onChange, type = 'text', required = false }) {
+function Field({ label, value, onChange, type = 'text', min, required = false }) {
   return (
     <label className="text-sm font-semibold text-gray-700">
       {label}
       <input
         type={type}
+        min={min}
         value={value ?? ''}
         required={required}
         onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
+function NumericField({ label, value, onChange }) {
+  return (
+    <label className="text-sm font-semibold text-gray-700">
+      {label}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onFocus={(event) => {
+          if (event.target.value === '0') {
+            event.target.select();
+          }
+        }}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (/^\d*$/.test(nextValue)) {
+            onChange(nextValue);
+          }
+        }}
+        onBlur={() => onChange(normalizeNumericValue(value))}
         className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
     </label>
@@ -312,8 +355,8 @@ function fromWorkshop(workshop) {
     roomLayoutUrl: workshop.roomLayoutUrl ?? '',
     startTime: toLocalInput(workshop.startTime),
     endTime: toLocalInput(workshop.endTime),
-    capacity: workshop.capacity ?? 1,
-    price: workshop.price ?? 0,
+    capacity: String(workshop.capacity ?? 1),
+    price: String(Number(workshop.price ?? 0)),
     pdfUrl: workshop.pdfUrl ?? '',
   };
 }
@@ -323,8 +366,8 @@ function toPayload(form) {
     ...form,
     startTime: new Date(form.startTime).toISOString(),
     endTime: new Date(form.endTime).toISOString(),
-    price: Number(form.price),
-    capacity: Number(form.capacity),
+    price: Number(normalizeNumericValue(form.price)),
+    capacity: Number(normalizeNumericValue(form.capacity)),
   };
 }
 
@@ -333,6 +376,45 @@ function toLocalInput(value) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function normalizeNumericValue(value) {
+  if (!value) return '0';
+  return String(Number(value));
+}
+
+function getWorkshopFormError(form) {
+  if (!form?.title?.trim() || !form?.room?.trim() || !form?.startTime || !form?.endTime) {
+    return 'Vui lòng điền đầy đủ các trường bắt buộc.';
+  }
+
+  const startTime = new Date(form.startTime);
+  const endTime = new Date(form.endTime);
+  const now = new Date();
+
+  if (!(startTime > now)) {
+    return 'Thời gian bắt đầu phải trễ hơn thời điểm hiện tại.';
+  }
+  if (!(endTime > startTime)) {
+    return 'Thời gian kết thúc phải sau thời gian bắt đầu.';
+  }
+  if (Number(form.capacity) <= 0) {
+    return 'Sức chứa phải lớn hơn 0.';
+  }
+  if (Number(form.price) < 0) {
+    return 'Giá vé không được âm.';
+  }
+
+  return '';
+}
+
+function statusStyle(status) {
+  const styles = {
+    DRAFT: 'bg-amber-50 text-amber-700 border-amber-200',
+    PUBLISHED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    CANCELLED: 'bg-gray-100 text-gray-600 border-gray-300',
+  };
+  return styles[status] ?? styles.DRAFT;
 }
 
 function workshopStatusLabel(status) {
@@ -369,4 +451,10 @@ function uploadNoticeClass(tone) {
     info: 'border-blue-200 bg-blue-50 text-blue-800',
   };
   return classes[tone] ?? classes.info;
+}
+
+function getDateTimeMin() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
 }
