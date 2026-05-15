@@ -114,6 +114,7 @@ public class RegistrationService {
 
         Registration savedRegistration = registrationRepository.save(registration);
         scheduleRegistrationCreatedNotification(savedRegistration);
+        scheduleNewRegistrationOrganizerNotification(savedRegistration);
         return RegistrationResponse.from(savedRegistration);
     }
 
@@ -382,6 +383,23 @@ public class RegistrationService {
                 "Da co cho trong workshop",
                 "Ban da duoc chuyen tu danh sach cho sang da xac nhan cho workshop " + workshopTitle + ".",
                 Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
+        );
+        runAfterCommit(task);
+    }
+
+    private void scheduleNewRegistrationOrganizerNotification(Registration registration) {
+        User organizer = registration.getWorkshop().getCreatedBy();
+        if (organizer == null) return;
+
+        String studentName = registration.getUser().getFullName();
+        String workshopTitle = registration.getWorkshop().getTitle();
+        
+        Runnable task = () -> notificationService.createNotification(
+                organizer.getId(),
+                Notification.NotificationType.NEW_REGISTRATION,
+                "Có đăng ký mới!",
+                "Sinh viên " + studentName + " vừa đăng ký workshop: " + workshopTitle,
+                Map.of("registrationId", registration.getId().toString(), "workshopId", registration.getWorkshop().getId().toString())
         );
         runAfterCommit(task);
     }

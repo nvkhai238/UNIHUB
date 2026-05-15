@@ -60,6 +60,7 @@ app:
     telegram:
       enabled: ${TELEGRAM_ENABLED:true}
       bot-token: ${TELEGRAM_BOT_TOKEN:}
+      admin-chat-id: ${TELEGRAM_ADMIN_CHAT_ID:}
     sms:
       enabled: ${SMS_ENABLED:true}
       twilio:
