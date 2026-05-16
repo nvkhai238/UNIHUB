@@ -60,6 +60,7 @@ public class DataSeederConfig implements CommandLineRunner {
             seedCheckins();
         }
         seedFreeCheckinDemoForMay14();
+        seedPaidPaymentDemoWorkshops();
         seedNotifications();
         log.info("Seed data complete.");
     }
@@ -323,6 +324,91 @@ public class DataSeederConfig implements CommandLineRunner {
         demoWorkshop.setRemainingSeats(Math.max(0, demoWorkshop.getCapacity() - (int) confirmedCount));
         workshopRepository.save(demoWorkshop);
         log.info("Seeded demo check-in workshop {} with {} confirmed free registrations", title, created);
+    }
+
+    private void seedPaidPaymentDemoWorkshops() {
+        User organizer = userRepository.findByEmail("organizer@unihub.edu.vn").orElseThrow();
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        ZonedDateTime baseDate = ZonedDateTime.now(zone).plusDays(3).withSecond(0).withNano(0);
+
+        upsertPaidDemoWorkshop(
+                organizer,
+                "Demo Paid - SePay 50K",
+                "Workshop có phí thấp để test đăng ký, tạo QR thanh toán và webhook SePay thành công.",
+                "UniHub Payment Demo",
+                "Dữ liệu mẫu cho luồng thanh toán SePay.",
+                "PAY-501",
+                baseDate.withHour(9).withMinute(0),
+                baseDate.withHour(11).withMinute(0),
+                30,
+                new BigDecimal("50000")
+        );
+
+        upsertPaidDemoWorkshop(
+                organizer,
+                "Demo Paid - Refund 80K",
+                "Workshop có phí để test hủy đăng ký sau thanh toán và trạng thái refund.",
+                "UniHub Refund Demo",
+                "Dữ liệu mẫu cho luồng hoàn tiền.",
+                "PAY-801",
+                baseDate.plusDays(1).withHour(14).withMinute(0),
+                baseDate.plusDays(1).withHour(16).withMinute(0),
+                20,
+                new BigDecimal("80000")
+        );
+
+        upsertPaidDemoWorkshop(
+                organizer,
+                "Demo Paid - Waitlist 30K",
+                "Workshop có phí với sức chứa nhỏ để test trạng thái waitlist khi hết chỗ.",
+                "UniHub Capacity Demo",
+                "Dữ liệu mẫu cho luồng hết chỗ.",
+                "PAY-301",
+                baseDate.plusDays(2).withHour(10).withMinute(0),
+                baseDate.plusDays(2).withHour(12).withMinute(0),
+                2,
+                new BigDecimal("30000")
+        );
+    }
+
+    private Workshop upsertPaidDemoWorkshop(User organizer,
+                                            String title,
+                                            String description,
+                                            String speakerName,
+                                            String speakerBio,
+                                            String room,
+                                            ZonedDateTime startTime,
+                                            ZonedDateTime endTime,
+                                            int capacity,
+                                            BigDecimal price) {
+        Workshop workshop = workshopRepository.findByTitle(title).orElseGet(() -> Workshop.builder()
+                .title(title)
+                .createdBy(organizer)
+                .aiSummaryStatus("NONE")
+                .build());
+
+        workshop.setDescription(description);
+        workshop.setSpeakerName(speakerName);
+        workshop.setSpeakerBio(speakerBio);
+        workshop.setRoom(room);
+        workshop.setStartTime(startTime);
+        workshop.setEndTime(endTime);
+        workshop.setCapacity(capacity);
+        workshop.setRemainingSeats(capacity);
+        workshop.setPrice(price);
+        workshop.setStatus(WorkshopStatus.PUBLISHED);
+        workshop.setCreatedBy(workshop.getCreatedBy() != null ? workshop.getCreatedBy() : organizer);
+        workshop.setAiSummaryStatus(workshop.getAiSummaryStatus() != null ? workshop.getAiSummaryStatus() : "NONE");
+        workshop = workshopRepository.save(workshop);
+
+        int reservedSeats = (int) registrationRepository.findByWorkshop(workshop).stream()
+                .filter(r -> r.getStatus() == RegistrationStatus.CONFIRMED || r.getStatus() == RegistrationStatus.PENDING)
+                .count();
+        workshop.setRemainingSeats(Math.max(0, capacity - reservedSeats));
+        Workshop savedWorkshop = workshopRepository.save(workshop);
+        log.info("Seeded paid demo workshop {} with price {} and {} remaining seats",
+                title, price, savedWorkshop.getRemainingSeats());
+        return savedWorkshop;
     }
 
     private void seedCheckins() {

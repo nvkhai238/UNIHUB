@@ -15,6 +15,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MOCK_PAYMENT_URL: http://mock-payment:3001
+      CSV_DATA_DIR: /data
     depends_on:
       redis:
         condition: service_healthy

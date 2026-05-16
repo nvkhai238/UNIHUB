@@ -5,6 +5,8 @@ import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -83,6 +85,13 @@ public class GlobalExceptionHandler {
                         "RATE_LIMIT_EXCEEDED",
                         "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 giây."
                 ));
+    }
+
+    @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(Exception ex) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(403, "FORBIDDEN", "Access denied"));
     }
 
     @ExceptionHandler(Exception.class)
