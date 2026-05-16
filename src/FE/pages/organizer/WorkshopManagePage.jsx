@@ -11,12 +11,10 @@ function createEmptyForm() {
     speakerName: '',
     speakerBio: '',
     room: '',
-    roomLayoutUrl: '',
     startTime: '',
     endTime: '',
     capacity: '30',
     price: '0',
-    pdfUrl: '',
   };
 }
 
@@ -26,8 +24,11 @@ export default function WorkshopManagePage() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [form, setForm] = useState(createEmptyForm());
+  const [pdfFile, setPdfFile] = useState(null);
+  const [roomLayoutFile, setRoomLayoutFile] = useState(null);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [phaseFilter, setPhaseFilter] = useState('ALL'); // ALL | UPCOMING | ONGOING | ENDED
@@ -62,8 +63,11 @@ export default function WorkshopManagePage() {
   useEffect(() => {
     if (!isCreateModalOpen) {
       setForm(createEmptyForm());
+      setPdfFile(null);
+      setRoomLayoutFile(null);
       setFormError('');
       setSubmitting(false);
+      setUploadStatus('');
     }
   }, [isCreateModalOpen]);
 
@@ -112,9 +116,30 @@ export default function WorkshopManagePage() {
     }
 
     setSubmitting(true);
+    setUploadStatus('Đang tạo workshop...');
     try {
-      await api.post('/api/workshops', toPayload(form));
-      setMessage('Tạo workshop thành công. Workshop mới đang ở trạng thái nháp.');
+      const { data } = await api.post('/api/workshops', toPayload(form));
+      const workshopId = data.data.id;
+
+      if (pdfFile) {
+        setUploadStatus('Đang tải lên tài liệu PDF...');
+        const pdfPayload = new FormData();
+        pdfPayload.append('file', pdfFile);
+        await api.post(`/api/workshops/${workshopId}/pdf`, pdfPayload, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      if (roomLayoutFile) {
+        setUploadStatus('Đang tải lên sơ đồ phòng...');
+        const imgPayload = new FormData();
+        imgPayload.append('file', roomLayoutFile);
+        await api.post(`/api/workshops/${workshopId}/room-layout`, imgPayload, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      setMessage('Tạo workshop thành công.');
       navigate('/admin/workshops', { replace: true });
       setPage(0);
       load();
@@ -122,6 +147,7 @@ export default function WorkshopManagePage() {
       setFormError(err?.response?.data?.message || 'Không tạo được workshop. Kiểm tra lại dữ liệu nhập.');
     } finally {
       setSubmitting(false);
+      setUploadStatus('');
     }
   };
 
@@ -204,7 +230,9 @@ export default function WorkshopManagePage() {
               <div key={workshop.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold text-gray-950">{workshop.title}</h2>
+                    <Link to={`/admin/workshops/${workshop.id}/edit`} className="hover:underline">
+                      <h2 className="font-semibold text-gray-950">{workshop.title}</h2>
+                    </Link>
                     <StatusBadge status={workshop.status} />
                     <TimePhaseAdminBadge phase={workshop.timePhase} />
                   </div>
@@ -283,6 +311,12 @@ export default function WorkshopManagePage() {
               </div>
             )}
 
+            {uploadStatus && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700 font-semibold">
+                {uploadStatus}
+              </div>
+            )}
+
             <form onSubmit={submitCreate} className="mt-6 grid gap-4">
               <Field label="Tiêu đề" value={form.title} onChange={(value) => update('title', value)} required />
               <Field label="Diễn giả" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
@@ -311,8 +345,29 @@ export default function WorkshopManagePage() {
               </div>
               <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
               <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
-              <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
-              <Field label="URL tài liệu PDF" value={form.pdfUrl} onChange={(value) => update('pdfUrl', value)} />
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-semibold text-gray-700">
+                  Sơ đồ phòng (Ảnh)
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setRoomLayoutFile(e.target.files?.[0])}
+                    className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs file:font-semibold"
+                  />
+                  {roomLayoutFile && <p className="mt-1 text-xs text-emerald-600">Đã chọn: {roomLayoutFile.name}</p>}
+                </label>
+                <label className="text-sm font-semibold text-gray-700">
+                  Tài liệu PDF (Tự động tóm tắt AI)
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setPdfFile(e.target.files?.[0])}
+                    className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs file:font-semibold"
+                  />
+                  {pdfFile && <p className="mt-1 text-xs text-emerald-600">Đã chọn: {pdfFile.name}</p>}
+                </label>
+              </div>
 
               <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <button

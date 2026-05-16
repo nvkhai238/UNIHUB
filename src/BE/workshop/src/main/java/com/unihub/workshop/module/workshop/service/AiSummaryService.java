@@ -32,7 +32,7 @@ import java.util.UUID;
 public class AiSummaryService {
 
     private static final int MAX_GEMINI_INPUT_CHARS = 30_000;
-    private static final int MAX_SUMMARY_CHARS = 500;
+    private static final int MAX_SUMMARY_CHARS = 800;
     private static final int GEMINI_MAX_ATTEMPTS = 3;
 
     private final WorkshopRepository workshopRepository;
@@ -99,8 +99,14 @@ public class AiSummaryService {
     private String requestGeminiSummary(String text) throws Exception {
         String endpoint = geminiUrl + "?key=" + geminiApiKey;
         String prompt = """
-                Hãy tóm tắt nội dung workshop sau trong 3-5 câu bằng tiếng Việt, tập trung vào kiến thức chính mà người tham dự sẽ học được:
+                Bạn là trợ lý tóm tắt tài liệu. Nhiệm vụ của bạn là đọc nội dung workshop và viết một đoạn tóm tắt ngắn gọn bằng tiếng Việt.
 
+                Quy tắc bắt buộc:
+                - Chỉ viết nội dung tóm tắt, KHÔNG thêm bất kỳ lời mở đầu nào (không được bắt đầu bằng "Dưới đây", "Sau đây", "Bản tóm tắt", v.v.)
+                - Viết 3 đến 5 câu liên tiếp, tập trung vào kiến thức và kỹ năng người tham dự sẽ học được
+                - Không dùng gạch đầu dòng, không đánh số, không tiêu đề
+
+                Nội dung workshop:
                 %s
                 """.formatted(text);
 
@@ -125,7 +131,10 @@ public class AiSummaryService {
             throw new IllegalStateException("Gemini response does not contain summary text");
         }
 
-        return truncate(textNode.asText().trim(), MAX_SUMMARY_CHARS);
+        String rawSummary = textNode.asText().trim();
+        // Strip any leading meta-sentences the model may still produce despite the instruction
+        String cleaned = stripPreamble(rawSummary);
+        return truncate(cleaned, MAX_SUMMARY_CHARS);
     }
 
     private void updateSummaryState(UUID workshopId, String pdfUrl, String summary, String status) {
@@ -159,6 +168,27 @@ public class AiSummaryService {
             return value;
         }
         return value.substring(0, maxChars).trim();
+    }
+
+    /**
+     * Strips common AI preamble sentences that models sometimes produce despite instructions.
+     * Examples: "Dưới đây là bản tóm tắt:", "Sau đây là tóm tắt 4 câu:", etc.
+     */
+    private String stripPreamble(String text) {
+        if (!StringUtils.hasText(text)) {
+            return text;
+        }
+        // Match a leading sentence that is clearly a meta-comment (not actual content).
+        // Patterns: lines ending with ':' that contain preamble keywords.
+        String[] preamblePatterns = {
+            "(?si)^(dưới đây[^\\n]*:|sau đây[^\\n]*:|bản tóm tắt[^\\n]*:|tóm tắt[^\\n]*:)\\s*",
+            "(?si)^(here is[^\\n]*:|the following[^\\n]*:)\\s*"
+        };
+        String result = text;
+        for (String pattern : preamblePatterns) {
+            result = result.replaceFirst(pattern, "");
+        }
+        return result.trim();
     }
 
     private boolean isRetryableGeminiError(Exception e) {

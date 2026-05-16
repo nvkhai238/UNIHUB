@@ -46,25 +46,39 @@ public class SupabaseStorageService {
     }
 
     public String uploadPdf(UUID workshopId, MultipartFile file) {
+        return upload(workshopId, file, "pdf", MediaType.APPLICATION_PDF, ".pdf");
+    }
+
+    public String uploadImage(UUID workshopId, MultipartFile file) {
+        String contentType = file.getContentType();
+        MediaType mediaType = contentType != null ? MediaType.parseMediaType(contentType) : MediaType.IMAGE_PNG;
+        return upload(workshopId, file, "images", mediaType, "");
+    }
+
+    private String upload(UUID workshopId, MultipartFile file, String folder, MediaType mediaType, String extension) {
         if (!StringUtils.hasText(supabaseUrl) || !StringUtils.hasText(supabaseKey)) {
             throw new AppException(ErrorCode.STORAGE_ERROR, "Supabase storage is not configured");
         }
 
-        String objectPath = "pdf/%s/%d_%s".formatted(
+        String filename = sanitizeFilename(file.getOriginalFilename(), extension);
+        // Structure: {folder}/{workshopId}/{timestamp}_{filename}
+        // Each workshop gets its own subdirectory to keep storage clean
+        String objectPath = "%s/%s/%d_%s".formatted(
+                folder,
                 workshopId,
                 System.currentTimeMillis(),
-                sanitizeFilename(file.getOriginalFilename())
+                filename
         );
         String endpoint = trimTrailingSlash(supabaseUrl)
                 + "/storage/v1/object/"
-                + UriUtils.encodePathSegment(bucket, StandardCharsets.UTF_8)
+                + bucket   // bucket name does not need URI encoding
                 + "/"
                 + encodeObjectPath(objectPath);
 
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(supabaseKey);
-            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentType(mediaType);
             headers.set("x-upsert", "true");
 
             HttpEntity<byte[]> requestEntity = new HttpEntity<>(file.getBytes(), headers);
@@ -75,7 +89,7 @@ public class SupabaseStorageService {
 
             return trimTrailingSlash(supabaseUrl)
                     + "/storage/v1/object/public/"
-                    + UriUtils.encodePathSegment(bucket, StandardCharsets.UTF_8)
+                    + bucket
                     + "/"
                     + encodeObjectPath(objectPath);
         } catch (HttpStatusCodeException e) {
@@ -89,8 +103,8 @@ public class SupabaseStorageService {
         }
     }
 
-    private String sanitizeFilename(String originalFilename) {
-        String fallback = "workshop.pdf";
+    private String sanitizeFilename(String originalFilename, String extension) {
+        String fallback = "file" + extension;
         if (!StringUtils.hasText(originalFilename)) {
             return fallback;
         }
@@ -100,7 +114,10 @@ public class SupabaseStorageService {
         if (!StringUtils.hasText(cleaned)) {
             return fallback;
         }
-        return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : cleaned + ".pdf";
+        if (StringUtils.hasText(extension) && !cleaned.toLowerCase().endsWith(extension)) {
+            return cleaned + extension;
+        }
+        return cleaned.toLowerCase();
     }
 
     private String encodeObjectPath(String objectPath) {

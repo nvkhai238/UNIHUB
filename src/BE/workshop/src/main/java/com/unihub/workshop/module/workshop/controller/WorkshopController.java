@@ -140,7 +140,7 @@ public class WorkshopController {
     @PostMapping(value = "/{id}/pdf", consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<PdfUploadResponse>> uploadPdf(@PathVariable UUID id, @RequestParam("file") MultipartFile file) {
-        validatePdfUpload(file);
+        validateFileUpload(file, "application/pdf", ".pdf", 10);
 
         com.unihub.workshop.module.workshop.entity.Workshop workshop = workshopRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
@@ -173,6 +173,42 @@ public class WorkshopController {
                                 .aiSummaryStatus(workshop.getAiSummaryStatus())
                                 .build())
                         .build());
+    }
+
+    @PostMapping(value = "/{id}/room-layout", consumes = {"multipart/form-data"})
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<ApiResponse<String>> uploadRoomLayout(@PathVariable UUID id, @RequestParam("file") MultipartFile file) {
+        validateFileUpload(file, "image/", "", 5);
+
+        com.unihub.workshop.module.workshop.entity.Workshop workshop = workshopRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.WORKSHOP_NOT_FOUND));
+        if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
+            throw new AppException(ErrorCode.WORKSHOP_CANCELLED, "Cannot upload room layout for a cancelled workshop");
+        }
+
+        String imageUrl = supabaseStorageService.uploadImage(id, file);
+        workshop.setRoomLayoutUrl(imageUrl);
+        workshopRepository.save(workshop);
+
+        return ResponseEntity.ok(ApiResponse.success(imageUrl));
+    }
+
+    private void validateFileUpload(MultipartFile file, String mimePrefix, String extension, int maxMb) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_FILE, "File is required");
+        }
+        if (file.getSize() > (long) maxMb * 1024L * 1024L) {
+            throw new AppException(ErrorCode.INVALID_FILE, "File must be " + maxMb + "MB or smaller");
+        }
+        String contentType = file.getContentType();
+        String filename = file.getOriginalFilename();
+
+        boolean validMime = contentType != null && contentType.toLowerCase().startsWith(mimePrefix.toLowerCase());
+        boolean validExt = !StringUtils.hasText(extension) || (filename != null && filename.toLowerCase().endsWith(extension.toLowerCase()));
+
+        if (!validMime && !validExt) {
+            throw new AppException(ErrorCode.INVALID_FILE, "Invalid file type. Expected: " + mimePrefix + " or " + extension);
+        }
     }
 
     @GetMapping({"/{id}/ai-summary", "/{id}/ai-summary/status"})
