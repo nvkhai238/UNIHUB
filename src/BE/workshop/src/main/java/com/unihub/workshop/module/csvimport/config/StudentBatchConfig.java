@@ -89,6 +89,9 @@ public class StudentBatchConfig {
                 if (existingUser.getRole() != UserRole.STUDENT) {
                     return null;
                 }
+                if (Boolean.TRUE.equals(existingUser.getIsActive()) && !existingUser.getEmail().equalsIgnoreCase(email)) {
+                    return null;
+                }
                 existingUser.setFullName(fullName);
                 existingUser.setEmail(email);
                 return existingUser;

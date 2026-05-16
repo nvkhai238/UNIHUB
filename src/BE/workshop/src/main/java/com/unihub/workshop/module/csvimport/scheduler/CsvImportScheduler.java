@@ -268,8 +268,14 @@ public class CsvImportScheduler {
         }
 
         Optional<User> existingUser = userRepository.findByStudentId(studentId);
-        if (existingUser.isPresent() && existingUser.get().getRole() != UserRole.STUDENT) {
-            return "student_id belongs to a non-student account";
+        if (existingUser.isPresent()) {
+            User currentUser = existingUser.get();
+            if (currentUser.getRole() != UserRole.STUDENT) {
+                return "student_id belongs to a non-student account";
+            }
+            if (Boolean.TRUE.equals(currentUser.getIsActive()) && !currentUser.getEmail().equalsIgnoreCase(email)) {
+                return "active student account cannot change email via CSV import";
+            }
         }
 
         return null;
