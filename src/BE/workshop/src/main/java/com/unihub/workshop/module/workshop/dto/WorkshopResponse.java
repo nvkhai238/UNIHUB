@@ -9,6 +9,13 @@ import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
+/**
+ * timePhase là trường tính toán (không lưu DB) phản ánh trạng thái thời gian:
+ *   UPCOMING  — chưa bắt đầu (now < startTime)
+ *   ONGOING   — đang diễn ra (startTime <= now < endTime)
+ *   ENDED     — đã kết thúc  (now >= endTime)
+ */
+
 @Getter
 @Builder
 public class WorkshopResponse {
@@ -31,6 +38,8 @@ public class WorkshopResponse {
     private UUID createdBy;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
+    /** Trạng thái thời gian: UPCOMING / ONGOING / ENDED (computed, không lưu DB) */
+    private String timePhase;
 
     public static WorkshopResponse from(Workshop w) {
         return WorkshopResponse.builder()
@@ -53,6 +62,19 @@ public class WorkshopResponse {
                 .createdBy(w.getCreatedBy() != null ? w.getCreatedBy().getId() : null)
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
+                .timePhase(computeTimePhase(w.getStartTime(), w.getEndTime()))
                 .build();
+    }
+
+    /**
+     * Tính timePhase từ startTime và endTime so với thời điểm hiện tại.
+     * Không phụ thuộc DB — luôn chính xác theo đồng hồ server.
+     */
+    private static String computeTimePhase(ZonedDateTime startTime, ZonedDateTime endTime) {
+        if (startTime == null || endTime == null) return "UPCOMING";
+        ZonedDateTime now = ZonedDateTime.now();
+        if (now.isBefore(startTime)) return "UPCOMING";
+        if (now.isBefore(endTime))   return "ONGOING";
+        return "ENDED";
     }
 }

@@ -11,12 +11,10 @@ function createEmptyForm() {
     speakerName: '',
     speakerBio: '',
     room: '',
-    roomLayoutUrl: '',
     startTime: '',
     endTime: '',
     capacity: '30',
     price: '0',
-    pdfUrl: '',
   };
 }
 
@@ -24,11 +22,16 @@ export default function WorkshopManagePage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [form, setForm] = useState(createEmptyForm());
+  const [pdfFile, setPdfFile] = useState(null);
+  const [roomLayoutFile, setRoomLayoutFile] = useState(null);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [phaseFilter, setPhaseFilter] = useState('ALL'); // ALL | UPCOMING | ONGOING | ENDED
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -47,6 +50,12 @@ export default function WorkshopManagePage() {
       .finally(() => setLoading(false));
   };
 
+  // Lọc theo timePhase ở client (admin luôn lấy toàn bộ từ server)
+  const filteredWorkshops = useMemo(() => {
+    if (phaseFilter === 'ALL') return workshops;
+    return workshops.filter((w) => w.timePhase === phaseFilter);
+  }, [workshops, phaseFilter]);
+
   useEffect(() => {
     load();
   }, [page]);
@@ -54,21 +63,36 @@ export default function WorkshopManagePage() {
   useEffect(() => {
     if (!isCreateModalOpen) {
       setForm(createEmptyForm());
+      setPdfFile(null);
+      setRoomLayoutFile(null);
       setFormError('');
       setSubmitting(false);
+      setUploadStatus('');
     }
   }, [isCreateModalOpen]);
 
   const publish = async (id) => {
-    await api.patch(`/api/workshops/${id}/status`, { status: 'PUBLISHED' });
-    setMessage('Workshop đã được xuất bản.');
-    load();
+    setErrorMessage('');
+    try {
+      await api.patch(`/api/workshops/${id}/status`, { status: 'PUBLISHED' });
+      setMessage('Workshop đã được xuất bản.');
+      load();
+    } catch (err) {
+      setMessage('');
+      setErrorMessage(err?.response?.data?.message || 'Không thể xuất bản workshop. Vui lòng thử lại.');
+    }
   };
 
   const cancel = async (id) => {
-    await api.post(`/api/workshops/${id}/cancel`);
-    setMessage('Workshop đã hủy. Nếu có giao dịch thành công, sinh viên sẽ nhận hướng dẫn điền form hoàn tiền.');
-    load();
+    setErrorMessage('');
+    try {
+      await api.post(`/api/workshops/${id}/cancel`);
+      setMessage('Workshop đã hủy. Nếu có giao dịch thành công, sinh viên sẽ nhận hướng dẫn điền form hoàn tiền.');
+      load();
+    } catch (err) {
+      setMessage('');
+      setErrorMessage(err?.response?.data?.message || 'Không thể hủy workshop. Vui lòng thử lại.');
+    }
   };
 
   const update = (field, value) => {
@@ -92,9 +116,30 @@ export default function WorkshopManagePage() {
     }
 
     setSubmitting(true);
+    setUploadStatus('Đang tạo workshop...');
     try {
-      await api.post('/api/workshops', toPayload(form));
-      setMessage('Tạo workshop thành công. Workshop mới đang ở trạng thái nháp.');
+      const { data } = await api.post('/api/workshops', toPayload(form));
+      const workshopId = data.data.id;
+
+      if (pdfFile) {
+        setUploadStatus('Đang tải lên tài liệu PDF...');
+        const pdfPayload = new FormData();
+        pdfPayload.append('file', pdfFile);
+        await api.post(`/api/workshops/${workshopId}/pdf`, pdfPayload, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      if (roomLayoutFile) {
+        setUploadStatus('Đang tải lên sơ đồ phòng...');
+        const imgPayload = new FormData();
+        imgPayload.append('file', roomLayoutFile);
+        await api.post(`/api/workshops/${workshopId}/room-layout`, imgPayload, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      setMessage('Tạo workshop thành công.');
       navigate('/admin/workshops', { replace: true });
       setPage(0);
       load();
@@ -102,6 +147,7 @@ export default function WorkshopManagePage() {
       setFormError(err?.response?.data?.message || 'Không tạo được workshop. Kiểm tra lại dữ liệu nhập.');
     } finally {
       setSubmitting(false);
+      setUploadStatus('');
     }
   };
 
@@ -131,9 +177,44 @@ export default function WorkshopManagePage() {
         </div>
       </div>
 
+      {/* Tab filter theo timePhase */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { key: 'ALL',     label: 'Tất cả' },
+          { key: 'UPCOMING', label: '🟡 Sắp diễn ra' },
+          { key: 'ONGOING',  label: '🟢 Đang diễn ra' },
+          { key: 'ENDED',    label: '⚫ Đã kết thúc' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { setPhaseFilter(key); setPage(0); }}
+            className={[
+              'rounded-full px-4 py-1.5 text-xs font-semibold transition',
+              phaseFilter === key
+                ? 'bg-gray-900 text-white'
+                : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+            ].join(' ')}
+          >
+            {label} {key !== 'ALL' && `(${workshops.filter((w) => w.timePhase === key).length})`}
+          </button>
+        ))}
+      </div>
+
       {message && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           {message}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-3">
+          <span className="mt-0.5 shrink-0 text-red-500">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+            </svg>
+          </span>
+          <span>{errorMessage}</span>
         </div>
       )}
 
@@ -142,15 +223,21 @@ export default function WorkshopManagePage() {
           <p className="p-5 text-sm text-gray-500">Đang tải...</p>
         ) : (
           <div className="divide-y divide-gray-100">
-            {workshops.map((workshop) => (
+            {filteredWorkshops.length === 0 && (
+              <p className="p-5 text-sm text-gray-400">Không có workshop nào trong bộ lọc này.</p>
+            )}
+            {filteredWorkshops.map((workshop) => (
               <div key={workshop.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold text-gray-950">{workshop.title}</h2>
+                    <Link to={`/admin/workshops/${workshop.id}/edit`} className="hover:underline">
+                      <h2 className="font-semibold text-gray-950">{workshop.title}</h2>
+                    </Link>
                     <StatusBadge status={workshop.status} />
+                    <TimePhaseAdminBadge phase={workshop.timePhase} />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    {formatDate(workshop.startTime)} | {workshop.room}
+                    {formatDate(workshop.startTime)} → {formatDate(workshop.endTime)} | {workshop.room}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
                     Ghế còn lại {workshop.remainingSeats}/{workshop.capacity}
@@ -224,6 +311,12 @@ export default function WorkshopManagePage() {
               </div>
             )}
 
+            {uploadStatus && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700 font-semibold">
+                {uploadStatus}
+              </div>
+            )}
+
             <form onSubmit={submitCreate} className="mt-6 grid gap-4">
               <Field label="Tiêu đề" value={form.title} onChange={(value) => update('title', value)} required />
               <Field label="Diễn giả" value={form.speakerName} onChange={(value) => update('speakerName', value)} />
@@ -252,8 +345,29 @@ export default function WorkshopManagePage() {
               </div>
               <Textarea label="Mô tả" value={form.description} onChange={(value) => update('description', value)} />
               <Textarea label="Bio diễn giả" value={form.speakerBio} onChange={(value) => update('speakerBio', value)} />
-              <Field label="URL sơ đồ phòng" value={form.roomLayoutUrl} onChange={(value) => update('roomLayoutUrl', value)} />
-              <Field label="URL tài liệu PDF" value={form.pdfUrl} onChange={(value) => update('pdfUrl', value)} />
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-semibold text-gray-700">
+                  Sơ đồ phòng (Ảnh)
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setRoomLayoutFile(e.target.files?.[0])}
+                    className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs file:font-semibold"
+                  />
+                  {roomLayoutFile && <p className="mt-1 text-xs text-emerald-600">Đã chọn: {roomLayoutFile.name}</p>}
+                </label>
+                <label className="text-sm font-semibold text-gray-700">
+                  Tài liệu PDF (Tự động tóm tắt AI)
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setPdfFile(e.target.files?.[0])}
+                    className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs file:font-semibold"
+                  />
+                  {pdfFile && <p className="mt-1 text-xs text-emerald-600">Đã chọn: {pdfFile.name}</p>}
+                </label>
+              </div>
 
               <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <button
@@ -356,6 +470,37 @@ function workshopStatusLabel(status) {
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
+}
+
+function TimePhaseAdminBadge({ phase }) {
+  if (phase === 'ONGOING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-600" />
+        </span>
+        Đang diễn ra
+      </span>
+    );
+  }
+  if (phase === 'UPCOMING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-800">
+        <span className="h-2 w-2 rounded-full bg-yellow-500" />
+        Sắp diễn ra
+      </span>
+    );
+  }
+  if (phase === 'ENDED') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+        <span className="h-2 w-2 rounded-full bg-gray-400" />
+        Đã kết thúc
+      </span>
+    );
+  }
+  return null;
 }
 
 function formatDate(value) {

@@ -159,8 +159,9 @@ public class WorkshopService {
 
     @Transactional(readOnly = true)
     public Page<WorkshopResponse> findPublished(Pageable pageable) {
+        // Chỉ trả PUBLISHED và chưa kết thúc (endTime > now) — ẩn workshop đã qua với student
         return workshopRepository
-                .findByStatus(WorkshopStatus.PUBLISHED, pageable)
+                .findByStatusAndEndTimeAfter(WorkshopStatus.PUBLISHED, ZonedDateTime.now(), pageable)
                 .map(WorkshopResponse::from);
     }
 
@@ -178,6 +179,28 @@ public class WorkshopService {
 
         if (workshop.getStatus() == WorkshopStatus.CANCELLED) {
             throw new AppException(ErrorCode.FORBIDDEN, "Workshop is already cancelled");
+        }
+
+        ZonedDateTime now = ZonedDateTime.now();
+
+        // Không cho hủy nếu workshop đang diễn ra (đã qua startTime nhưng chưa qua endTime)
+        if (!now.isBefore(workshop.getStartTime()) && now.isBefore(workshop.getEndTime())) {
+            throw new AppException(ErrorCode.WORKSHOP_IN_PROGRESS,
+                    "Không thể hủy workshop đang diễn ra");
+        }
+
+        // Không cho hủy nếu sắp diễn ra trong vòng 30 phút
+        if (now.isBefore(workshop.getStartTime()) &&
+                !now.isBefore(workshop.getStartTime().minusMinutes(30))) {
+            throw new AppException(ErrorCode.WORKSHOP_IN_PROGRESS,
+                    "Không thể hủy workshop trong vòng 30 phút trước khi bắt đầu");
+        }
+
+        // Không cho hủy nếu đã có người check in
+        long checkinCount = checkinRepository.countByRegistration_Workshop(workshop);
+        if (checkinCount > 0) {
+            throw new AppException(ErrorCode.WORKSHOP_IN_PROGRESS,
+                    "Không thể hủy workshop đã có " + checkinCount + " người check in");
         }
 
         workshop.setStatus(WorkshopStatus.CANCELLED);

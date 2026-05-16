@@ -44,11 +44,16 @@ public class RegistrationResponse {
         boolean isPaidWorkshop = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
         boolean isPendingPayment = registration.getStatus() == RegistrationStatus.PENDING;
 
-        boolean canCancel = !isCancelled && (!isPaidWorkshop || isPendingPayment);
+        boolean isTooCloseToStart = workshop.getStartTime() != null &&
+                ZonedDateTime.now().plusHours(6).isAfter(workshop.getStartTime());
+
+        boolean canCancel = !isCancelled && (!isPaidWorkshop || isPendingPayment) && !isTooCloseToStart;
         String cancellationUnavailableReason = null;
 
         if (isCancelled) {
             cancellationUnavailableReason = "Đăng ký đã được hủy.";
+        } else if (isTooCloseToStart) {
+            cancellationUnavailableReason = "Không thể hủy đăng ký khi workshop sắp diễn ra trong dưới 6 tiếng.";
         } else if (isPaidWorkshop && !isPendingPayment) {
             cancellationUnavailableReason = "Workshop đã thanh toán thành công nên không hỗ trợ sinh viên tự hủy. BTC sẽ xử lý hoàn tiền nếu workshop bị hủy.";
         }

@@ -88,15 +88,39 @@ async function refreshToken(refreshTokenValue) {
   }
 }
 
-export async function preloadCheckins(date) {
-  const payload = await request(`/api/checkins/preload?date=${date}`);
+/**
+ * Lấy danh sách workshops PUBLISHED diễn ra trong ngày `date`.
+ * Dùng để hiển thị dropdown chọn ca cho staff.
+ */
+export async function getWorkshopsByDate(date) {
+  const payload = await request(`/api/checkins/workshops?date=${date}`);
   return payload.data || [];
 }
 
-export async function lookupCheckinQr(qrCode, date) {
+/**
+ * Preload QR codes cho ngày `date`.
+ * Nếu có `workshopId`, chỉ tải QR của workshop đó.
+ */
+export async function preloadCheckins(date, workshopId) {
+  const query = new URLSearchParams({ date });
+  if (workshopId) {
+    query.set('workshopId', workshopId);
+  }
+  const payload = await request(`/api/checkins/preload?${query.toString()}`);
+  return payload.data || [];
+}
+
+/**
+ * Tra cứu QR code online.
+ * Nếu có `workshopId`, backend sẽ validate QR phải thuộc đúng workshop đó.
+ */
+export async function lookupCheckinQr(qrCode, date, workshopId) {
   const query = new URLSearchParams({ qrCode });
   if (date) {
     query.set('date', date);
+  }
+  if (workshopId) {
+    query.set('workshopId', workshopId);
   }
   const payload = await request(`/api/checkins/lookup?${query.toString()}`);
   return payload.data;
