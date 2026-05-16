@@ -24,6 +24,7 @@ export default function WorkshopManagePage() {
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [form, setForm] = useState(createEmptyForm());
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,15 +61,27 @@ export default function WorkshopManagePage() {
   }, [isCreateModalOpen]);
 
   const publish = async (id) => {
-    await api.patch(`/api/workshops/${id}/status`, { status: 'PUBLISHED' });
-    setMessage('Workshop đã được xuất bản.');
-    load();
+    setErrorMessage('');
+    try {
+      await api.patch(`/api/workshops/${id}/status`, { status: 'PUBLISHED' });
+      setMessage('Workshop đã được xuất bản.');
+      load();
+    } catch (err) {
+      setMessage('');
+      setErrorMessage(err?.response?.data?.message || 'Không thể xuất bản workshop. Vui lòng thử lại.');
+    }
   };
 
   const cancel = async (id) => {
-    await api.post(`/api/workshops/${id}/cancel`);
-    setMessage('Workshop đã hủy. Nếu có giao dịch thành công, sinh viên sẽ nhận hướng dẫn điền form hoàn tiền.');
-    load();
+    setErrorMessage('');
+    try {
+      await api.post(`/api/workshops/${id}/cancel`);
+      setMessage('Workshop đã hủy. Nếu có giao dịch thành công, sinh viên sẽ nhận hướng dẫn điền form hoàn tiền.');
+      load();
+    } catch (err) {
+      setMessage('');
+      setErrorMessage(err?.response?.data?.message || 'Không thể hủy workshop. Vui lòng thử lại.');
+    }
   };
 
   const update = (field, value) => {
@@ -134,6 +147,17 @@ export default function WorkshopManagePage() {
       {message && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           {message}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-3">
+          <span className="mt-0.5 shrink-0 text-red-500">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+            </svg>
+          </span>
+          <span>{errorMessage}</span>
         </div>
       )}
 
