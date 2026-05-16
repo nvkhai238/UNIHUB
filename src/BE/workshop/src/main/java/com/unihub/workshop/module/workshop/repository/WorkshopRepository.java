@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,4 +25,12 @@ public interface WorkshopRepository extends JpaRepository<Workshop, UUID> {
     @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM Workshop w WHERE w.id = :id")
     Optional<Workshop> findByIdForUpdate(@Param("id") UUID id);
+
+    /** Dùng cho checkin staff: lấy workshop theo trạng thái và bắt đầu trong khoảng [startOfDay, endOfDay) */
+    @Query("SELECT w FROM Workshop w WHERE w.status = :status AND w.startTime >= :startOfDay AND w.startTime < :endOfDay ORDER BY w.startTime ASC")
+    List<Workshop> findPublishedByStartDay(
+            @Param("status") WorkshopStatus status,
+            @Param("startOfDay") ZonedDateTime startOfDay,
+            @Param("endOfDay") ZonedDateTime endOfDay
+    );
 }

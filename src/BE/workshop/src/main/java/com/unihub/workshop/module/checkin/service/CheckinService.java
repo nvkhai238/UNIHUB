@@ -7,6 +7,7 @@ import com.unihub.workshop.module.checkin.dto.CheckinLookupResponse;
 import com.unihub.workshop.module.checkin.dto.PreloadResponse;
 import com.unihub.workshop.module.checkin.dto.SyncRequest;
 import com.unihub.workshop.module.checkin.dto.SyncResponse;
+import com.unihub.workshop.module.checkin.dto.WorkshopSummaryResponse;
 import com.unihub.workshop.module.checkin.entity.Checkin;
 import com.unihub.workshop.module.checkin.repository.CheckinRepository;
 import com.unihub.workshop.module.registration.entity.Registration;
@@ -19,12 +20,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,15 +37,44 @@ public class CheckinService {
     private final RegistrationRepository registrationRepository;
     private final WorkshopRepository workshopRepository;
 
+    /**
+     * Trả về danh sách workshop PUBLISHED bắt đầu trong ngày `date`.
+     * Dùng để mobile hiển thị dropdown chọn ca trước khi preload.
+     */
     @Transactional(readOnly = true)
-    public List<PreloadResponse> preloadCheckins(LocalDate date) {
-        ZoneId localZone = ZoneId.systemDefault();
+    public List<WorkshopSummaryResponse> getWorkshopsByDate(LocalDate date) {
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
+        ZonedDateTime startOfDay = date.atStartOfDay(zoneId);
+        ZonedDateTime endOfDay = startOfDay.plusDays(1);
+        return workshopRepository.findPublishedByStartDay(com.unihub.workshop.module.workshop.entity.WorkshopStatus.PUBLISHED, startOfDay, endOfDay)
+                .stream()
+                .map(WorkshopSummaryResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Preload QR codes hợp lệ cho ngày `date`.
+     * Nếu `workshopId` được cung cấp, chỉ lấy QR của workshop đó.
+     * Nếu không, lấy tất cả workshop trong ngày (backward-compatible).
+     */
+    @Transactional(readOnly = true)
+    public List<PreloadResponse> preloadCheckins(LocalDate date, UUID workshopId) {
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
         List<Registration> registrations = registrationRepository.findByStatusAndQrCodeIsNotNull(RegistrationStatus.CONFIRMED)
                 .stream()
-                .filter(r -> r.getWorkshop().getStartTime()
-                        .withZoneSameInstant(localZone)
-                        .toLocalDate()
-                        .equals(date))
+                .filter(r -> {
+                    LocalDate workshopDate = r.getWorkshop().getStartTime()
+                            .withZoneSameInstant(zoneId)
+                            .toLocalDate();
+                    if (!workshopDate.equals(date)) {
+                        return false;
+                    }
+                    // Nếu có workshopId, chỉ lấy QR của workshop đó
+                    if (workshopId != null) {
+                        return r.getWorkshop().getId().equals(workshopId);
+                    }
+                    return true;
+                })
                 .toList();
 
         return registrations.stream()
@@ -56,8 +87,12 @@ public class CheckinService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Tra cứu QR code online.
+     * Nếu `workshopId` được cung cấp, validate thêm: QR phải thuộc đúng workshop đó.
+     */
     @Transactional(readOnly = true)
-    public CheckinLookupResponse lookupQr(String qrCode, LocalDate selectedDate) {
+    public CheckinLookupResponse lookupQr(String qrCode, LocalDate selectedDate, UUID workshopId) {
         Optional<Registration> registrationOpt = registrationRepository.findByQrCode(qrCode);
         if (registrationOpt.isEmpty()) {
             return CheckinLookupResponse.builder()
@@ -71,11 +106,14 @@ public class CheckinService {
 
         Registration registration = registrationOpt.get();
         LocalDate workshopDate = registration.getWorkshop().getStartTime()
-                .withZoneSameInstant(ZoneId.systemDefault())
+                .withZoneSameInstant(ZoneId.of("Asia/Ho_Chi_Minh"))
                 .toLocalDate();
         boolean confirmed = registration.getStatus() == RegistrationStatus.CONFIRMED;
         boolean sameDate = selectedDate == null || workshopDate.equals(selectedDate);
-        boolean eligible = confirmed && sameDate;
+        // Validate workshop scope: nếu có workshopId, QR phải thuộc đúng workshop đó
+        boolean sameWorkshop = workshopId == null || registration.getWorkshop().getId().equals(workshopId);
+
+        boolean eligible = confirmed && sameDate && sameWorkshop;
         String status;
         String message;
 
@@ -85,6 +123,9 @@ public class CheckinService {
         } else if (!sameDate) {
             status = "WRONG_DATE";
             message = "QR belongs to workshop date " + workshopDate;
+        } else if (!sameWorkshop) {
+            status = "WRONG_WORKSHOP";
+            message = "Vé này thuộc workshop khác: " + registration.getWorkshop().getTitle();
         } else {
             status = "ELIGIBLE";
             message = "QR is eligible for check-in";

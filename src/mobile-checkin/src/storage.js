@@ -104,8 +104,21 @@ export async function replaceQrRegistry(items) {
   });
 }
 
-export async function findQr(qrCode) {
+export async function findQr(qrCode, workshopId) {
   const db = await getDb();
+  if (workshopId) {
+    return db.getFirstAsync(
+      `SELECT
+         qr_code AS qrCode,
+         full_name AS fullName,
+         workshop_id AS workshopId,
+         workshop_title AS workshopTitle,
+         checked_in_local AS checkedInLocal
+       FROM qr_registry
+       WHERE qr_code = ? AND workshop_id = ?`,
+      [qrCode, workshopId]
+    );
+  }
   return db.getFirstAsync(
     `SELECT
        qr_code AS qrCode,
@@ -118,6 +131,7 @@ export async function findQr(qrCode) {
     [qrCode]
   );
 }
+
 
 export async function queueOfflineCheckin({ qrCode, workshopId, deviceId, timestamp }) {
   const db = await getDb();
