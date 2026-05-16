@@ -25,12 +25,21 @@ if (!Number.isInteger(startId) || startId < 0) {
   process.exit(1);
 }
 
+const firstNames = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Huỳnh', 'Phan', 'Vũ', 'Võ', 'Đặng'];
+const middleNames = ['Văn', 'Thị', 'Minh', 'Anh', 'Hữu', 'Đức', 'Quang', 'Hoàng', 'Thanh', 'Ngọc', 'Hải', 'Thùy', 'Hương', 'Mỹ', 'Nhật'];
+const lastNames = ['An', 'Bình', 'Cường', 'Dũng', 'Em', 'Hạnh', 'Khai', 'Linh', 'Minh', 'Nam', 'Phúc', 'Quân', 'Sơn', 'Tâm', 'Uyên', 'Việt', 'Tài', 'Lộc', 'Phát', 'Đạt'];
+
 const rows = ['student_id,full_name,email'];
 
 for (let i = 0; i < count; i++) {
   const studentNumber = startId + i;
   const studentId = String(studentNumber).padStart(8, '0');
-  const fullName = `Sinh Vien ${i + 1}`;
+  
+  const f = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const m = middleNames[Math.floor(Math.random() * middleNames.length)];
+  const l = lastNames[Math.floor(Math.random() * lastNames.length)];
+  const fullName = `${f} ${m} ${l}`;
+  
   const email = `${studentId}@student.unihub.vn`;
   rows.push(`${studentId},${fullName},${email}`);
 }
