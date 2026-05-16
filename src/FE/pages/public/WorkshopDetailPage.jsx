@@ -148,20 +148,40 @@ export default function WorkshopDetailPage() {
             <p className="mt-2 text-sm font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
           </div>
 
-          <RegistrationButton
-            workshopId={workshop.id}
-            workshopPrice={Number(workshop.price ?? 0)}
-            remainingSeats={workshop.remainingSeats ?? 0}
-            alreadyRegistered={alreadyRegistered}
-            onSuccess={(data) => {
-              setResult(data);
-              setAlreadyRegistered(true);
-              if (data.status === 'PENDING') {
-                navigate(`/student/registrations/${data.registrationId || data.id}/payment`);
-              }
-            }}
-          />
+          {/* Banner ENDED */}
+          {workshop.timePhase === 'ENDED' && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              <p className="font-semibold text-gray-800">🏁 Workshop đã kết thúc</p>
+              <p className="mt-1">Workshop này đã diễn ra xong. Không thể đăng ký.</p>
+            </div>
+          )}
 
+          {/* Banner ONGOING */}
+          {workshop.timePhase === 'ONGOING' && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+              <p className="font-semibold">🔴 Workshop đang diễn ra</p>
+              <p className="mt-1">Workshop đang trong quá trình diễn ra, không nhận đăng ký mới.</p>
+            </div>
+          )}
+
+          {/* Nút đăng ký — chỉ hiển thị khi UPCOMING */}
+          {(!workshop.timePhase || workshop.timePhase === 'UPCOMING') && (
+            <RegistrationButton
+              workshopId={workshop.id}
+              workshopPrice={Number(workshop.price ?? 0)}
+              remainingSeats={workshop.remainingSeats ?? 0}
+              alreadyRegistered={alreadyRegistered}
+              onSuccess={(data) => {
+                setResult(data);
+                setAlreadyRegistered(true);
+                if (data.status === 'PENDING') {
+                  navigate(`/student/registrations/${data.registrationId || data.id}/payment`);
+                }
+              }}
+            />
+          )}
+
+          {/* Vẫn hiện QR / payment link dù workshop đã bắt đầu/kết thúc */}
           {alreadyRegistered && !result && existingRegistration && (
             <div className="mt-4 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
               <p className="font-semibold">Bạn đã đăng ký workshop này.</p>

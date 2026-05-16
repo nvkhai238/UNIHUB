@@ -30,6 +30,7 @@ export default function WorkshopManagePage() {
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [phaseFilter, setPhaseFilter] = useState('ALL'); // ALL | UPCOMING | ONGOING | ENDED
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -47,6 +48,12 @@ export default function WorkshopManagePage() {
       })
       .finally(() => setLoading(false));
   };
+
+  // Lọc theo timePhase ở client (admin luôn lấy toàn bộ từ server)
+  const filteredWorkshops = useMemo(() => {
+    if (phaseFilter === 'ALL') return workshops;
+    return workshops.filter((w) => w.timePhase === phaseFilter);
+  }, [workshops, phaseFilter]);
 
   useEffect(() => {
     load();
@@ -144,6 +151,30 @@ export default function WorkshopManagePage() {
         </div>
       </div>
 
+      {/* Tab filter theo timePhase */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { key: 'ALL',     label: 'Tất cả' },
+          { key: 'UPCOMING', label: '🟡 Sắp diễn ra' },
+          { key: 'ONGOING',  label: '🟢 Đang diễn ra' },
+          { key: 'ENDED',    label: '⚫ Đã kết thúc' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { setPhaseFilter(key); setPage(0); }}
+            className={[
+              'rounded-full px-4 py-1.5 text-xs font-semibold transition',
+              phaseFilter === key
+                ? 'bg-gray-900 text-white'
+                : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+            ].join(' ')}
+          >
+            {label} {key !== 'ALL' && `(${workshops.filter((w) => w.timePhase === key).length})`}
+          </button>
+        ))}
+      </div>
+
       {message && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           {message}
@@ -166,15 +197,19 @@ export default function WorkshopManagePage() {
           <p className="p-5 text-sm text-gray-500">Đang tải...</p>
         ) : (
           <div className="divide-y divide-gray-100">
-            {workshops.map((workshop) => (
+            {filteredWorkshops.length === 0 && (
+              <p className="p-5 text-sm text-gray-400">Không có workshop nào trong bộ lọc này.</p>
+            )}
+            {filteredWorkshops.map((workshop) => (
               <div key={workshop.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-semibold text-gray-950">{workshop.title}</h2>
                     <StatusBadge status={workshop.status} />
+                    <TimePhaseAdminBadge phase={workshop.timePhase} />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    {formatDate(workshop.startTime)} | {workshop.room}
+                    {formatDate(workshop.startTime)} → {formatDate(workshop.endTime)} | {workshop.room}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
                     Ghế còn lại {workshop.remainingSeats}/{workshop.capacity}
@@ -380,6 +415,37 @@ function workshopStatusLabel(status) {
     CANCELLED: 'Đã hủy',
   };
   return labels[status] ?? status;
+}
+
+function TimePhaseAdminBadge({ phase }) {
+  if (phase === 'ONGOING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-600" />
+        </span>
+        Đang diễn ra
+      </span>
+    );
+  }
+  if (phase === 'UPCOMING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-800">
+        <span className="h-2 w-2 rounded-full bg-yellow-500" />
+        Sắp diễn ra
+      </span>
+    );
+  }
+  if (phase === 'ENDED') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+        <span className="h-2 w-2 rounded-full bg-gray-400" />
+        Đã kết thúc
+      </span>
+    );
+  }
+  return null;
 }
 
 function formatDate(value) {

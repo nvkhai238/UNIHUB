@@ -159,8 +159,9 @@ public class WorkshopService {
 
     @Transactional(readOnly = true)
     public Page<WorkshopResponse> findPublished(Pageable pageable) {
+        // Chỉ trả PUBLISHED và chưa kết thúc (endTime > now) — ẩn workshop đã qua với student
         return workshopRepository
-                .findByStatus(WorkshopStatus.PUBLISHED, pageable)
+                .findByStatusAndEndTimeAfter(WorkshopStatus.PUBLISHED, ZonedDateTime.now(), pageable)
                 .map(WorkshopResponse::from);
     }
 

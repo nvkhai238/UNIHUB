@@ -88,24 +88,32 @@ export default function WorkshopListPage() {
 
       {!loading && !error && (
         <>
+          {workshops.length === 0 && (
+            <StateBox text="Hiện không có workshop nào đang mở đăng ký." />
+          )}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {workshops.map((workshop) => (
               <Link
                 key={workshop.id}
                 to={`${detailPrefix}/${workshop.id}`}
-                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+                className="group rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
               >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <h2 className="line-clamp-2 text-lg font-semibold text-gray-950">{workshop.title}</h2>
-                  <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                    {workshop.remainingSeats}/{workshop.capacity}
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h2 className="line-clamp-2 text-lg font-semibold text-gray-950 group-hover:text-emerald-700 transition-colors">
+                    {workshop.title}
+                  </h2>
+                  <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                    {workshop.remainingSeats}/{workshop.capacity} ghế
                   </span>
                 </div>
-                <div className="space-y-2 text-sm text-gray-600">
+                <div className="mb-3">
+                  <TimePhase phase={workshop.timePhase} />
+                </div>
+                <div className="space-y-1.5 text-sm text-gray-600">
                   <p><strong>Thời gian:</strong> {formatDate(workshop.startTime)}</p>
                   <p><strong>Phòng:</strong> {workshop.room}</p>
                   <p><strong>Diễn giả:</strong> {workshop.speakerName || 'Đang cập nhật'}</p>
-                  <p className="mt-1 font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
+                  <p className="mt-2 font-semibold text-gray-950">{formatPrice(workshop.price)}</p>
                 </div>
               </Link>
             ))}
@@ -116,6 +124,29 @@ export default function WorkshopListPage() {
       )}
     </section>
   );
+}
+
+function TimePhase({ phase }) {
+  if (phase === 'ONGOING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-600" />
+        </span>
+        Đang diễn ra
+      </span>
+    );
+  }
+  if (phase === 'UPCOMING') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+        <span className="h-2 w-2 rounded-full bg-indigo-400" />
+        Sắp diễn ra
+      </span>
+    );
+  }
+  return null;
 }
 
 function StateBox({ text, tone = 'default', onRetry }) {

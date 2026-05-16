@@ -60,6 +60,19 @@ public class RegistrationService {
             throw new AppException(ErrorCode.FORBIDDEN, "Workshop is not published");
         }
 
+        // Guard thời gian: không cho đăng ký workshop đã kết thúc
+        ZonedDateTime now = ZonedDateTime.now();
+        if (!now.isBefore(workshop.getEndTime())) {
+            throw new AppException(ErrorCode.WORKSHOP_ENDED,
+                    "Workshop đã kết thúc, không thể đăng ký");
+        }
+
+        // Guard thời gian: không cho đăng ký workshop đang diễn ra
+        if (!now.isBefore(workshop.getStartTime())) {
+            throw new AppException(ErrorCode.WORKSHOP_STARTED,
+                    "Workshop đang diễn ra, không còn nhận đăng ký mới");
+        }
+
         // Check if user already has an active (non-cancelled) registration
         boolean alreadyRegistered = registrationRepository.existsByUserAndWorkshopAndStatusNot(user, workshop, RegistrationStatus.CANCELLED);
         if (alreadyRegistered) {
@@ -223,6 +236,14 @@ public class RegistrationService {
                         "Workshop đã thanh toán thành công nên không hỗ trợ sinh viên tự hủy."
                 );
             }
+        }
+
+        if (registration.getWorkshop().getStartTime() != null &&
+                ZonedDateTime.now().plusHours(6).isAfter(registration.getWorkshop().getStartTime())) {
+            throw new AppException(
+                    ErrorCode.REGISTRATION_CANCEL_TIMEOUT,
+                    "Không thể hủy đăng ký khi workshop sắp diễn ra trong dưới 6 tiếng."
+            );
         }
 
         Workshop workshop = workshopRepository.findByIdForUpdate(registration.getWorkshop().getId())
