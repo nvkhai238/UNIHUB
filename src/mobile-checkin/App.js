@@ -29,6 +29,7 @@ export default function App() {
   const [preloadMessage, setPreloadMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [lastSyncSummary, setLastSyncSummary] = useState("");
   const [date, setDate] = useState(dateString());
 
   // Workshop selection state
@@ -85,6 +86,7 @@ export default function App() {
       const deviceId = await getOrCreateDeviceId();
       setSession({ deviceId, accessToken: auth.accessToken, refreshToken: auth.refreshToken, user: auth.user });
       setPassword("");
+      setLastSyncSummary("");
       setMessage("Đăng nhập thành công. Chọn ngày và ca để bắt đầu.");
     } catch (error) {
       setMessage(error.message);
@@ -154,6 +156,7 @@ export default function App() {
       setPreloadMessage("");
       setWorkshops([]);
       setSelectedWorkshop(null);
+      setLastSyncSummary("");
       await refreshStats();
       setMessage("Đã đăng xuất và xóa dữ liệu offline của phiên trước.");
       setLoading(false);
@@ -167,25 +170,40 @@ export default function App() {
     if (statusMessage) setPreloadMessage(statusMessage);
     try {
       const records = await listPendingCheckins();
-      if (records.length === 0) {
+      const pendingCount = records.length;
+
+      if (pendingCount === 0) {
         await refreshStats();
+        const noPendingMessage = statusMessage
+          ? "Không còn check-in pending nào cần đồng bộ (có thể đã auto-sync khi mạng trở lại)."
+          : "Không còn check-in pending nào cần đồng bộ.";
+        setLastSyncSummary(noPendingMessage);
         if (statusMessage) {
-          setPreloadMessage("Không có check-in pending nào cần đồng bộ.");
-          setMessage("Không có check-in pending nào cần đồng bộ.");
+          setPreloadMessage(noPendingMessage);
+          setMessage(noPendingMessage);
         }
         return;
       }
-      if (statusMessage) setMessage(statusMessage);
+
+      const syncingMessage = `Tìm thấy ${pendingCount} check-in pending, đang đồng bộ...`;
+      setPreloadMessage(syncingMessage);
+      setMessage(syncingMessage);
+
       const response = await syncCheckins(
         records.map((item) => ({ qrCode: item.qrCode, timestamp: item.timestamp, deviceId: item.deviceId }))
       );
       await markCheckinsSyncResult(response.items || []);
       await refreshStats();
-      setPreloadMessage(`Đồng bộ xong ${response.created}/${response.total} check-in.`);
-      setMessage(`Đồng bộ xong ${response.created}/${response.total} check-in.`);
+
+      const summary = `Đồng bộ xong: ${response.created} mới · ${response.duplicate} trùng · ${response.conflict} xung đột · ${response.invalid} lỗi (tổng ${response.total}).`;
+      setLastSyncSummary(summary);
+      setPreloadMessage(summary);
+      setMessage(summary);
     } catch (error) {
-      setPreloadMessage(`Chưa thể đồng bộ: ${error.message}`);
-      setMessage(`Chưa thể đồng bộ: ${error.message}`);
+      const errorMessage = `Chưa thể đồng bộ: ${error.message}`;
+      setLastSyncSummary(errorMessage);
+      setPreloadMessage(errorMessage);
+      setMessage(errorMessage);
     } finally {
       syncingRef.current = false;
       setSyncing(false);
@@ -421,6 +439,7 @@ export default function App() {
             Registry: {stats.registryCount} QR | Pending: {stats.pendingCount}
           </Text>
           {preloadMessage ? <Text style={styles.preloadFeedback}>{preloadMessage}</Text> : null}
+          {lastSyncSummary ? <Text style={styles.muted}>Sync gần nhất: {lastSyncSummary}</Text> : null}
         </View>
 
         {/* Camera quét QR */}
