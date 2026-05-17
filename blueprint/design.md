@@ -725,81 +725,70 @@ Route guard chỉ là lớp hỗ trợ giao diện. Người dùng tự sửa UR
 
 Từ lúc sinh viên bấm "Đăng ký" đến khi nhận mã QR.
 
-```
-SV (Browser)         React Frontend        Spring Boot API         Redis / PostgreSQL
-      │                     │                     │                       │
-      │── Click "Đăng ký" ─▶│                     │                       │
-      │                     │ Sinh idempotencyKey  │                       │
-      │                     │ = UUID.randomUUID()  │                       │
-      │                     │                     │                       │
-      │                     │──POST /registrations▶│                       │
-      │                     │  Header:             │                       │
-      │                     │  Idempotency-Key:    │                       │
-      │                     │  {uuid}              │                       │
-      │                     │  Body: {workshopId}  │                       │
-      │                     │                     │                       │
-      │                     │                     │── ① Rate limit check ─▶│ Redis ZSET rate:registration:{email}
-      │                     │                     │◀─ OK (< 5 req/10s) ───│
-      │                     │                     │   hoặc 429 (exceeded) │
-      │                     │                     │                       │
-      │                     │                     │── ② Idem key check ──▶│ Redis GET idem:{email}:{key}
-      │                     │                     │◀─ null (chưa có) ─────│
-      │                     │                     │   (nếu có → return    │
-      │                     │                     │    cached response)   │
-      │                     │                     │                       │
-      │                     │                     │── ③ BEGIN TRANSACTION ─▶│ PostgreSQL
-      │                     │                     │   SELECT * FROM         │
-      │                     │                     │   workshops             │
-      │                     │                     │   WHERE id = ?          │
-      │                     │                     │   FOR UPDATE            │ ← Pessimistic Lock
-      │                     │                     │                         │
-      │                     │                     │   remaining_seats = 0?  │
-      │                     │                     │   → INSERT WAITLISTED   │
-      │                     │                     │   → COMMIT              │
-      │                     │                     │                         │
-      │                     │                     │   INSERT registrations  │
-      │                     │                     │   status = 'PENDING'    │
-      │                     │                     │                         │
-      │                     │                     │   UPDATE workshops      │
-      │                     │                     │   SET remaining_seats   │
-      │                     │                     │       = remaining_seats │
-      │                     │                     │       - 1               │
-      │                     │                     │                         │
-      │                     │                     │   INSERT payments       │
-      │                     │                     │   status = 'PENDING'    │
-      │                     │                     │   gateway_ref='UHxxxxxx'│
-      │                     │                     │── COMMIT ───────────────│
-      │                     │                     │                         │
-      │                     │                     │── ④ Cache idem key ────▶│ Redis SET idem:{email}:{key}
-      │                     │                     │                    EX 86400
-      │                     │◀── 201 {registrationId,status:PENDING}────────│
-      │                     │──GET /payment-info───────────────────────────▶│
-      │                     │◀── {paymentCode,amount,bank}─────────────────│
-      │◀── Hiển thị QR SePay / thông tin chuyển khoản                       │
-      │                     │                     │                         │
-      │                     │                     │◀─── [SePay webhook] ─────
-      │                     │                     │   POST /api/webhooks/sepay
-      │                     │                     │   content contains UHxxxxxx
-      │                     │                     │   amount >= payment.amount
-      │                     │                     │   UPDATE payments SUCCESS│
-      │                     │                     │   UPDATE registrations CONFIRMED
-      │                     │                     │   qr_code = UUID.new()  │
-      │                     │                     │   Send notification/email│
-      │                     │                     │                         │
-      │                     │                     │◀─── [Payment timeout] ───
-      │                     │                     │   Scheduler sau 15 phút │
-      │                     │                     │   UPDATE payments FAILED│
-      │                     │                     │   UPDATE registrations CANCELLED
-      │                     │                     │   remaining_seats += 1/promote waitlist
-```
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student as Sinh viên
+  participant Web as React Frontend
+  participant API as Spring Boot API
+  participant Redis as Redis
+  participant DB as PostgreSQL
+  participant SePay as SePay Webhook
+  participant Scheduler as Payment Timeout Scheduler
 
-**Kịch bản client retry với cùng idempotency key:**
+  Student->>Web: Bấm "Đăng ký"
+  Web->>Web: Sinh Idempotency-Key = crypto.randomUUID()
+  Web->>API: POST /api/registrations<br/>Header: Idempotency-Key<br/>Body: {workshopId}
 
-```
-Client gửi lại request với cùng Idempotency-Key
-→ API: Redis GET idem:{email}:{key} → Tìm thấy response cũ
-→ Return cached response ngay, không xử lý lại
-→ Header: X-Idempotent-Replayed: true
+  API->>Redis: Rate limit check<br/>rate:registration:{email}
+  alt Vượt giới hạn
+    Redis-->>API: Exceeded
+    API-->>Web: 429 RATE_LIMIT_EXCEEDED
+    Web-->>Student: Hiển thị countdown thử lại
+  else Hợp lệ
+    Redis-->>API: OK
+    API->>Redis: GET idem:{email}:{key}
+    alt Request retry cùng key
+      Redis-->>API: Cached response
+      API-->>Web: 200/201 cached<br/>X-Idempotent-Replayed: true
+      Web-->>Student: Hiển thị trạng thái đăng ký cũ
+    else Request mới
+      Redis-->>API: null
+      API->>DB: BEGIN + SELECT workshop FOR UPDATE
+      alt Hết chỗ
+        API->>DB: INSERT registration status=WAITLISTED
+        API->>DB: COMMIT
+        API->>Redis: Cache response EX 86400
+        API-->>Web: 201 {status: WAITLISTED}
+        Web-->>Student: Hiển thị đã vào danh sách chờ
+      else Còn chỗ và workshop có phí
+        API->>DB: INSERT registration status=PENDING
+        API->>DB: UPDATE workshops SET remaining_seats = remaining_seats - 1
+        API->>DB: INSERT payment status=PENDING, gateway_ref=UHxxxxxx
+        API->>DB: COMMIT
+        API->>Redis: Cache response EX 86400
+        API-->>Web: 201 {registrationId, status: PENDING}
+        Web->>API: GET payment info
+        API-->>Web: {paymentCode, amount, bank}
+        Web-->>Student: Hiển thị QR SePay / thông tin chuyển khoản
+      else Còn chỗ và workshop miễn phí
+        API->>DB: INSERT registration status=CONFIRMED, qr_code=UUID
+        API->>DB: UPDATE workshops SET remaining_seats = remaining_seats - 1
+        API->>DB: COMMIT
+        API->>Redis: Cache response EX 86400
+        API-->>Web: 201 {status: CONFIRMED, qrAvailable: true}
+        Web-->>Student: Hiển thị đăng ký thành công / mã QR
+      end
+    end
+  end
+
+  SePay-->>API: POST /api/webhooks/sepay<br/>content contains UHxxxxxx
+  API->>DB: UPDATE payment SUCCESS<br/>UPDATE registration CONFIRMED<br/>qr_code = UUID
+  API-->>Web: Trạng thái đăng ký đã xác nhận khi refresh/poll
+
+  Scheduler->>DB: Quét payment PENDING quá 15 phút
+  Scheduler->>DB: UPDATE payment FAILED<br/>UPDATE registration CANCELLED
+  Scheduler->>DB: Release seat hoặc promote waitlist
 ```
 
 ### Luồng B — Check-in offline và đồng bộ (Thành viên 3)
@@ -807,80 +796,63 @@ Client gửi lại request với cùng Idempotency-Key
 ```mermaid
 sequenceDiagram
   autonumber
-  actor Staff as Nhân sự
+  actor Staff as Nhân sự check-in
   participant Mobile as Check-in Mobile App
-  participant LocalDB as SQLite + SecureStore
-  participant Sync as Mobile Sync Worker
+  participant LocalDB as Expo SQLite + SecureStore
+  participant NetInfo as NetInfo / AppState
   participant API as Spring Boot API
   participant DB as PostgreSQL
 
-  Note over Staff, DB: GIAI ĐOẠN 1: CÓ MẠNG (Tải trước dữ liệu đầu ngày)
-  Staff->>Mobile: Mở ứng dụng Check-in
-  Mobile->>API: GET /api/checkins/preload?date=today
-  API->>DB: Query confirmed registrations (Hôm nay)
-  DB-->>API: Danh sách hợp lệ
-  API-->>Mobile: [{qr, name, workshop_id}]
-  Mobile->>LocalDB: Lưu vào bảng qr_registry
-  LocalDB-->>Mobile: OK
-  Mobile-->>Staff: Hiển thị "Đã tải xong dữ liệu offline"
+  Note over Staff, DB: GIAI ĐOẠN 1: CÓ MẠNG — chọn ca và preload QR
+  Staff->>Mobile: Đăng nhập bằng tài khoản CHECKIN_STAFF
+  Staff->>Mobile: Chọn ngày check-in
+  Mobile->>API: GET /api/checkins/workshops?date={date}
+  API->>DB: Query workshop PUBLISHED trong ngày
+  DB-->>API: Danh sách workshop
+  API-->>Mobile: [{id, title, startTime, room, ...}]
+  Staff->>Mobile: Chọn workshop cụ thể
+  Mobile->>API: GET /api/checkins/preload?date={date}&workshopId={workshopId}
+  API->>DB: Query registration CONFIRMED của workshop đã chọn
+  DB-->>API: QR registry hợp lệ
+  API-->>Mobile: [{qrCode, fullName, workshopId, workshopTitle}]
+  Mobile->>LocalDB: REPLACE qr_registry theo dữ liệu preload
+  Mobile-->>Staff: Hiển thị số QR đã tải và pending count
 
-  Note over Staff, DB: GIAI ĐOẠN 2: MẤT MẠNG (Check-in tại cửa sự kiện)
-  Staff->>Mobile: Quét mã QR của Sinh viên
-  Mobile->>Mobile: Kiểm tra trạng thái network của OS
-  Mobile->>LocalDB: SELECT * FROM qr_registry WHERE qr = qr_code
-
-  alt Không hợp lệ (Không tìm thấy)
+  Note over Staff, DB: GIAI ĐOẠN 2: MẤT MẠNG — scan và lưu pending local
+  NetInfo-->>Mobile: isConnected=false hoặc internetReachable=false
+  Staff->>Mobile: Quét QR bằng expo-camera
+  Mobile->>Mobile: Debounce scan gần nhất
+  Mobile->>LocalDB: SELECT qr_registry WHERE qr_code=? AND workshop_id=?
+  alt QR không nằm trong registry workshop đã chọn
     LocalDB-->>Mobile: null
-    Mobile-->>Staff: Báo lỗi đỏ và gợi ý nhập tay/kiểm tra lại
-  else Hợp lệ (Tìm thấy)
-    LocalDB-->>Mobile: {name, workshop_id}
-    Mobile->>LocalDB: INSERT pending_sync {qr_code, timestamp, device_id, synced: 0}
-    Note over Mobile, LocalDB: UNIQUE constraint ngăn lưu trùng trên cùng thiết bị
-    LocalDB-->>Mobile: Insert Success
-    Mobile-->>Staff: Báo xanh "Check-in thành công: [Tên SV]"
+    Mobile-->>Staff: Báo QR không hợp lệ hoặc sai ca check-in
+  else QR đã pending/synced local
+    Mobile->>LocalDB: Check pending_checkins / checked_in_local
+    LocalDB-->>Mobile: duplicate=true
+    Mobile-->>Staff: Báo đã check-in/lưu pending trên thiết bị
+  else QR hợp lệ
+    LocalDB-->>Mobile: {qrCode, fullName, workshopId}
+    Mobile->>LocalDB: INSERT pending_checkins status=PENDING<br/>UPDATE qr_registry.checked_in_local=1
+    LocalDB-->>Mobile: OK
+    Mobile-->>Staff: Hiển thị PENDING và tăng pending count
   end
 
-  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI (Đồng bộ theo lifecycle mobile)
-  Note right of Sync: Chạy khi app foreground, network restored, hoặc lịch sync nền của OS cho phép
-  Sync->>LocalDB: SELECT * FROM pending_sync WHERE synced = 0
-  LocalDB-->>Sync: [{qr_code, timestamp, device_id, ...}]
-  Sync->>API: POST /api/checkins/sync (Gửi array batch)
-  API->>DB: INSERT checkins nếu registration CONFIRMED và chưa tồn tại
-  Note right of API: Unique registration_id phân loại DUPLICATE/CONFLICT
-
-  alt Kết nối chập chờn / Lỗi Server
-    DB-->>API: Error / Timeout
-    API-->>Sync: 500 Internal Server Error
-    Sync->>LocalDB: Giữ nguyên synced=0, retry với exponential backoff
-  else Thành công
-    DB-->>API: CREATED/DUPLICATE/CONFLICT/INVALID_QR
-    API-->>Sync: 200 OK {items: [...]}
-    Sync->>LocalDB: UPDATE pending_checkins theo từng item
+  Note over Staff, DB: GIAI ĐOẠN 3: CÓ MẠNG TRỞ LẠI — auto/manual sync
+  NetInfo-->>Mobile: Network restored
+  Mobile->>LocalDB: SELECT pending_checkins WHERE sync_status='PENDING'
+  alt Không còn pending
+    LocalDB-->>Mobile: []
+    Mobile-->>Staff: Hiển thị không có pending cần đồng bộ / có thể đã auto-sync
+  else Có pending
+    LocalDB-->>Mobile: [{qrCode, timestamp, deviceId, ...}]
+    Mobile->>API: POST /api/checkins/sync<br/>[{qrCode, timestamp, deviceId}]
+    API->>DB: Validate QR tồn tại và registration CONFIRMED
+    API->>DB: INSERT checkins nếu chưa có registration_id
+    DB-->>API: CREATED / DUPLICATE / CONFLICT / INVALID_QR / NOT_CONFIRMED
+    API-->>Mobile: 200 OK {total, created, duplicate, conflict, invalid, items}
+    Mobile->>LocalDB: UPDATE pending_checkins theo từng item
+    Mobile-->>Staff: Hiển thị sync summary gần nhất
   end
-```
-
-```
-Nhân sự        Mobile App        Local SQLite        Spring Boot API        PostgreSQL
-   │               │                  │                    │                  │
-   │ [Trước sự kiện - có mạng]        │                    │                  │
-   │── Mở app ───▶│                  │                    │                  │
-   │               │── GET /checkins/preload?date=today ─▶│                  │
-   │               │                  │                    │── Query confirmed registrations
-   │               │◀── [{qr, name, workshopId}] ─────────│                  │
-   │               │── Cache QR registry ────────────────▶│                  │
-   │◀── "Đã tải xong"                                      │                  │
-   │ [Tại cửa phòng - mất mạng]         │                  │                  │
-   │── Quét QR SV ─▶│                  │                  │                  │
-   │               │── Lookup local QR ─────────────────▶│                  │
-   │               │◀── {name, workshop} ────────────────│                  │
-   │               │── Save pending check-in ───────────▶│                  │
-   │◀── "Check-in OK"                                     │                  │
-   │ [Khi mạng trở lại / app foreground]                  │                  │
-   │               │── Read pending rows ───────────────▶│                  │
-   │               │── POST /checkins/sync ───────────────▶│
-   │               │                  │                    │── INSERT/validate checkins
-   │               │◀── {items:[CREATED/...]} ───────────│
-   │               │── Mark result per row ─────────────▶│
 ```
 
 **Xử lý lỗi:**
