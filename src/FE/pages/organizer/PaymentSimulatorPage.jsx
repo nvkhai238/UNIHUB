@@ -38,13 +38,14 @@ export default function PaymentSimulatorPage() {
     setProcessingId('manual');
     setMessage(null);
     try {
-      await api.post('/api/payments/sepay', {
+      await api.post('/api/webhooks/sepay', {
         id: Math.floor(Math.random() * 1000000),
         gateway: 'VietQR',
         transactionDate: new Date().toISOString(),
         accountNumber: '123456789',
         transferAmount: parseFloat(amount),
-        transferContent: paymentCode,
+        transferType: 'in',
+        content: paymentCode,
         code: 'SIMULATED',
         referenceCode: 'SIM-' + Date.now()
       });

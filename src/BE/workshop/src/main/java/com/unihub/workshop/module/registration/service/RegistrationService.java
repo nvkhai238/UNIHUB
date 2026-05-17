@@ -33,6 +33,7 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -263,7 +264,6 @@ public class RegistrationService {
                 workshopRepository.save(workshop);
             }
         }
-
         scheduleRegistrationCancelledNotification(cancelled);
         if (promoted != null) {
             scheduleWaitlistPromotedNotification(promoted);
@@ -317,14 +317,30 @@ public class RegistrationService {
     }
 
     private Registration promoteNextWaitlisted(Workshop workshop) {
+        boolean needsPayment = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
         return registrationRepository
                 .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
                 .map(waitlisted -> {
-                    waitlisted.setStatus(RegistrationStatus.CONFIRMED);
-                    waitlisted.setQrCode(generateUniqueQrCode());
-                    waitlisted.setConfirmedAt(ZonedDateTime.now());
                     waitlisted.setCancelledAt(null);
-                    return registrationRepository.save(waitlisted);
+                    if (needsPayment) {
+                        waitlisted.setStatus(RegistrationStatus.PENDING);
+                        waitlisted = registrationRepository.save(waitlisted);
+                        String paymentCode = "UH" + (100000 + new Random().nextInt(900000));
+                        Payment payment = Payment.builder()
+                                .registration(waitlisted)
+                                .amount(workshop.getPrice())
+                                .idempotencyKey(UUID.randomUUID().toString())
+                                .status(PaymentStatus.PENDING)
+                                .gatewayRef(paymentCode)
+                                .build();
+                        paymentRepository.save(payment);
+                    } else {
+                        waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                        waitlisted.setQrCode(generateUniqueQrCode());
+                        waitlisted.setConfirmedAt(ZonedDateTime.now());
+                        waitlisted = registrationRepository.save(waitlisted);
+                    }
+                    return waitlisted;
                 })
                 .orElse(null);
     }
@@ -398,11 +414,19 @@ public class RegistrationService {
         String workshopTitle = registration.getWorkshop().getTitle();
         UUID workshopId = registration.getWorkshop().getId();
         UUID registrationId = registration.getId();
+        boolean needsPayment = registration.getStatus() == RegistrationStatus.PENDING;
+        Notification.NotificationType type = needsPayment
+                ? Notification.NotificationType.PAYMENT_PENDING
+                : Notification.NotificationType.REGISTRATION_CONFIRMED;
+        String title = needsPayment ? "Có chỗ trống - Vui lòng thanh toán" : "Đã có chỗ trong workshop";
+        String body = needsPayment
+                ? "Bạn đã được chuyển từ danh sách chờ sang chờ thanh toán cho workshop " + workshopTitle + ". Vui lòng thanh toán để xác nhận."
+                : "Bạn đã được chuyển từ danh sách chờ sang đã xác nhận cho workshop " + workshopTitle + ".";
         Runnable task = () -> notificationService.createNotification(
                 userId,
-                Notification.NotificationType.REGISTRATION_CONFIRMED,
-                "Da co cho trong workshop",
-                "Ban da duoc chuyen tu danh sach cho sang da xac nhan cho workshop " + workshopTitle + ".",
+                type,
+                title,
+                body,
                 Map.of("registrationId", registrationId.toString(), "workshopId", workshopId.toString())
         );
         runAfterCommit(task);

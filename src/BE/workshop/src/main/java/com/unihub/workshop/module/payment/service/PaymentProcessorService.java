@@ -15,17 +15,18 @@ import com.unihub.workshop.module.workshop.repository.WorkshopRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Random;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -165,6 +166,21 @@ public class PaymentProcessorService {
         if (promoted == null) {
             workshop.setRemainingSeats(Math.min(workshop.getCapacity(), workshop.getRemainingSeats() + 1));
             workshopRepository.save(workshop);
+        } else {
+            // Notify the promoted student
+            boolean needsPayment = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
+            scheduleNotification(
+                    promoted.getUser().getId(),
+                    needsPayment ? Notification.NotificationType.PAYMENT_PENDING : Notification.NotificationType.REGISTRATION_CONFIRMED,
+                    needsPayment ? "Có chỗ trống - Vui lòng thanh toán" : "Đã có chỗ trong workshop",
+                    needsPayment
+                        ? "Bạn đã được chuyển từ danh sách chờ sang chờ thanh toán cho workshop " + workshop.getTitle() + ". Vui lòng thanh toán để xác nhận."
+                        : "Bạn đã được chuyển từ danh sách chờ sang đã xác nhận cho workshop " + workshop.getTitle() + ".",
+                    Map.of(
+                            "registrationId", promoted.getId().toString(),
+                            "workshopId", workshop.getId().toString()
+                    )
+            );
         }
     }
 
@@ -182,14 +198,32 @@ public class PaymentProcessorService {
     }
 
     private Registration promoteNextWaitlisted(Workshop workshop) {
+        boolean needsPayment = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
         return registrationRepository
                 .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
                 .map(waitlisted -> {
-                    waitlisted.setStatus(RegistrationStatus.CONFIRMED);
-                    waitlisted.setQrCode(generateUniqueQrCode());
-                    waitlisted.setConfirmedAt(ZonedDateTime.now());
                     waitlisted.setCancelledAt(null);
-                    return registrationRepository.save(waitlisted);
+                    if (needsPayment) {
+                        // Paid workshop: must pay before being confirmed
+                        waitlisted.setStatus(RegistrationStatus.PENDING);
+                        waitlisted = registrationRepository.save(waitlisted);
+                        String paymentCode = "UH" + (100000 + new Random().nextInt(900000));
+                        Payment payment = Payment.builder()
+                                .registration(waitlisted)
+                                .amount(workshop.getPrice())
+                                .idempotencyKey(UUID.randomUUID().toString())
+                                .status(PaymentStatus.PENDING)
+                                .gatewayRef(paymentCode)
+                                .build();
+                        paymentRepository.save(payment);
+                    } else {
+                        // Free workshop: confirm immediately
+                        waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                        waitlisted.setQrCode(generateUniqueQrCode());
+                        waitlisted.setConfirmedAt(ZonedDateTime.now());
+                        waitlisted = registrationRepository.save(waitlisted);
+                    }
+                    return waitlisted;
                 })
                 .orElse(null);
     }
