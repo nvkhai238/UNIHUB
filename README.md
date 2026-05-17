@@ -1,38 +1,44 @@
 # UniHub Workshop
 
-UniHub Workshop is a full-stack workshop registration and check-in system for a university event week.
+UniHub Workshop là hệ thống full-stack phục vụ đăng ký workshop và check-in cho tuần sự kiện của trường đại học.
 
-The submission layout is:
+Cấu trúc nộp bài gồm:
 
-- `blueprint/`: design and feature specifications.
-- `src/`: all runnable source code, environment templates, seed data, Docker Compose, and app services.
-- `clips/`: presentation videos if the team adds them for submission.
+- `blueprint/`: tài liệu thiết kế và đặc tả tính năng.
+- `src/`: toàn bộ source code có thể chạy, template môi trường, dữ liệu seed/import, Docker Compose và các service của ứng dụng.
+- `clips/`: video thuyết trình/demo nếu nhóm bổ sung khi nộp bài.
 
-## Source Layout
+## Cấu trúc source code
 
 ```text
 src/
-  BE/workshop/        Spring Boot backend
-  FE/                 React source code
-  mobile-checkin/     React Native + Expo app for CHECKIN_STAFF
-  mock-payment/       Node.js mock payment gateway
-  data/               CSV seed/import files
-  docker-compose.yml  Main Compose file
-  .env.example        Environment template
+  BE/workshop/        Backend Spring Boot
+  FE/                 Source code React
+  mobile-checkin/     App React Native + Expo cho CHECKIN_STAFF
+  mock-payment/       Mock payment gateway bằng Node.js
+  data/               File CSV seed/import
+  docker-compose.yml  File Docker Compose chính
+  .env.example        Template biến môi trường
 ```
 
-## Prerequisites
+## Yêu cầu cài đặt
 
-- Docker Desktop.
-- Node.js 20+ if running services outside Docker.
-- Java 21 if running the backend outside Docker.
-- A PostgreSQL/Supabase database matching the schema in `blueprint/`.
+- Docker Desktop, nếu chạy toàn bộ stack bằng Docker.
+- Node.js 20+ và npm, nếu chạy frontend/mock-payment/mobile ngoài Docker.
+- Java 21, nếu chạy backend ngoài Docker.
+- Expo Go trên điện thoại hoặc Android Emulator/iOS Simulator để chạy app mobile check-in.
+- PostgreSQL/Supabase database khớp với schema trong `blueprint/`.
 
-## Environment
+## Cấu hình môi trường
 
-Create `src/.env` from `src/.env.example` and fill in your local values.
+Tạo `src/.env` từ `src/.env.example` và điền các giá trị local.
 
-Important variables:
+```powershell
+cd src
+Copy-Item .env.example .env
+```
+
+Các biến quan trọng:
 
 ```env
 DB_URL=jdbc:postgresql://...
@@ -54,33 +60,39 @@ MAIL_FROM=...
 MAIL_ADMIN=...
 ```
 
-For local demos without real email, set `MAIL_ENABLED=false`.
+Nếu demo local không dùng email thật, đặt `MAIL_ENABLED=false`.
 
-## Run With Docker
+## Chạy bằng Docker
 
-All runtime commands should start inside `src/`:
+Tất cả lệnh runtime nên được chạy bên trong thư mục `src/`:
 
 ```powershell
 cd src
 docker compose up --build
 ```
 
-Services:
+Các service sau khi chạy:
 
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8080`
 - Mock payment gateway: `http://localhost:3001`
 - Redis: `localhost:6379`
 
-Stop the stack:
+Dừng stack:
 
 ```powershell
 docker compose down
 ```
 
-## Run Without Docker
+Dừng stack và xóa volume:
 
-Open separate terminals from the repo root.
+```powershell
+docker compose down -v
+```
+
+## Chạy không dùng Docker
+
+Mở các terminal riêng từ root repo.
 
 Backend:
 
@@ -88,6 +100,8 @@ Backend:
 cd src\BE\workshop
 .\mvnw.cmd spring-boot:run
 ```
+
+Nếu Maven báo lỗi `release version 21 not supported`, hãy trỏ `JAVA_HOME` về JDK 21 trước khi chạy backend.
 
 Frontend:
 
@@ -105,7 +119,18 @@ npm install
 npm start
 ```
 
-Mobile check-in app:
+Redis vẫn cần thiết cho rate limiting/idempotency khi chạy các service local. Cách đơn giản nhất là giữ Redis chạy bằng Docker:
+
+```powershell
+cd src
+docker compose up redis
+```
+
+## App mobile check-in
+
+App mobile nằm trong `src/mobile-checkin` và được dùng bởi `CHECKIN_STAFF` để quét QR, lưu offline và đồng bộ check-in.
+
+Cài dependencies và chạy Expo:
 
 ```powershell
 cd src\mobile-checkin
@@ -113,11 +138,37 @@ npm install
 npx expo start
 ```
 
-Set `src/mobile-checkin/app.json -> expo.extra.apiBaseUrl` to your backend LAN IP when testing on a real phone, for example `http://192.168.2.100:8080`.
+Các cách chạy:
 
-## Demo Accounts
+- Nhấn `a` trong terminal Expo để mở Android Emulator.
+- Quét QR của Expo bằng Expo Go trên điện thoại thật.
+- Đăng nhập bằng tài khoản staff ở phần bên dưới.
 
-Seeded accounts are created by `DataSeederConfig`.
+Khi test trên điện thoại thật, điện thoại phải truy cập được backend qua IP LAN của máy tính. Có thể truyền biến môi trường khi chạy Expo:
+
+```powershell
+cd src\mobile-checkin
+$env:EXPO_PUBLIC_API_BASE_URL="http://192.168.2.100:8080"
+npx expo start
+```
+
+Hoặc cấu hình trong `src/mobile-checkin/app.json -> expo.extra.apiBaseUrl`:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "apiBaseUrl": "http://192.168.2.100:8080"
+    }
+  }
+}
+```
+
+Nếu cả hai giá trị trên đều không được cấu hình, app sẽ fallback về `http://localhost:8080`, chỉ phù hợp khi môi trường mobile có thể resolve `localhost` tới backend.
+
+## Tài khoản demo
+
+Các tài khoản seed được tạo bởi `DataSeederConfig`.
 
 ```text
 Organizer: organizer@unihub.edu.vn / admin123
@@ -125,45 +176,45 @@ Check-in staff: staff@unihub.edu.vn / staff123
 Student example: 21521001@university.edu.vn / 21521001@UniHub
 ```
 
-Imported students use:
+Sinh viên được import dùng mật khẩu mặc định:
 
 ```text
 password = {student_id}@UniHub
 ```
 
-## Student CSV Import
+## Import CSV sinh viên
 
-The scheduled job runs daily at 02:00 and reads:
+Scheduled job chạy hằng ngày lúc 02:00 và đọc file:
 
 ```text
 /data/students_{yyyy-MM-dd}.csv
 ```
 
-When using Docker from `src/`, the host folder `src/data/` is mounted into the backend container as `/data`.
+Khi chạy Docker từ `src/`, thư mục host `src/data/` được mount vào container backend tại `/data`.
 
-Organizer APIs:
+Các API dành cho Organizer:
 
 - `POST /api/admin/student-imports/run`
 - `GET /api/admin/student-imports`
 - `GET /api/csv/status`
 
-## Verification
+## Kiểm tra
 
-Backend tests:
+Chạy test backend:
 
 ```powershell
 cd src\BE\workshop
 .\mvnw.cmd test
 ```
 
-Frontend build:
+Build frontend:
 
 ```powershell
 cd src\FE
 npm run build
 ```
 
-Mock payment smoke check:
+Smoke check mock payment:
 
 ```powershell
 cd src\mock-payment
