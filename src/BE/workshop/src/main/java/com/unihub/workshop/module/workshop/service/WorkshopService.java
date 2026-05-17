@@ -437,19 +437,37 @@ public class WorkshopService {
     }
 
     private void promoteWaitlistIfSeatsAvailable(Workshop workshop) {
+        boolean needsPayment = workshop.getPrice() != null && workshop.getPrice().compareTo(BigDecimal.ZERO) > 0;
         List<UUID> promotedRegistrationIds = new ArrayList<>();
         while (workshop.getRemainingSeats() > 0) {
             Registration promoted = registrationRepository
                     .findFirstByWorkshopAndStatusOrderByRegisteredAtAsc(workshop, RegistrationStatus.WAITLISTED)
                     .map(waitlisted -> {
-                        waitlisted.setStatus(RegistrationStatus.CONFIRMED);
-                        waitlisted.setQrCode(generateUniqueQrCode());
-                        waitlisted.setConfirmedAt(ZonedDateTime.now());
                         waitlisted.setCancelledAt(null);
-                        workshop.setRemainingSeats(workshop.getRemainingSeats() - 1);
-                        registrationRepository.save(waitlisted);
-                        workshopRepository.save(workshop);
-                        return waitlisted;
+                        if (needsPayment) {
+                            waitlisted.setStatus(RegistrationStatus.PENDING);
+                            Registration savedReg = registrationRepository.save(waitlisted);
+                            String paymentCode = "UH" + (100000 + new java.util.Random().nextInt(900000));
+                            Payment payment = Payment.builder()
+                                    .registration(savedReg)
+                                    .amount(workshop.getPrice())
+                                    .idempotencyKey(UUID.randomUUID().toString())
+                                    .status(PaymentStatus.PENDING)
+                                    .gatewayRef(paymentCode)
+                                    .build();
+                            paymentRepository.save(payment);
+                            workshop.setRemainingSeats(workshop.getRemainingSeats() - 1);
+                            workshopRepository.save(workshop);
+                            return savedReg;
+                        } else {
+                            waitlisted.setStatus(RegistrationStatus.CONFIRMED);
+                            waitlisted.setQrCode(generateUniqueQrCode());
+                            waitlisted.setConfirmedAt(ZonedDateTime.now());
+                            workshop.setRemainingSeats(workshop.getRemainingSeats() - 1);
+                            Registration savedReg = registrationRepository.save(waitlisted);
+                            workshopRepository.save(workshop);
+                            return savedReg;
+                        }
                     })
                     .orElse(null);
             if (promoted == null) {
@@ -462,12 +480,20 @@ public class WorkshopService {
             return;
         }
 
+        Notification.NotificationType notificationType = needsPayment
+                ? Notification.NotificationType.PAYMENT_PENDING
+                : Notification.NotificationType.REGISTRATION_CONFIRMED;
+        String notificationTitle = needsPayment ? "Có chỗ trống - Vui lòng thanh toán" : "Đã có chỗ trong workshop";
+        String notificationBody = needsPayment
+                ? "Bạn đã được chuyển từ danh sách chờ sang chờ thanh toán cho workshop " + workshop.getTitle() + ". Vui lòng thanh toán để xác nhận."
+                : "Bạn đã được chuyển từ danh sách chờ sang đã xác nhận cho workshop " + workshop.getTitle() + ".";
+
         Runnable action = () -> promotedRegistrationIds.forEach(registrationId -> {
             notificationService.createNotification(
                     registrationRepository.findById(registrationId).orElseThrow().getUser().getId(),
-                    Notification.NotificationType.REGISTRATION_CONFIRMED,
-                    "Da co cho trong workshop",
-                    "Ban da duoc chuyen tu danh sach cho sang da xac nhan.",
+                    notificationType,
+                    notificationTitle,
+                    notificationBody,
                     Map.of("registrationId", registrationId.toString(), "workshopId", workshop.getId().toString())
             );
         });
