@@ -14,6 +14,9 @@ Hệ thống cho phép nhân sự (CHECKIN_STAFF) quét mã QR để ghi nhận 
 
 ### Luồng 1: Preload dữ liệu (Khi có mạng)
 
+1. Staff mở mobile app vào buổi sáng, gọi `GET /api/checkins/workshops?date={today}` để chọn workshop/ca check-in.
+2. App gọi `GET /api/checkins/preload?date={today}&workshopId={id}` để tải QR hợp lệ; nếu không truyền `workshopId`, backend trả QR của các workshop trong ngày.
+3. App lưu registry QR vào local database của thiết bị.
 1. Staff mở mobile app, chọn ngày và gọi `GET /api/checkins/workshops?date={date}` để lấy danh sách workshop `PUBLISHED` trong ngày.
 2. Staff chọn một workshop cụ thể, app gọi `GET /api/checkins/preload?date={date}&workshopId={workshopId}`.
 3. Trả về danh sách QR hợp lệ của các registration `CONFIRMED` trong workshop đã chọn.

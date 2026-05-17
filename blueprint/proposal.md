@@ -1,5 +1,7 @@
 # UniHub Workshop — Project Proposal
 
+> **Nguồn ưu tiên:** Blueprint này bám theo đề bài UniHub Workshop. Khi có khác biệt giữa ý tưởng mở rộng và đề, yêu cầu trong đề luôn được ưu tiên; phần cài đặt/codebase chỉ được mô tả nếu không làm lệch các yêu cầu bắt buộc của đề.
+
 ## 1. Vấn đề
 
 ### Hiện trạng
@@ -65,11 +67,11 @@ Xây dựng hệ thống **UniHub Workshop** tự động hóa toàn bộ quy tr
 ### Trong phạm vi
 
 - **Web App cho Sinh viên:** Xem danh sách workshop, đăng ký (miễn phí và có phí), xem mã QR, nhận thông báo in-app.
-- **Web App cho Ban tổ chức (Admin):** Dashboard CRUD workshop, upload PDF, xem thống kê đăng ký, quản lý người dùng.
+- **Web App cho Ban tổ chức (Admin):** Dashboard CRUD workshop, upload PDF/room layout, đổi phòng/giờ, hủy workshop, xem thống kê đăng ký/thanh toán/check-in và lịch sử import CSV.
 - **Check-in Mobile App:** Quét QR bằng camera thiết bị, hỗ trợ offline qua local database, đồng bộ lại khi có mạng trở lại hoặc app foreground.
 - **Backend API (Spring Boot 3.x):** Toàn bộ logic nghiệp vụ, bảo mật JWT, Rate Limiting, Circuit Breaker, Idempotency Key, phân quyền RBAC.
 - **Tích hợp AI Summary:** Nhận PDF → trích xuất văn bản → gửi Gemini API → lưu bản tóm tắt vào trang chi tiết workshop.
-- **Đồng bộ CSV sinh viên:** Spring Batch đọc file CSV export từ hệ thống cũ mỗi đêm, upsert dữ liệu vào PostgreSQL.
+- **Đồng bộ CSV sinh viên:** Spring Batch đọc file CSV export từ hệ thống cũ mỗi đêm trong thư mục `/data` (Docker bind mount), upsert dữ liệu vào PostgreSQL.
 - **Hệ thống thông báo:** Email (SMTP) và thông báo in-app sau mỗi sự kiện quan trọng (đăng ký thành công, workshop bị hủy/đổi phòng). Thiết kế mở rộng được để thêm kênh mới (Telegram, v.v.) mà không sửa logic core.
 
 ### Ngoài phạm vi

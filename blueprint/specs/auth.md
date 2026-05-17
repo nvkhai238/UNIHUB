@@ -49,15 +49,16 @@
 ### Đăng xuất — Blacklist trong Redis
 
 ```
-Key:   refresh:{refreshToken}
-Value: "revoked"
+Key:   blacklist:{refreshToken}
+Value: "1"
 TTL:   Thời gian còn lại của token (seconds)
 ```
 
 Khi `/api/auth/refresh` được gọi:
 1. Kiểm tra token có trong Redis blacklist không → nếu có → 401
-2. Verify signature + expiry
-3. Cấp access token mới
+2. Kiểm tra token hiện hành theo `refresh_token:{email}` nếu Redis còn dữ liệu
+3. Verify signature + expiry
+4. Cấp access token + refresh token mới, thay thế `refresh_token:{email}`
 
 ---
 
@@ -114,9 +115,11 @@ Authorization Check (Spring Security)
     ├── GET /api/registrations/my/** → hasRole("STUDENT")
     ├── /api/admin/**        → hasRole("ORGANIZER")
     ├── POST/PUT/DELETE /api/workshops/** → hasRole("ORGANIZER")
-    ├── /api/checkins/**     → hasRole("CHECKIN_STAFF")
+    ├── /api/checkins/**     → hasAnyRole("CHECKIN_STAFF", "ORGANIZER")
     └── anyRequest()        → authenticated()
 ```
+
+`SecurityConfig` chỉ là lớp cổng vào theo namespace. Quyền chi tiết của `/api/checkins/**` được chốt bằng `@PreAuthorize`: `CHECKIN_STAFF` được preload/lookup/sync; `ORGANIZER` chỉ xem danh sách check-in theo workshop.
 
 ---
 
@@ -173,7 +176,7 @@ Mọi response lỗi từ module Auth đều theo format chung:
 - [ ] Cấu hình `SecurityFilterChain` bean trong `SecurityConfig`
 - [ ] Tạo `AuthController` với endpoints: login, refresh, logout, change-password, register, request-otp, verify-otp
 - [ ] Tạo `UserDetailsServiceImpl` — load user từ PostgreSQL theo email
-- [ ] Viết `PasswordEncoder` bean (BCrypt, strength 12)
+- [ ] Viết `PasswordEncoder` bean (BCrypt, default strength)
 - [ ] Test: login thành công, sai password, token hết hạn, blacklist refresh token
 - [ ] Test: endpoint STUDENT không cho ORGANIZER truy cập và ngược lại
 

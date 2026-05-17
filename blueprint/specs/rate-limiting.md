@@ -20,7 +20,7 @@ Hệ thống giới hạn số request mỗi sinh viên có thể gửi trong 10
 ```
 POST /api/registrations
   │
-  ├── [1] Extract user ID từ JWT token
+  ├── [1] Extract principal từ JWT token (email); với public workshop read thì fallback theo client IP
   │
   ├── [2] RegistrationSlidingWindowService (Redis Sorted Set)
   │       ├── Key: rate:registration:{principal}
@@ -175,7 +175,7 @@ return (
 | **User gửi 6 requests trong 10s** | 429 | 5 requests đầu pass, thứ 6 reject với Retry-After: 10 |
 | **User gửi nhiều requests liên tục** | 429 | Mỗi lần vượt → 429, countdown reset lại 10s |
 | **Window slide qua, request mới lại được tiếp** | 200 | Sau 10s, counter reset, request mới đi được |
-| **Nhiều user cùng rate limit** | 429 | Rate limit per user (userId), không ảnh hưởng user khác |
+| **Nhiều user cùng rate limit** | 429 | Rate limit per principal (email hoặc IP), không ảnh hưởng principal khác |
 | **Redis unavailable** | 200/201 | Fail-open: cho request đi tiếp, dựa vào DB lock/idempotency để bảo vệ consistency |
 | **Config limit/window sai** | — | Dùng default trong service/config, không crash app |
 
@@ -185,7 +185,7 @@ return (
 
 | Ràng buộc | Chi tiết |
 |----------|---------|
-| **Per-user isolation** | Rate limit tính riêng từng user (userId từ JWT) |
+| **Per-principal isolation** | Registration tính theo email từ JWT; workshop read tính theo email nếu có login hoặc IP nếu anonymous |
 | **Sliding window** | Không fixed window (tránh burst ở edge) |
 | **Timeout behavior** | timeoutDuration=0 → fail fast (không queue) |
 | **Endpoints** | POST /registrations: 5 req/10s; GET /workshops: 30 req/10s |

@@ -8,7 +8,7 @@
 
 Sinh viên có thể đăng ký tham dự workshop. Hệ thống phải đảm bảo:
 - Không overbooking (pessimistic lock)
-- QR code được phát ngay sau khi đăng ký thành công
+- QR code được phát ngay sau khi registration đạt `CONFIRMED`; workshop miễn phí nhận QR ngay, workshop có phí nhận QR sau khi SePay webhook xác nhận thanh toán
 - Hỗ trợ cả workshop miễn phí và có phí
 - Khi hết chỗ, sinh viên vào danh sách chờ (waitlisted)
 
@@ -24,7 +24,7 @@ POST /api/registrations
   ├── Body: {workshopId}
   │
   ├── [1] Validate Idempotency-Key (UUID v4 format)
-  ├── [2] Rate limit check (Resilience4j)
+  ├── [2] Rate limit check bằng Redis Sorted Set (`RegistrationSlidingWindowService`)
   ├── [3] Redis GET idem:{principal}:{key} → nếu có → return cached response
   │
   ├── [4] BEGIN TRANSACTION
@@ -108,7 +108,7 @@ DELETE /api/registrations/{registrationId}
 | **Thanh toán quá hạn (> 15 phút)** | Async | `PENDING_PAYMENT_TIMEOUT` | Scheduler chuyển payment=`FAILED`, registration=`CANCELLED`, hoàn ghế/promote waitlist |
 | **SePay webhook thiếu tiền** | 200 | (webhook accepted) | Giữ payment=`PENDING`, không confirm registration |
 | **Workshop không tồn tại** | 404 | `WORKSHOP_NOT_FOUND` | Báo lỗi |
-| **Hủy khi workshop đang diễn ra** | 409 | `WORKSHOP_IN_PROGRESS` | Không cho phép hủy |
+| **Hủy sát giờ workshop (< 6 tiếng)** | 409 | `REGISTRATION_CANCEL_TIMEOUT` | Không cho phép hủy |
 | **Hủy danh sách chờ** | 200 | (success) | Cho phép hủy WAITLISTED, không hoàn ghế |
 | **Redis unavailable (idempotency)** | 200/201 | (success) | Fail open: tiếp tục xử lý, không cache |
 

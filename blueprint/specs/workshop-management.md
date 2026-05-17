@@ -9,7 +9,7 @@
 Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
 - Cho phép ORGANIZER quản lý workshop từ DRAFT → PUBLISHED → CANCELLED
 - Public có thể xem danh sách workshop đã PUBLISHED
-- Cung cấp thống kê đăng ký cho ORGANIZER
+- Cung cấp thống kê đăng ký, check-in và doanh thu cho ORGANIZER
 - Hỗ trợ Supabase Realtime cập nhật số chỗ còn lại (xem [realtime-updates.md](realtime-updates.md))
 
 ---
@@ -27,9 +27,9 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
    - Cancel (PATCH /workshops/{id}/status hoặc POST /workshops/{id}/cancel → CANCELLED)
 3. Khi PUBLISHED: sinh viên có thể xem + đăng ký
 4. Khi CANCELLED: 
-   - Notify tất cả CONFIRMED sinh viên via email + in-app
-   - Tất cả registrations → CANCELLED
-   - Refund nếu có phí
+   - Notify tất cả sinh viên có registration liên quan via email + in-app
+   - Tất cả registrations active/waitlisted → CANCELLED
+   - Payment `SUCCESS` → `REFUNDED`, payment `PENDING` → `FAILED`
 5. ORGANIZER xem stats realtime (số confirmed, waitlisted, checked-in)
 ```
 
@@ -40,9 +40,8 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
 | Tình huống | HTTP | Code | Hành vi |
 |-----------|------|------|--------|
 | **Workshop không tồn tại** | 404 | `WORKSHOP_NOT_FOUND` | Trả lỗi |
-| **Giảm capacity dưới confirmed count** | 409 | `CAPACITY_BELOW_REGISTERED` | Reject |
+| **Giảm capacity** | 200/409 | tùy validation | Codebase hiện tại cập nhật capacity, điều chỉnh `remainingSeats=max(0, oldRemaining+diff)` và promote waitlist nếu còn chỗ; trước demo không giảm dưới số active registrations |
 | **Cập nhật workshop CANCELLED** | 409 | `WORKSHOP_ALREADY_CANCELLED` | Reject |
-| **Cancel mà không có lý do** | 400 | `CANCELLATION_REASON_REQUIRED` | Reject |
 | **Quay lại PUBLISHED → DRAFT** | 409 | `INVALID_STATE_TRANSITION` | Reject |
 | **Không phải ORGANIZER** | 403 | `FORBIDDEN` | Reject |
 
@@ -52,7 +51,7 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
 
 | Ràng buộc | Chi tiết |
 |----------|---------|
-| **Consistency** | remaining_seats = capacity - confirmed; confirmed + waitlisted ≤ capacity |
+| **Consistency** | `remaining_seats` không âm; active seat reservation (`PENDING` + `CONFIRMED`) không vượt capacity trong luồng đăng ký; waitlist có thể vượt capacity |
 | **Immutability** | Không thể revert PUBLISHED → DRAFT |
 | **Notification** | Khi cancel: email + in-app gửi async, không block response |
 | **Realtime** | Số ghế cập nhật via Supabase Realtime (xem [realtime-updates.md](realtime-updates.md)) |
@@ -63,7 +62,7 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
 ## Tiêu chí chấp nhận
 
 - ✅ ORGANIZER tạo workshop → status = DRAFT
-- ✅ Cập nhật capacity → validate không < confirmed count
+- ✅ Cập nhật capacity → remainingSeats được điều chỉnh nhất quán và waitlist được promote nếu có chỗ
 - ✅ Publish → status = PUBLISHED, sinh viên thấy ngay
 - ✅ Cancel → notify tất cả → async email gửi không block
 - ✅ Stats real-time: confirmed, waitlisted, checkedIn count chính xác
@@ -81,9 +80,8 @@ Ban tổ chức tạo, chỉnh sửa, hủy workshop. Hệ thống:
 Xem tất cả workshop PUBLISHED. Không cần đăng nhập.
 
 **Query Params:**
-- `?date=2026-05-10` — lọc theo ngày (tùy chọn)
-- `?status=PUBLISHED` — mặc định PUBLISHED; ORGANIZER có thể query DRAFT
 - `?page=0&size=20` — phân trang
+- Public endpoint chỉ trả workshop `PUBLISHED` và chưa kết thúc; lọc theo `status` dùng endpoint admin.
 
 **Response 200:**
 ```json
@@ -190,16 +188,23 @@ Xem tất cả workshop PUBLISHED. Không cần đăng nhập.
 
 **Header:** `Authorization: Bearer {accessToken}`
 
-**Request Body:** (partial update)
+**Request Body:** full update payload theo `WorkshopRequest`
 ```json
 {
   "title": "Workshop AI (Updated)",
+  "description": "Nội dung cập nhật...",
+  "speakerName": "TS. Nguyễn Văn X",
+  "speakerBio": "Tiểu sử cập nhật...",
   "room": "B4-302",
-  "startTime": "2026-05-10T09:00:00Z"
+  "roomLayoutUrl": "https://storage.supabase.co/...",
+  "startTime": "2026-05-10T09:00:00Z",
+  "endTime": "2026-05-10T11:00:00Z",
+  "capacity": 60,
+  "price": 50000,
+  "pdfUrl": "https://storage.supabase.co/..."
 }
 ```
-
-**Constraint:** Không được giảm `capacity` dưới số CONFIRMED registrations.
+**Constraint:** Không cập nhật workshop đã `CANCELLED`; thay đổi capacity sẽ điều chỉnh `remainingSeats` theo chênh lệch capacity và có thể promote waitlist.
 
 **Response 200:** Updated workshop data.
 
@@ -210,8 +215,7 @@ Xem tất cả workshop PUBLISHED. Không cần đăng nhập.
 **Request Body:**
 ```json
 {
-  "status": "PUBLISHED",
-  "cancellationReason": null
+  "status": "PUBLISHED"
 }
 ```
 
@@ -224,9 +228,8 @@ PUBLISHED → CANCELLED
 ```
 
 **Special handling:**
-- Khi status = CANCELLED: phải có `cancellationReason`
-- Server tự động gửi email + in-app notification đến tất cả CONFIRMED registrations
-- Tất cả registrations chuyển sang CANCELLED
+- `PATCH /status` chỉ đổi state hợp lệ.
+- `POST /api/workshops/{id}/cancel` chạy logic hủy đầy đủ: gửi email + in-app notification, chuyển registrations liên quan sang `CANCELLED`, cập nhật payment.
 
 **Response 200:**
 ```json
@@ -275,16 +278,31 @@ Xem tất cả workshop (DRAFT, PUBLISHED, CANCELLED).
 {
   "status": 200,
   "data": {
-    "workshopId": "a1b2c3d4-...",
-    "title": "Workshop AI trong giáo dục",
-    "capacity": 60,
-    "remainingSeats": 15,
-    "confirmed": 45,
-    "waitlisted": 12,
-    "cancelled": 3,
-    "checkedIn": 38,
-    "fillRate": "75%",
-    "checkinRate": "84%"
+    "totalWorkshops": 8,
+    "totalRegistrations": 320,
+    "totalConfirmedRegistrations": 240,
+    "totalWaitlistedRegistrations": 36,
+    "totalPendingRegistrations": 24,
+    "totalCancelledRegistrations": 20,
+    "totalCheckins": 180,
+    "successfulPayments": 92,
+    "totalRevenue": 4600000,
+    "breakdown": [
+      {
+        "workshopId": "a1b2c3d4-...",
+        "workshopTitle": "Workshop AI trong giáo dục",
+        "registrationsCount": 60,
+        "confirmedCount": 45,
+        "waitlistedCount": 12,
+        "pendingCount": 3,
+        "cancelledCount": 0,
+        "checkinCount": 38,
+        "checkinRate": 0.84,
+        "capacity": 60,
+        "remainingSeats": 15,
+        "revenue": 2250000
+      }
+    ]
   }
 }
 ```

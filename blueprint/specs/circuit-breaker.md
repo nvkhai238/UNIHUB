@@ -115,10 +115,10 @@ public class PaymentService {
         fallbackMethod = "paymentFallback"
     )
     @Retry(name = "payment")
-    public PaymentResult processPayment(PaymentRequest request) {
-        
-        log.info("Processing payment: {}", request.getIdempotencyKey());
-        
+    public Payment processPayment(Payment payment) {
+
+        log.info("Processing payment: {}", payment.getGatewayRef());
+
         try {
             PaymentStatus status = gatewayClient.processPayment(payment.getGatewayRef(), payment.getAmount());
             payment.setStatus(status);
@@ -135,8 +135,8 @@ public class PaymentService {
      * - CB OPEN: gọi fallback ngay lập tức
      * - Retry exhausted: cũng gọi fallback
      */
-    public PaymentResult paymentFallback(
-            PaymentRequest request,
+    public Payment paymentFallback(
+            Payment payment,
             Exception ex) {
         
         log.warn("Payment CB fallback triggered: {}", ex.getMessage());

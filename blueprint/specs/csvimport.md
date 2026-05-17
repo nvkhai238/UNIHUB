@@ -29,13 +29,13 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
       │   ├── [3] Đọc dòng đầu (header): student_id,full_name,email
       │   │       ├── Match header → OK
       │   │       └── Khác → Job status=SKIPPED, gửi alert email admin
-      │   ├── [4] Validate từng dòng, dedupe student_id, ghi file tạm sanitized
+      │   ├── [4] Validate từng dòng, dedupe student_id, ghi file tạm sanitized trong /data/.tmp
       │   └── Lỗi file-level → Job SKIPPED, không chạy Step 2
       │
       ├── Step 2: ImportStudentsStep (Chunk-oriented, chunk size=100)
       │   │
       │   ├── [1] ItemReader: FlatFileItemReader
-      │   │       ├── File: /data/students_{today}.csv
+      │   │       ├── File: sanitized temp CSV từ Step 1
       │   │       ├── Encoding: UTF-8
       │   │       ├── Skip: 1 (header row)
       │   │       ├── Delimiter: ","
@@ -90,7 +90,7 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
 | **student_id không hợp lệ (không phải 8 chữ số)** | Skip dòng, log cảnh báo chi tiết dòng số mấy |
 | **Email format sai** | Skip dòng |
 | **Trùng lặp student_id (cùng trong file)** | Preprocess giữ dòng hợp lệ cuối cùng theo student_id |
-| **Database connection fail** | Spring Batch rollback chunk, retry 3 lần, nếu vẫn fail → Job FAILED |
+| **Database connection fail** | Spring Batch rollback chunk, ghi batch status `FAILED`, gửi alert email admin |
 | **Batch size quá lớn (memory leak)** | Chunk size = 100, manageable |
 | **Job chạy 2 lần cùng lúc** | ReentrantLock đánh dấu batch thứ 2 `SKIPPED` |
 | **Dữ liệu cũ của SV được xóa** | TUYỆT ĐỐI KHÔNG → chỉ cập nhật name/email cho user STUDENT |
@@ -103,7 +103,7 @@ Scheduler (Cron) kích hoạt lúc 02:00 AM
 |----------|---------|
 | **Chunk size** | 100 rows/commit → balance memory & performance |
 | **Encoding** | UTF-8 only |
-| **Retry policy** | Max 3 attempts per chunk, nếu vẫn fail → Job FAILED |
+| **Fault tolerance** | `skip(Exception.class)` với `skipLimit=1000`; lỗi file-level vẫn `SKIPPED`, lỗi runtime quá ngưỡng → `FAILED` |
 | **Error tolerance** | Skip individual row không dừng job, nhưng fail at step 1 → SKIPPED toàn bộ |
 | **File naming** | `/data/students_{YYYY-MM-DD}.csv`; manual run có fallback lấy file mới nhất |
 | **Field format** | student_id: 8 chữ số, email: valid email, full_name: max 255 char |
