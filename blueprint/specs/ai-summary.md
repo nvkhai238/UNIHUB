@@ -80,7 +80,7 @@ AiSummaryService.processAsync(workshopId, pdfUrl)
   │
   ├── [5] Parse response
   │       ├── Extract: response.candidates[0].content.parts[0].text
-  │       └── Truncate to 500 characters max
+  │       └── Truncate to 800 characters max
   │
   ├── [6] Update workshop
   │       ├── UPDATE workshops
@@ -134,7 +134,7 @@ POST /api/workshops/{workshopId}/ai-summary/retry
 | **Async pool** | ThreadPool size ≥ 2 cho AI processing, queue ≥ 50 |
 | **State machine** | NONE → PROCESSING → DONE / FAILED |
 | **Retry policy** | Max 3 times per original request (manual retries unlimited) |
-| **Summary length** | Max 500 characters stored in database |
+| **Summary length** | Max 800 characters stored in database |
 | **Language** | Luôn tiếng Việt, không dùng ngôn ngữ khác |
 | **Rate limit (Gemini)** | Không vượt 100 requests/phút (nếu setup quá, phải throttle) |
 
@@ -159,6 +159,10 @@ POST /api/workshops/{workshopId}/ai-summary/retry
 
 Upload file PDF và kích hoạt tiến trình tạo tóm tắt AI bất đồng bộ.
 
+#### `POST /api/workshops/{workshopId}/room-layout`
+
+Upload ảnh sơ đồ phòng (`image/*`, tối đa 5MB) vào Supabase Storage và cập nhật `roomLayoutUrl` của workshop. Endpoint này thuộc workshop-management nhưng dùng cùng storage service với PDF upload.
+
 #### `POST /api/workshops/{workshopId}/ai-summary/retry`
 
 Thử lại tiến trình tạo tóm tắt AI khi trạng thái trước đó là `FAILED`.
@@ -176,7 +180,7 @@ Cho phép ORGANIZER lấy bản tóm tắt AI của một workshop cụ thể.
 {
   "status": 200,
   "data": {
-    "summary": "This workshop covers the basics of AI in education..."
+    "summary": "Workshop giới thiệu các ứng dụng AI trong giáo dục, tập trung vào trợ giảng thông minh, cá nhân hóa học tập và công cụ hỗ trợ sinh viên."
   }
 }
 ```

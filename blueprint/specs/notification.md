@@ -93,6 +93,14 @@ Event: Bất kỳ sự kiện quan trọng (workshop cancelled, status updated, 
 ### Luồng D: Mark Notification as Read
 
 ```
+PATCH /api/notifications/{notificationId}
+  ├── Header: Authorization
+  ├── Body: {isRead: true}
+  │
+  ├── [1] Verify ownership: notification.user_id == current_user.id
+  ├── [2] UPDATE notifications SET is_read = true WHERE id = ?
+  └── Return 200 {isRead: true}
+```
 
 ### Luồng E: Refund / Workshop Update Email
 
@@ -103,14 +111,6 @@ Event: Workshop updated / refund processed
   ├── EmailService.sendRefundCompleted(refundRequestId)
   │   └── Dedup Redis key: email:refund-completed:{refundRequestId}:{processed}
   └── In-app notification lưu payload JSON {workshopId, registrationId, refundRequestId}
-```
-PATCH /api/notifications/{notificationId}
-  ├── Header: Authorization
-  ├── Body: {is_read: true}
-  │
-  ├── [1] Verify ownership: notification.user_id == current_user.id
-  ├── [2] UPDATE notifications SET is_read = true WHERE id = ?
-  └── Return 200 {is_read: true}
 ```
 
 ---
@@ -163,16 +163,15 @@ PATCH /api/notifications/{notificationId}
 
 ### Base path: `/api/notifications`
 
-#### `GET /api/notifications` — Danh sách notifications (STUDENT)
+#### `GET /api/notifications` — Danh sách notifications (authenticated user)
 
 Lấy notifications của user đang đăng nhập.
 
 **Header:** `Authorization: Bearer {accessToken}`
 
 **Query Params:**
-- `?is_read=false` — chỉ unread (tùy chọn)
+- `?unreadOnly=true` — chỉ unread (tùy chọn)
 - `?page=0&size=20` — phân trang
-- `?sort=createdAt,desc` — sắp xếp
 
 **Response 200:**
 ```json
@@ -185,8 +184,8 @@ Lấy notifications của user đang đăng nhập.
         "type": "REGISTRATION_CONFIRMED",
         "title": "Đăng ký thành công",
         "body": "Bạn đã đăng ký thành công workshop 'AI trong giáo dục'",
-        "is_read": false,
-        "created_at": "2026-05-03T10:15:00Z",
+        "isRead": false,
+        "createdAt": "2026-05-03T10:15:00Z",
         "data": {
           "workshopId": "a1b2c3d4-...",
           "registrationId": "r1r2r3r4-..."
@@ -204,20 +203,24 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
-#### `PATCH /api/notifications/{notificationId}` — Mark as read (STUDENT)
+#### `GET /api/notifications/unread-count` — Số notification chưa đọc
+
+Trả về số notification chưa đọc của user đang đăng nhập.
+
+#### `PATCH /api/notifications/{notificationId}` — Mark as read (authenticated user)
 
 **Header:** `Authorization: Bearer {accessToken}`
 
 **Request Body:**
 ```json
 {
-  "is_read": true
+  "isRead": true
 }
 ```
 
 **Validation:**
 - Notification thuộc về user đang đăng nhập
-- Chỉ có thể set `is_read` (không thể modify `type`, `title`, `body`)
+- Endpoint hiện tại mark notification theo `id` sang read; body chỉ dùng để tương thích UI, không cho sửa `type`, `title`, `body`.
 
 **Response 200:**
 ```json
@@ -225,7 +228,7 @@ Lấy notifications của user đang đăng nhập.
   "status": 200,
   "data": {
     "id": "n1n2n3n4-...",
-    "is_read": true,
+    "isRead": true,
     "updatedAt": "2026-05-03T10:20:00Z"
   }
 }
@@ -233,17 +236,14 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
-#### `PATCH /api/notifications` — Bulk mark as read (STUDENT)
+#### `PATCH /api/notifications` — Bulk mark as read (authenticated user)
 
 **Header:** `Authorization: Bearer {accessToken}`
 
 **Request Body:**
 ```json
 {
-  "action": "mark_all_read",
-  "filter": {
-    "type": "WORKSHOP_CANCELLED"
-  }
+  "action": "mark_all_read"
 }
 ```
 
@@ -259,7 +259,7 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
-#### `DELETE /api/notifications/{notificationId}` — Xóa notification (STUDENT)
+#### `DELETE /api/notifications/{notificationId}` — Xóa notification (authenticated user)
 
 **Header:** `Authorization: Bearer {accessToken}`
 
@@ -267,18 +267,14 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
-#### `DELETE /api/notifications` — Bulk delete (STUDENT)
+#### `DELETE /api/notifications` — Bulk delete (authenticated user)
 
 **Header:** `Authorization: Bearer {accessToken}`
 
 **Request Body:**
 ```json
 {
-  "action": "delete_all",
-  "filter": {
-    "type": "WORKSHOP_CANCELLED",
-    "olderThan": "2026-04-01"
-  }
+  "action": "delete_all"
 }
 ```
 
@@ -294,29 +290,9 @@ Lấy notifications của user đang đăng nhập.
 
 ---
 
-### API bổ sung
+### API nội bộ
 
-#### `POST /api/notifications` — Create Notification nội bộ/service
-
-Cho phép ORGANIZER tạo thông báo mới cho một workshop cụ thể.
-
-**Request Body:**
-```json
-{
-  "workshopId": "abc123",
-  "type": "WORKSHOP_UPDATED",
-  "title": "Workshop Updated",
-  "body": "The workshop schedule has been updated."
-}
-```
-
-**Response 201:**
-```json
-{
-  "status": 201,
-  "message": "Notification created successfully."
-}
-```
+Codebase hiện tại không mở `POST /api/notifications` public. Notification được tạo từ service sau các sự kiện nghiệp vụ như đăng ký, thanh toán, hủy/cập nhật workshop và refund.
 
 ---
 

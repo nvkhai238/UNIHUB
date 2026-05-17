@@ -1,6 +1,8 @@
 # UniHub Workshop — Technical Design
 
-> **Stack đã chốt:** Java 21 + Spring Boot 3.5.x · React 18 + Vite cho Student/Admin Web · Check-in Mobile App native (React Native/Expo SDK 54) · Expo SQLite + SecureStore · Supabase (PostgreSQL + Storage + Realtime) · Redis · Gemini API · SMTP · Docker Compose
+> **Stack đã chốt:** Java 21 + Spring Boot 3.5.x · React 18 + Vite cho Student/Admin Web · Check-in Mobile App native (React Native/Expo SDK 54) · Expo SQLite + SecureStore · Supabase (PostgreSQL + Storage + Realtime) · Redis · Gemini API · SMTP · CSV `/data` Docker bind mount · Docker Compose
+>
+> **Ưu tiên thiết kế:** Đề bài UniHub Workshop là source of truth. Blueprint phải mô tả đúng các yêu cầu bắt buộc trong đề: web sinh viên/admin, mobile check-in offline, AI Summary, CSV nightly import, RBAC 3 role, rate limiting, circuit breaker và idempotency. Các chi tiết triển khai được ghi theo codebase hiện tại nếu không mâu thuẫn với đề.
 >
 > **Phân công:** Thành viên 1 — Đăng ký & Giao dịch | Thành viên 2 — Quản trị & AI | Thành viên 3 — Vận hành & Đồng bộ
 
@@ -39,7 +41,7 @@ com.unihub.workshop
 **Lý do chọn Java 21 + Spring Boot 3.x:**
 
 - **Spring Batch:** Giải quyết bài toán CSV import phức tạp với cơ chế chunk processing, retry, skip, restart — không cần tự viết từ đầu.
-- **Resilience4j + Redis:** Resilience4j dùng cho Circuit Breaker/Retry payment demo; Redis Sorted Set/lock dùng cho sliding-window rate limit, idempotency và seat queue guard.
+- **Resilience4j + Redis:** Resilience4j dùng cho Circuit Breaker/Retry payment demo; Redis Sorted Set/lock dùng cho sliding-window rate limit, idempotency, refresh-token blacklist, OTP và seat queue guard.
 - **Spring Security:** RBAC + JWT filter chain được thiết lập chặt chẽ, không để lọt request không hợp lệ qua bất kỳ tầng nào.
 - **JPA + Pessimistic Locking:** `@Lock(LockModeType.PESSIMISTIC_WRITE)` giải quyết race condition chỗ ngồi trực tiếp ở tầng ORM.
 
@@ -142,8 +144,9 @@ flowchart TB
         subgraph DATA["Tầng Dữ liệu"]
             direction LR
             db[("&lt;&lt;database&gt;&gt;<br/><b>Main DB</b><br/>(Supabase PostgreSQL)<br/><span style='font-size:12px'>Users, workshops, registrations, payments, check-ins</span>")]
-            redis[("&lt;&lt;database&gt;&gt;<br/><b>Cache & Lock</b><br/>(Redis)<br/><span style='font-size:12px'>Rate limit, idempotency, circuit state</span>")]
-            storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>PDF, room maps, QR, CSV import files</span>"]
+            redis[("&lt;&lt;database&gt;&gt;<br/><b>Cache & Lock</b><br/>(Redis)<br/><span style='font-size:12px'>Rate limit, idempotency, OTP, refresh blacklist</span>")]
+            storage["&lt;&lt;container&gt;&gt;<br/><b>File Storage</b><br/>(Supabase Storage)<br/><span style='font-size:12px'>Workshop PDF và room layout images</span>"]
+            csvDrop[("&lt;&lt;filesystem&gt;&gt;<br/><b>CSV Drop Folder</b><br/>(Docker bind mount /data)<br/><span style='font-size:12px'>students_YYYY-MM-DD.csv từ hệ thống cũ</span>")]
         end
     end
 
@@ -173,13 +176,14 @@ flowchart TB
     %% Backend to Storage/DB/Cache
     backend -->|SQL + transaction lock| db
     backend -->|Atomic ops + TTL| redis
-    backend -->|Read/write files| storage
+    backend -->|Upload/read PDF + room layout| storage
+    backend -->|Read nightly/manual CSV| csvDrop
 
     %% Backend to Externals
     backend -->|REST / HTTPS + circuit breaker| payment
     backend -->|Gemini API| ai
     backend -->|SMTP| emailSvc
-    legacy -->|CSV nightly export| storage
+    legacy -->|CSV nightly export| csvDrop
 
     %% ================= STYLING =================
     classDef titleStyle fill:transparent,stroke:transparent,font-size:20px,font-weight:bold;
@@ -193,7 +197,7 @@ flowchart TB
     class student,organizer,staff person;
     class studentWeb,adminWeb,checkinMobile ui;
     class backend logic;
-    class db,redis,storage database;
+    class db,redis,storage,csvDrop database;
     class offlineDb local;
     class legacy,payment,ai,emailSvc external;
 ```
@@ -229,8 +233,9 @@ flowchart LR
 
     subgraph DATA["Data Layer"]
         DB[("Supabase PostgreSQL<br/>Users, workshops, registrations, payments, check-ins")]
-        Redis[("Redis<br/>Rate limit, idempotency, circuit state")]
-        Storage["Supabase Storage<br/>PDF, room maps, QR, CSV files"]
+        Redis[("Redis<br/>Rate limit, idempotency, OTP, refresh blacklist")]
+        Storage["Supabase Storage<br/>PDF, room layout images"]
+        Csv_Folder[("/data CSV folder<br/>students_YYYY-MM-DD.csv")]
     end
 
     subgraph EXTERNALS["External Systems"]
@@ -261,15 +266,15 @@ flowchart LR
 
     Payment_Gateway -->|POST /api/webhooks/sepay| Payment_Service
     Payment_Service -->|Circuit Breaker demo call| Payment_Gateway
-    Payment_Service -->|Cache response + circuit state| Redis
+    Payment_Service -->|Idempotency/retry cache| Redis
     Payment_Service -->|Payment status| DB
 
     Checkin_Service -->|Persist synced scans| DB
     Notification_Service -->|SMTP| Email_Provider
     Notification_Service -->|In-app notifications| DB
 
-    Legacy_System -->|Nightly CSV export| Storage
-    Csv_Service -->|Read, validate, upsert| Storage
+    Legacy_System -->|Nightly CSV export| Csv_Folder
+    Csv_Service -->|Read, validate, sanitize| Csv_Folder
     Csv_Service -->|Upsert students + batch log| DB
 ```
 
@@ -280,8 +285,9 @@ flowchart LR
 | Nhu cầu                                                                 | Lựa chọn                | Lý do                                                                                                              |
 | ----------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Dữ liệu nghiệp vụ (users, workshops, registrations, payments, checkins) | **Supabase PostgreSQL** | ACID bắt buộc cho seat locking và thanh toán; Supabase có sẵn Real-time WebSocket để cập nhật số ghế trên frontend |
-| Rate limiting counter, idempotency key cache, Circuit Breaker state     | **Redis**               | Atomic operations (INCR, SET NX EX), TTL tự động, dưới 1ms latency                                                 |
-| File storage (PDF, ảnh sơ đồ phòng)                                     | **Supabase Storage**    | S3-compatible, tích hợp sẵn với Supabase, không cần cấu hình thêm                                                  |
+| Rate limiting counter, idempotency key cache, OTP, refresh-token blacklist | **Redis**             | Atomic operations (Sorted Set, SET NX EX), TTL tự động, dưới 1ms latency                                           |
+| File storage (PDF, ảnh sơ đồ phòng)                                     | **Supabase Storage**    | S3-compatible, tích hợp sẵn với Supabase, dùng cho upload PDF và room layout                                       |
+| CSV import source                                                       | **Filesystem `/data`**  | Đúng với đề "legacy export CSV ban đêm"; Docker Compose mount thư mục dữ liệu vào backend để Spring Batch đọc     |
 
 **Không dùng NoSQL** cho dữ liệu nghiệp vụ vì: dữ liệu có quan hệ rõ ràng (user → registration → payment → workshop), cần JOIN và transaction ACID, và PostgreSQL Pessimistic Lock là công cụ chuẩn cho bài toán seat contention.
 
@@ -617,8 +623,9 @@ Tài khoản `ORGANIZER` và `CHECKIN_STAFF` được tạo thủ công qua seed
 | Tạo / cập nhật / hủy workshop (`POST/PUT/DELETE /api/workshops/**`) | ❌ | ✅ | ❌ |
 | Upload PDF giới thiệu workshop (`POST /api/workshops/{id}/pdf`) | ❌ | ✅ | ❌ |
 | Xem danh sách sinh viên đăng ký / thống kê (`GET /api/workshops/admin`, `GET /api/workshops/statistics`, `GET /api/admin/**`) | ❌ | ✅ | ❌ |
-| Preload / lookup danh sách QR hợp lệ (`GET /api/checkins/preload`, `GET /api/checkins/lookup`) | ❌ | ✅ | ✅ |
-| Quét QR / đồng bộ check-in offline (`POST /api/checkins/sync`) | ❌ | ✅ | ✅ |
+| Chọn workshop theo ngày / preload / lookup QR (`GET /api/checkins/workshops`, `GET /api/checkins/preload`, `GET /api/checkins/lookup`) | ❌ | ❌ | ✅ |
+| Quét QR / đồng bộ check-in offline (`POST /api/checkins/sync`) | ❌ | ❌ | ✅ |
+| Xem danh sách lượt check-in của workshop (`GET /api/checkins/workshops/{workshopId}`) | ❌ | ✅ | ❌ |
 
 ### 5.5. Kiểm soát truy cập tại API Endpoint
 Tất cả request từ Student Web, Organizer Admin Web và Check-in Mobile App đều phải đi qua Backend API do Backend API là nơi kiểm tra quyền chính thức của hệ thống. Frontend chỉ ẩn/hiện route và nút chức năng theo role để cải thiện UX; bảo mật thật sự phải được kiểm tra ở backend.
@@ -658,7 +665,7 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
             .requestMatchers(DELETE, "/api/workshops/**").hasRole("ORGANIZER")
 
             // Check-in staff only
-            .requestMatchers("/api/checkins/**").hasRole("CHECKIN_STAFF")
+            .requestMatchers("/api/checkins/**").hasAnyRole("CHECKIN_STAFF", "ORGANIZER")
 
             .anyRequest().authenticated()
         )
@@ -669,6 +676,8 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 ```
 
 **Tầng 2 — Method-level Security (defense in depth):**
+
+Trong codebase hiện tại, `SecurityConfig` cho phép cả `CHECKIN_STAFF` và `ORGANIZER` đi qua namespace `/api/checkins/**`, nhưng quyền thực tế được chốt tại controller bằng `@PreAuthorize`: staff chỉ được dùng preload/lookup/sync, organizer chỉ được xem danh sách lượt check-in của một workshop.
 
 ```java
 @Service
