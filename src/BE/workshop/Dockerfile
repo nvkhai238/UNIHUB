@@ -7,11 +7,14 @@ COPY mvnw pom.xml ./
 COPY .mvn .mvn/
 RUN chmod +x ./mvnw || true
 
+# Pre-fetch dependencies to leverage Docker caching
+RUN mvn dependency:go-offline -B
+
 # Copy source
 COPY src ./src
 
 # Build
-RUN mvn clean package -Dmaven.test.skip=true
+RUN mvn package -Dmaven.test.skip=true
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
